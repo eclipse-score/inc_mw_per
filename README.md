@@ -1,2 +1,5 @@
-# inc_mw_per
-Incubation repository for persistency framework
+# Incubation Repository for Persistency Framework
+
+## Structure
+
+  * kvs: Key-Value-Store implementation and tests

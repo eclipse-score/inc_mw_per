@@ -1,0 +1,18 @@
+[package]
+name = "persistence_client_library_wrapper"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+libc = "0.2.170"
+libloading = "0.7"
+once_cell = "1.10"
+clap = "4.0"
+
+[[bin]]
+name = "persistence_client_library_tool_rust"
+path = "src/persistence_client_library_tool_rust.rs"
+
+[lib]
+name = "persistence_client_library_wrapper"
+path = "src/persistence_client_library_wrapper.rs"

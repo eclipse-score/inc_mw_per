@@ -11,7 +11,7 @@
 
 //! # Verify Snapshot Recovery
 
-use rust_kvs::{ErrorCode, InstanceId, Kvs, OpenNeedDefaults, OpenNeedKvs, SnapshotId};
+use rust_kvs::{ErrorCode, InstanceId, Kvs, KvsValue, OpenNeedDefaults, OpenNeedKvs, SnapshotId};
 
 mod common;
 use crate::common::TempDir;
@@ -54,7 +54,10 @@ fn kvs_snapshot_restore() -> Result<(), ErrorCode> {
     // restore snapshots and check `counter` value
     for idx in 1..=max_count {
         kvs.snapshot_restore(SnapshotId::new(idx))?;
-        assert_eq!(kvs.get_value::<f64>("counter")?, (counter - idx) as f64);
+        assert_eq!(
+            kvs.get_value("counter")?,
+            KvsValue::Number((counter - idx) as f64)
+        );
     }
 
     Ok(())

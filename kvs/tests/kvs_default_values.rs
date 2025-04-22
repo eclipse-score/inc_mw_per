@@ -11,6 +11,7 @@
 
 //! # Verify KVS Default Value Functionality
 
+use adler32::RollingAdler32;
 use rust_kvs::{ErrorCode, InstanceId, Kvs, KvsValue, OpenNeedDefaults, OpenNeedKvs};
 use std::collections::HashMap;
 use tinyjson::{JsonGenerator, JsonValue};
@@ -26,7 +27,7 @@ use crate::common::TempDir;
 ///   * Change in default must be returned when key isn't set
 ///   * Change in default must be ignored when key was once set
 #[test]
-fn kvs_without_defaults() -> Result<(), ErrorCode> {
+fn kvs_default_values() -> Result<(), ErrorCode> {
     let dir = TempDir::create()?;
     dir.set_current_dir()?;
 
@@ -38,13 +39,15 @@ fn kvs_without_defaults() -> Result<(), ErrorCode> {
     ]);
 
     let json = KvsValue::from(defaults);
-    let json = JsonValue::from(&json);
+    let json = JsonValue::try_from(&json)?;
     let mut buf = Vec::new();
     let mut gen = JsonGenerator::new(&mut buf).indent("  ");
     gen.generate(&json)?;
 
     let data = String::from_utf8(buf)?;
+    let hash = RollingAdler32::from_buffer(data.as_bytes()).hash();
     std::fs::write("kvs_0_default.json", &data)?;
+    std::fs::write("kvs_0_default.hash", hash.to_be_bytes())?;
 
     // create KVS
     let kvs = Kvs::open(
@@ -57,23 +60,23 @@ fn kvs_without_defaults() -> Result<(), ErrorCode> {
     kvs.set_value("bool2", false)?;
     kvs.set_value("string2", "Ola".to_string())?;
 
-    assert_eq!(kvs.get_value::<f64>("number1")?, 123.0);
-    assert_eq!(kvs.get_value::<f64>("number2")?, 345.0);
+    assert_eq!(kvs.get_value("number1")?, KvsValue::Number(123.0));
+    assert_eq!(kvs.get_value("number2")?, KvsValue::Number(345.0));
 
-    assert!(kvs.get_value::<bool>("bool1")?);
-    assert!(!kvs.get_value::<bool>("bool2")?);
+    assert_eq!(kvs.get_value("bool1")?, KvsValue::Boolean(true));
+    assert_eq!(kvs.get_value("bool2")?, KvsValue::Boolean(false));
 
-    assert_eq!(kvs.get_value::<String>("string1")?, "Hello".to_string());
-    assert_eq!(kvs.get_value::<String>("string2")?, "Ola".to_string());
+    assert_eq!(kvs.get_value("string1")?, KvsValue::String("Hello".into()));
+    assert_eq!(kvs.get_value("string2")?, KvsValue::String("Ola".into()));
 
-    assert!(kvs.is_value_default("number1")?);
-    assert!(!kvs.is_value_default("number2")?);
+    assert!(kvs.has_default_value("number1"));
+    assert!(!kvs.has_default_value("number2"));
 
-    assert!(kvs.is_value_default("bool1")?);
-    assert!(!kvs.is_value_default("bool2")?);
+    assert!(kvs.has_default_value("bool1"));
+    assert!(!kvs.has_default_value("bool2"));
 
-    assert!(kvs.is_value_default("string1")?);
-    assert!(!kvs.is_value_default("string2")?);
+    assert!(kvs.has_default_value("string1"));
+    assert!(!kvs.has_default_value("string2"));
 
     // write same-as-default-value into `bool1`
     kvs.set_value("bool1", true)?;
@@ -90,11 +93,14 @@ fn kvs_without_defaults() -> Result<(), ErrorCode> {
         OpenNeedKvs::Required,
     )?;
 
-    assert!(kvs.get_value::<bool>("bool1")?);
-    assert!(!kvs.is_value_default("bool1")?);
+    assert_eq!(kvs.get_value("bool1")?, KvsValue::Boolean(true));
+    assert!(kvs.has_default_value("bool1"));
 
-    assert_eq!(kvs.get_value::<String>("string1")?, "Bonjour".to_string());
-    assert!(!kvs.is_value_default("string1")?);
+    assert_eq!(
+        kvs.get_value("string1")?,
+        KvsValue::String("Bonjour".into())
+    );
+    assert!(!kvs.has_default_value("string1"));
 
     // drop the current instance with flush-on-exit enabled and reopen storage
     drop(kvs);
@@ -107,13 +113,15 @@ fn kvs_without_defaults() -> Result<(), ErrorCode> {
     ]);
 
     let json = KvsValue::from(defaults);
-    let json = JsonValue::from(&json);
+    let json = JsonValue::try_from(&json)?;
     let mut buf = Vec::new();
     let mut gen = JsonGenerator::new(&mut buf).indent("  ");
     gen.generate(&json)?;
 
     let data = String::from_utf8(buf)?;
+    let hash = RollingAdler32::from_buffer(data.as_bytes()).hash();
     std::fs::write("kvs_0_default.json", &data)?;
+    std::fs::write("kvs_0_default.hash", hash.to_be_bytes())?;
 
     let kvs = Kvs::open(
         InstanceId::new(0),
@@ -121,11 +129,11 @@ fn kvs_without_defaults() -> Result<(), ErrorCode> {
         OpenNeedKvs::Required,
     )?;
 
-    assert_eq!(kvs.get_value::<f64>("number1")?, 987.0);
-    assert!(kvs.is_value_default("number1")?);
+    assert_eq!(kvs.get_value("number1")?, KvsValue::Number(987.0));
+    assert!(kvs.has_default_value("number1"));
 
-    assert!(kvs.get_value::<bool>("bool1")?);
-    assert!(!kvs.is_value_default("bool1")?);
+    assert_eq!(kvs.get_value("bool1")?, KvsValue::Boolean(true));
+    assert!(!kvs.has_default_value("bool1"));
 
     Ok(())
 }

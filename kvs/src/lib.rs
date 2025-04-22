@@ -36,10 +36,8 @@
 //! and a `KvsValue` as second parameter. Either `KvsValue::Number(123.0)` or `123.0` can be
 //! used as there will be an auto-Into performed when calling the function.
 //!
-//! To read a value call [`Kvs::get_value::<T>`](Kvs::get_value) with the `key` as first
-//! parameter. `T` represents the type to read and can be `f64`, `bool`, `String`, `()`,
-//! `Vec<KvsValue>`, `HashMap<String, KvsValue` or `KvsValue`. Also `let value: f64 =
-//! kvs.get_value()` can be used.
+//! To read a `KvsValue` value call [`Kvs::get_value`](Kvs::get_value) with the `key` as first
+//! parameter.
 //!
 //! If a `key` isn't available in the KVS a lookup into the defaults storage will be performed and
 //! if the `value` is found the default will be returned. The default value isn't stored when
@@ -47,8 +45,8 @@
 //! defaults change always the latest values will be returned. If that is an unwanted behaviour
 //! it's better to remove the default value and write the value permanently when the KVS is
 //! initialized. To check whether a value has a default call [`Kvs::get_default_value`] and to
-//! see if the value wasn't written yet and will return the default call
-//! [`Kvs::is_value_default`].
+//! see if the value contains the default call
+//! [`Kvs::has_default_value`].
 //!
 //!
 //! ## Example Usage
@@ -212,6 +210,9 @@ pub enum ErrorCode {
     /// Key not found
     KeyNotFound,
 
+    /// Key default value not found
+    KeyDefaultNotFound,
+
     /// Serialization failed
     SerializationFailed,
 
@@ -223,6 +224,9 @@ pub enum ErrorCode {
 
     /// Mutex failed
     MutexLockFailed,
+
+    /// Invalid value type
+    InvalidValueType,
 }
 
 /// Key-value-storage builder
@@ -257,7 +261,7 @@ pub struct Kvs {
 }
 
 /// Key-value-storage value
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum KvsValue {
     /// Number
     Number(f64),
@@ -344,16 +348,6 @@ impl From<OpenNeedKvs> for OpenJsonNeedFile {
     }
 }
 
-/// Verify-Hash flag
-#[derive(PartialEq)]
-enum OpenJsonVerifyHash {
-    /// No: Parse the file without the hash
-    No,
-
-    /// Yes: Parse the file with the hash
-    Yes,
-}
-
 impl From<std::io::Error> for ErrorCode {
     fn from(cause: std::io::Error) -> Self {
         let kind = cause.kind();
@@ -422,6 +416,12 @@ impl fmt::Display for InstanceId {
 impl fmt::Display for SnapshotId {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.0)
+    }
+}
+
+impl From<usize> for SnapshotId {
+    fn from(val: usize) -> SnapshotId {
+        SnapshotId(val)
     }
 }
 
@@ -539,8 +539,8 @@ impl Kvs {
         let filename_prefix = format!("kvs_{instance_id}");
         let filename_kvs = format!("{filename_prefix}_0");
 
-        let default = Self::open_json(&filename_default, need_defaults, OpenJsonVerifyHash::No)?;
-        let kvs = Self::open_json(&filename_kvs, need_kvs, OpenJsonVerifyHash::Yes)?;
+        let default = Self::open_json(&filename_default, need_defaults)?;
+        let kvs = Self::open_json(&filename_kvs, need_kvs)?;
 
         println!("opened KVS: instance '{instance_id}'");
         println!("max snapshot count: {KVS_MAX_SNAPSHOTS}");
@@ -557,7 +557,7 @@ impl Kvs {
     ///
     /// # Parameters
     ///   * `flush_on_exit`: Flag to control flush-on-exit behaviour
-    pub fn flush_on_exit(self, flush_on_exit: bool) {
+    pub fn flush_on_exit(&self, flush_on_exit: bool) {
         self.flush_on_exit
             .store(flush_on_exit, atomic::Ordering::Relaxed);
     }
@@ -583,7 +583,6 @@ impl Kvs {
     fn open_json<T>(
         filename_prefix: &str,
         need_file: T,
-        verify_hash: OpenJsonVerifyHash,
     ) -> Result<HashMap<String, KvsValue>, ErrorCode>
     where
         T: Into<OpenJsonNeedFile>,
@@ -592,43 +591,34 @@ impl Kvs {
         let filename_hash = format!("{filename_prefix}.hash");
         match fs::read_to_string(&filename_json) {
             Ok(data) => {
-                if verify_hash == OpenJsonVerifyHash::Yes {
-                    // data exists, read hash file
-                    match fs::read(&filename_hash) {
-                        Ok(hash) => {
-                            let hash_kvs = RollingAdler32::from_buffer(data.as_bytes()).hash();
-                            if u32::from_be_bytes(hash.try_into()?) != hash_kvs {
-                                eprintln!(
-                                    "error: KVS data corrupted ({filename_json}, {filename_hash})"
-                                );
-                                Err(ErrorCode::ValidationFailed)
-                            } else {
-                                println!("JSON data has valid hash");
-                                let data: JsonValue = data.parse()?;
-                                println!("parsing file {filename_json}");
-                                Ok(data
-                                    .get::<HashMap<_, _>>()
-                                    .ok_or(ErrorCode::JsonParserError)?
-                                    .iter()
-                                    .map(|(key, value)| (key.clone(), value.into()))
-                                    .collect())
-                            }
-                        }
-                        Err(err) => {
+                let hash_kvs = RollingAdler32::from_buffer(data.as_bytes()).hash();
+
+                // data exists, read hash file
+                match fs::read(&filename_hash) {
+                    Ok(hash) => {
+                        let hash_calc = u32::from_be_bytes(hash.try_into()?);
+                        if hash_calc != hash_kvs {
                             eprintln!(
-                                "error: hash file {filename_hash} could not be read: {err:#?}"
+                                "error: KVS data corrupted {filename_json}: calculated = {hash_calc:#x}, stored = {hash_kvs:#x}"
                             );
-                            Err(ErrorCode::KvsHashFileReadError)
+                            Err(ErrorCode::ValidationFailed)
+                        } else {
+                            println!("JSON data has valid hash");
+                            let data: JsonValue = data.parse()?;
+                            println!("parsing file {filename_json}");
+                            Ok(data
+                                .get::<HashMap<_, _>>()
+                                .ok_or(ErrorCode::JsonParserError)?
+                                .iter()
+                                .map(|(key, value)| Ok((key.clone(), value.try_into()?)))
+                                .collect::<Result<HashMap<String, KvsValue>, ErrorCode>>()?)
                         }
                     }
-                } else {
-                    Ok(data
-                        .parse::<JsonValue>()?
-                        .get::<HashMap<_, _>>()
-                        .ok_or(ErrorCode::JsonParserError)?
-                        .iter()
-                        .map(|(key, value)| (key.clone(), value.into()))
-                        .collect())
+                    Err(err) => {
+                        eprintln!("error: hash file {filename_hash} could not be read: {err:#?}");
+                        eprintln!("error: required hash file content: {hash_kvs:#x}");
+                        Err(ErrorCode::KvsHashFileReadError)
+                    }
                 }
             }
             Err(err) => {
@@ -662,7 +652,10 @@ impl Kvs {
         Ok(self.kvs.lock()?.keys().map(|x| x.to_string()).collect())
     }
 
-    /// Check if a key exists
+    /// Reports if a manually stored value exists for a given key in the KVS
+    ///
+    /// If the key was never written it will always return false even if a default value for the
+    /// key is available.
     ///
     /// # Parameters
     ///   * `key`: Key to check for existence
@@ -677,9 +670,6 @@ impl Kvs {
 
     /// Get the assigned value for a given key
     ///
-    /// See [Variants](https://docs.rs/tinyjson/latest/tinyjson/enum.JsonValue.html#variants) for
-    /// supported value types.
-    ///
     /// # Features
     ///   * `FEAT_REQ__KVS__default_values`
     ///
@@ -691,34 +681,13 @@ impl Kvs {
     ///   * `ErrorCode::MutexLockFailed`: Mutex locking failed
     ///   * `ErrorCode::ConversionFailed`: Type conversion failed
     ///   * `ErrorCode::KeyNotFound`: Key wasn't found in KVS nor in defaults
-    pub fn get_value<T>(&self, key: &str) -> Result<T, ErrorCode>
-    where
-        for<'a> T: TryFrom<&'a KvsValue> + std::clone::Clone,
-        for<'a> <T as TryFrom<&'a KvsValue>>::Error: std::fmt::Debug,
-    {
+    pub fn get_value(&self, key: &str) -> Result<KvsValue, ErrorCode> {
         let kvs = self.kvs.lock()?;
 
         if let Some(value) = kvs.get(key) {
-            match T::try_from(value) {
-                Ok(value) => Ok(value),
-                Err(err) => {
-                    eprintln!(
-                        "error: get_value could not convert KvsValue from KVS store: {err:#?}"
-                    );
-                    Err(ErrorCode::ConversionFailed)
-                }
-            }
+            Ok(value.clone())
         } else if let Some(value) = self.default.get(key) {
-            // check if key has a default value
-            match T::try_from(value) {
-                Ok(value) => Ok(value),
-                Err(err) => {
-                    eprintln!(
-                        "error: get_value could not convert KvsValue from default store: {err:#?}"
-                    );
-                    Err(ErrorCode::ConversionFailed)
-                }
-            }
+            Ok(value.clone())
         } else {
             eprintln!("error: get_value could not find key: {key}");
 
@@ -746,7 +715,10 @@ impl Kvs {
         }
     }
 
-    /// Return if the value wasn't set yet and uses its default value
+    /// Return if the value is equal to its default
+    ///
+    /// If no default value for a given key is available or the current key value doesn't match the
+    /// default the function will return `false`. Otherwise it will return `true`.
     ///
     /// # Features
     ///   * `FEAT_REQ__KVS__default_values`
@@ -755,17 +727,48 @@ impl Kvs {
     ///   * `key`: Key to check if a default exists
     ///
     /// # Return Values
-    ///   * Ok(true): Key currently returns the default value
-    ///   * Ok(false): Key returns the set value
+    ///   * true: Key contains default value
+    ///   * false: Key hasn't a default or value varies from default
+    pub fn has_default_value(&self, key: &str) -> bool {
+        if let Some(default) = self.default.get(key) {
+            if let Ok(kvs) = self.kvs.lock() {
+                if let Some(current) = kvs.get(key) {
+                    if default == current {
+                        // values match => value is default
+                        return true;
+                    }
+                } else {
+                    // value isn't set but default found
+                    return true;
+                }
+            }
+        }
+
+        false
+    }
+
+    /// Set the key value to its default value
+    ///
+    /// Overwrite the current value of the key with its default value. If the value has a default
+    /// but wasn't written yet it will fixate the current default value even if the default changes
+    /// later until it is rewritten. If no default exist a `ErrorCode::KeyDefaultNotFound` error is
+    /// returned.
+    ///
+    /// # Parameters
+    ///   * `key`: Key to write default value to
+    ///
+    /// # Return Values
+    ///   * Ok: Default value was assigned to key
     ///   * `ErrorCode::MutexLockFailed`: Mutex locking failed
-    ///   * `ErrorCode::KeyNotFound`: Key wasn't found
-    pub fn is_value_default(&self, key: &str) -> Result<bool, ErrorCode> {
-        if self.kvs.lock()?.contains_key(key) {
-            Ok(false)
-        } else if self.default.contains_key(key) {
-            Ok(true)
+    ///   * `ErrorCode::KeyDefaultNotFound`: Default value not found for key
+    pub fn set_default_value<S: Into<String>>(&self, key: S) -> Result<(), ErrorCode> {
+        let key = key.into();
+
+        if let Some(default) = self.default.get(&key) {
+            self.kvs.lock()?.insert(key, default.clone());
+            Ok(())
         } else {
-            Err(ErrorCode::KeyNotFound)
+            Err(ErrorCode::KeyDefaultNotFound)
         }
     }
 
@@ -774,6 +777,7 @@ impl Kvs {
     /// # Parameters
     ///   * `key`: Key to set value
     ///   * `value`: Value to be set
+    ///   * `key`: Key to write default value to
     ///
     /// # Return Values
     ///   * Ok: Value was assigned to key
@@ -822,8 +826,8 @@ impl Kvs {
             .kvs
             .lock()?
             .iter()
-            .map(|(key, value)| (key.clone(), value.into()))
-            .collect();
+            .map(|(key, value)| Ok((key.clone(), value.try_into()?)))
+            .collect::<Result<HashMap<String, JsonValue>, ErrorCode>>()?;
         let json = JsonValue::from(json);
         let mut buf = Vec::new();
         let mut gen = JsonGenerator::new(&mut buf).indent("  ");
@@ -907,7 +911,6 @@ impl Kvs {
         let kvs = Self::open_json(
             &format!("{}_{}", self.filename_prefix, id.0),
             OpenJsonNeedFile::Required,
-            OpenJsonVerifyHash::Yes,
         )?;
         *self.kvs.lock()? = kvs;
 
@@ -980,33 +983,49 @@ impl Drop for Kvs {
     }
 }
 
-impl From<&JsonValue> for KvsValue {
-    fn from(val: &JsonValue) -> KvsValue {
-        match val {
+impl TryFrom<&JsonValue> for KvsValue {
+    type Error = ErrorCode;
+
+    fn try_from(val: &JsonValue) -> Result<Self, Self::Error> {
+        Ok(match val {
             JsonValue::Number(val) => KvsValue::Number(*val),
             JsonValue::Boolean(val) => KvsValue::Boolean(*val),
             JsonValue::String(val) => KvsValue::String(val.clone()),
             JsonValue::Null => KvsValue::Null,
-            JsonValue::Array(val) => KvsValue::Array(val.iter().map(|x| x.into()).collect()),
-            JsonValue::Object(val) => {
-                KvsValue::Object(val.iter().map(|(x, y)| (x.clone(), y.into())).collect())
-            }
-        }
+            JsonValue::Array(val) => KvsValue::Array(
+                val.iter()
+                    .map(|x| x.try_into())
+                    .collect::<Result<Vec<KvsValue>, ErrorCode>>()?,
+            ),
+            JsonValue::Object(val) => KvsValue::Object(
+                val.iter()
+                    .map(|(x, y)| Ok((x.clone(), y.try_into()?)))
+                    .collect::<Result<HashMap<String, KvsValue>, ErrorCode>>()?,
+            ),
+        })
     }
 }
 
-impl From<&KvsValue> for JsonValue {
-    fn from(val: &KvsValue) -> JsonValue {
-        match val {
+impl TryFrom<&KvsValue> for JsonValue {
+    type Error = ErrorCode;
+
+    fn try_from(val: &KvsValue) -> Result<Self, Self::Error> {
+        Ok(match val {
             KvsValue::Number(val) => JsonValue::Number(*val),
             KvsValue::Boolean(val) => JsonValue::Boolean(*val),
             KvsValue::String(val) => JsonValue::String(val.clone()),
             KvsValue::Null => JsonValue::Null,
-            KvsValue::Array(val) => JsonValue::Array(val.iter().map(|x| x.into()).collect()),
-            KvsValue::Object(val) => {
-                JsonValue::Object(val.iter().map(|(x, y)| (x.clone(), y.into())).collect())
-            }
-        }
+            KvsValue::Array(val) => JsonValue::Array(
+                val.iter()
+                    .map(|x| x.try_into())
+                    .collect::<Result<Vec<JsonValue>, ErrorCode>>()?,
+            ),
+            KvsValue::Object(val) => JsonValue::Object(
+                val.iter()
+                    .map(|(x, y)| Ok((x.clone(), y.try_into()?)))
+                    .collect::<Result<HashMap<String, JsonValue>, ErrorCode>>()?,
+            ),
+        })
     }
 }
 
@@ -1034,13 +1053,15 @@ impl From<()> for KvsValue {
 
 macro_rules! impl_from_kvs_value_to_t {
     ($to:ty, $item:ident) => {
-        impl<'a> From<&'a KvsValue> for $to {
-            fn from(val: &'a KvsValue) -> $to {
-                if let KvsValue::$item(val) = val {
-                    return val.clone();
-                }
+        impl<'a> TryFrom<&'a KvsValue> for $to {
+            type Error = ErrorCode;
 
-                panic!("Invalid KvsValue type");
+            fn try_from(val: &'a KvsValue) -> Result<$to, Self::Error> {
+                if let KvsValue::$item(val) = val {
+                    Ok(val.clone())
+                } else {
+                    Err(ErrorCode::InvalidValueType)
+                }
             }
         }
     };
@@ -1052,13 +1073,15 @@ impl_from_kvs_value_to_t!(String, String);
 impl_from_kvs_value_to_t!(Vec<KvsValue>, Array);
 impl_from_kvs_value_to_t!(HashMap<String, KvsValue>, Object);
 
-impl<'a> From<&'a KvsValue> for () {
-    fn from(val: &'a KvsValue) {
-        if let KvsValue::Null = val {
-            return;
-        }
+impl<'a> TryFrom<&'a KvsValue> for () {
+    type Error = ErrorCode;
 
-        panic!("Invalid KvsValue type for ()");
+    fn try_from(val: &'a KvsValue) -> Result<(), Self::Error> {
+        if let KvsValue::Null = val {
+            Ok(())
+        } else {
+            Err(ErrorCode::InvalidValueType)
+        }
     }
 }
 

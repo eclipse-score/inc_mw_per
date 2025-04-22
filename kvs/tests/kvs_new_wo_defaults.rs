@@ -19,7 +19,7 @@ use crate::common::TempDir;
 
 /// Create a key-value-storage without defaults
 #[test]
-fn kvs_without_defaults() -> Result<(), ErrorCode> {
+fn kvs_new_wo_defaults() -> Result<(), ErrorCode> {
     let dir = TempDir::create()?;
     dir.set_current_dir()?;
 
@@ -67,30 +67,31 @@ fn kvs_without_defaults() -> Result<(), ErrorCode> {
         OpenNeedKvs::Required,
     )?;
 
-    assert_eq!(kvs.get_value::<f64>("number")?, 123.0);
-    assert!(kvs.get_value::<bool>("bool")?);
-    assert_eq!(kvs.get_value::<String>("string")?, "Hello");
-    assert_eq!(kvs.get_value::<()>("null"), Ok(()));
+    assert_eq!(kvs.get_value("number")?, KvsValue::Number(123.0));
+    assert_eq!(kvs.get_value("bool")?, KvsValue::Boolean(true));
+    assert_eq!(kvs.get_value("string")?, KvsValue::String("Hello".into()));
+    assert_eq!(kvs.get_value("null")?, KvsValue::Null);
 
-    let json_array = kvs.get_value::<Vec<KvsValue>>("array")?;
+    let json_array = kvs.get_value("array")?;
     assert_eq!(json_array[0].get(), Some(&456.0));
     assert_eq!(json_array[1].get(), Some(&false));
     assert_eq!(json_array[2].get(), Some(&"Bye".to_string()));
 
-    let json_map = kvs.get_value::<HashMap<String, KvsValue>>("object")?;
+    let json_map = kvs.get_value("object")?;
+    let json_map = json_map.get::<HashMap<String, KvsValue>>().unwrap();
     assert_eq!(json_map["sub-number"].get(), Some(&789.0));
     assert_eq!(json_map["sub-bool"].get(), Some(&true));
     assert_eq!(json_map["sub-string"].get(), Some(&"Hi".to_string()));
     assert_eq!(json_map["sub-null"].get(), Some(&()));
 
-    let json_sub_array = &json_map["sub-array"];
+    let json_sub_array = &json_map["sub-array"].get::<Vec<KvsValue>>().unwrap();
     assert_eq!(json_sub_array[0].get(), Some(&1246.0));
     assert_eq!(json_sub_array[1].get(), Some(&false));
     assert_eq!(json_sub_array[2].get(), Some(&"Moin".to_string()));
 
     // test for non-existent values
     assert_eq!(
-        kvs.get_value::<String>("non-existent").err(),
+        kvs.get_value("non-existent").err(),
         Some(ErrorCode::KeyNotFound)
     );
 

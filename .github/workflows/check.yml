@@ -19,17 +19,14 @@ jobs:
 
       - name: Cargo Clippy
         run: |
-          cd kvs
           cargo clippy --all-features
 
       - name: Cargo Fmt
         run: |
-          cd kvs
           cargo fmt --check
 
       - name: Cargo Build
         run: |
-          cd kvs
           cargo build
 
   cargo-miri:
@@ -51,5 +48,4 @@ jobs:
 
       - name: Cargo Miri
         run: |
-          cd kvs
           cargo +nightly-2024-12-17 miri test

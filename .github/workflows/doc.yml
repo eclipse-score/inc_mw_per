@@ -35,13 +35,12 @@ jobs:
 
       - name: Build documentation
         run: |
-          cd kvs
           cargo doc --lib --no-deps --all
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: ./kvs/target/doc
+          path: ./target/doc
 
       - name: Setup Pages
         id: pages

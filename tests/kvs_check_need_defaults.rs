@@ -11,7 +11,7 @@
 
 //! # Verify File Check for non-existing Defaults File
 
-use rust_kvs::{ErrorCode, InstanceId, Kvs, OpenNeedDefaults, OpenNeedKvs};
+use rust_kvs::{ErrorCode, InstanceId, KvsBuilder};
 
 mod common;
 use crate::common::TempDir;
@@ -22,11 +22,10 @@ fn kvs_check_needs_defaults() -> Result<(), ErrorCode> {
     let dir = TempDir::create()?;
     dir.set_current_dir()?;
 
-    let kvs = Kvs::open(
-        InstanceId::new(0),
-        OpenNeedDefaults::Required,
-        OpenNeedKvs::Optional,
-    );
+    let kvs = KvsBuilder::new(InstanceId::new(0))
+        .need_defaults(true)
+        .need_kvs(false)
+        .build();
 
     assert_eq!(kvs.err(), Some(ErrorCode::KvsFileReadError));
 

@@ -18,9 +18,11 @@
 //! [Adler32](https://crates.io/crates/adler32) crate. No other direct dependencies are used
 //! besides the Rust `std` library.
 //!
-//! The key-value-storage is opened or initialized with [`Kvs::open`] and automatically flushed on
-//! exit by default. This can be controlled by [`Kvs::flush_on_exit`]. It is possible to manually
-//! flush the KVS by calling [`Kvs::flush`].
+//! The key-value-storage is opened or initialized with [`KvsBuilder::new`] where various settings
+//! can be applied before the KVS instance is created.
+//!
+//! Without configuration the KVS is flushed on exit by default. This can be controlled by
+//! [`Kvs::flush_on_exit`]. It is possible to manually flush the KVS by calling [`Kvs::flush`].
 //!
 //! All `TinyJSON` provided datatypes can be used:
 //!   * `Number`: `f64`
@@ -36,10 +38,8 @@
 //! and a `KvsValue` as second parameter. Either `KvsValue::Number(123.0)` or `123.0` can be
 //! used as there will be an auto-Into performed when calling the function.
 //!
-//! To read a value call [`Kvs::get_value::<T>`](Kvs::get_value) with the `key` as first
-//! parameter. `T` represents the type to read and can be `f64`, `bool`, `String`, `()`,
-//! `Vec<KvsValue>`, `HashMap<String, KvsValue` or `KvsValue`. Also `let value: f64 =
-//! kvs.get_value()` can be used.
+//! To read a `KvsValue` value call [`Kvs::get_value`](Kvs::get_value) with the `key` as first
+//! parameter.
 //!
 //! If a `key` isn't available in the KVS a lookup into the defaults storage will be performed and
 //! if the `value` is found the default will be returned. The default value isn't stored when
@@ -47,21 +47,21 @@
 //! defaults change always the latest values will be returned. If that is an unwanted behaviour
 //! it's better to remove the default value and write the value permanently when the KVS is
 //! initialized. To check whether a value has a default call [`Kvs::get_default_value`] and to
-//! see if the value wasn't written yet and will return the default call
-//! [`Kvs::is_value_default`].
+//! see if the value contains the default call
+//! [`Kvs::has_default_value`].
 //!
 //!
 //! ## Example Usage
 //!
 //! ```
-//! use rust_kvs::{ErrorCode, InstanceId, Kvs, OpenNeedDefaults, OpenNeedKvs, KvsValue};
+//! use rust_kvs::{ErrorCode, InstanceId, KvsBuilder, KvsValue};
 //! use std::collections::HashMap;
+//! use tempdir::TempDir;
 //!
 //! fn main() -> Result<(), ErrorCode> {
-//!     let kvs = Kvs::open(
-//!         InstanceId::new(0),
-//!         OpenNeedDefaults::Optional,
-//!         OpenNeedKvs::Optional)?;
+//!     let temp_dir = TempDir::new("").unwrap();
+//!     let temp_path = temp_dir.path().display().to_string();
+//!     let kvs = KvsBuilder::new(InstanceId::new(0)).dir(temp_path).build()?;
 //!
 //!     kvs.set_value("number", 123.0)?;
 //!     kvs.set_value("bool", true)?;
@@ -131,13 +131,8 @@
 //!     defines that `String` and `str` are always valid UTF-8.
 //!   * Feature `FEAT_REQ__KVS__supported_datatypes_values` is matched by using the same types that
 //!     the IPC will use for the Rust implementation.
-//!
-//! ## Todos
-//!
-//!   * Store the current working directory in the KVS struct to make sure snapshots are created at
-//!     the same place as the KVS was opened in case of the application changes the working
-//!     directory
 #![forbid(unsafe_code)]
+#![cfg_attr(coverage_nightly, feature(coverage_attribute))]
 
 use adler32::RollingAdler32;
 use std::array::TryFromSliceError;
@@ -159,9 +154,11 @@ use tinyjson::{JsonGenerateError, JsonGenerator, JsonParseError, JsonValue};
 const KVS_MAX_SNAPSHOTS: usize = 3;
 
 /// Instance ID
+#[derive(Clone, Debug, PartialEq)]
 pub struct InstanceId(usize);
 
 /// Snapshot ID
+#[derive(PartialEq, Debug)]
 pub struct SnapshotId(usize);
 
 /// Runtime Error Codes
@@ -212,6 +209,9 @@ pub enum ErrorCode {
     /// Key not found
     KeyNotFound,
 
+    /// Key default value not found
+    KeyDefaultNotFound,
+
     /// Serialization failed
     SerializationFailed,
 
@@ -223,6 +223,9 @@ pub enum ErrorCode {
 
     /// Mutex failed
     MutexLockFailed,
+
+    /// Invalid value type
+    InvalidValueType,
 }
 
 /// Key-value-storage builder
@@ -235,6 +238,9 @@ pub struct KvsBuilder {
 
     /// Need-KVS flag
     need_kvs: bool,
+
+    /// Working directory
+    dir: Option<String>,
 }
 
 /// Key-value-storage data
@@ -257,7 +263,7 @@ pub struct Kvs {
 }
 
 /// Key-value-storage value
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum KvsValue {
     /// Number
     Number(f64),
@@ -279,7 +285,7 @@ pub enum KvsValue {
 }
 
 /// Need-Defaults flag
-pub enum OpenNeedDefaults {
+enum OpenNeedDefaults {
     /// Optional: Open defaults only if available
     Optional,
 
@@ -288,7 +294,7 @@ pub enum OpenNeedDefaults {
 }
 
 /// Need-KVS flag
-pub enum OpenNeedKvs {
+enum OpenNeedKvs {
     /// Optional: Use an empty KVS if no KVS is available
     Optional,
 
@@ -344,16 +350,6 @@ impl From<OpenNeedKvs> for OpenJsonNeedFile {
     }
 }
 
-/// Verify-Hash flag
-#[derive(PartialEq)]
-enum OpenJsonVerifyHash {
-    /// No: Parse the file without the hash
-    No,
-
-    /// Yes: Parse the file with the hash
-    Yes,
-}
-
 impl From<std::io::Error> for ErrorCode {
     fn from(cause: std::io::Error) -> Self {
         let kind = cause.kind();
@@ -387,28 +383,28 @@ impl From<JsonGenerateError> for ErrorCode {
 
 impl From<FromUtf8Error> for ErrorCode {
     fn from(cause: FromUtf8Error) -> Self {
-        eprintln!("error: UTF-8 conversion failed: {:#?}", cause);
+        eprintln!("error: UTF-8 conversion failed: {cause:#?}");
         ErrorCode::ConversionFailed
     }
 }
 
 impl From<TryFromSliceError> for ErrorCode {
     fn from(cause: TryFromSliceError) -> Self {
-        eprintln!("error: try_into from slice failed: {:#?}", cause);
+        eprintln!("error: try_into from slice failed: {cause:#?}");
         ErrorCode::ConversionFailed
     }
 }
 
 impl From<Vec<u8>> for ErrorCode {
     fn from(cause: Vec<u8>) -> Self {
-        eprintln!("error: try_into from u8 vector failed: {:#?}", cause);
+        eprintln!("error: try_into from u8 vector failed: {cause:#?}");
         ErrorCode::ConversionFailed
     }
 }
 
 impl From<PoisonError<MutexGuard<'_, HashMap<std::string::String, KvsValue>>>> for ErrorCode {
     fn from(cause: PoisonError<MutexGuard<'_, HashMap<std::string::String, KvsValue>>>) -> Self {
-        eprintln!("error: Mutex locking failed: {:#?}", cause);
+        eprintln!("error: Mutex locking failed: {cause:#?}");
         ErrorCode::MutexLockFailed
     }
 }
@@ -422,6 +418,12 @@ impl fmt::Display for InstanceId {
 impl fmt::Display for SnapshotId {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.0)
+    }
+}
+
+impl From<usize> for SnapshotId {
+    fn from(val: usize) -> SnapshotId {
+        SnapshotId(val)
     }
 }
 
@@ -455,6 +457,7 @@ impl KvsBuilder {
             instance_id,
             need_defaults: false,
             need_kvs: false,
+            dir: None,
         }
     }
 
@@ -482,6 +485,17 @@ impl KvsBuilder {
         self
     }
 
+    /// Set the key-value-storage permanent storage directory
+    ///
+    /// # Parameters
+    ///   * `dir`: Path to permanent storage
+    ///
+    /// # Return Values
+    pub fn dir<P: Into<String>>(mut self, dir: P) -> KvsBuilder {
+        self.dir = Some(dir.into());
+        self
+    }
+
     /// Finalize the builder and open the key-value-storage
     ///
     /// Calls `Kvs::open` with the configured settings.
@@ -503,6 +517,7 @@ impl KvsBuilder {
             self.instance_id,
             self.need_defaults.into(),
             self.need_kvs.into(),
+            self.dir,
         )
     }
 }
@@ -530,17 +545,23 @@ impl Kvs {
     ///   * `ErrorCode::KvsFileReadError`: KVS file read error
     ///   * `ErrorCode::KvsHashFileReadError`: KVS hash file read error
     ///   * `ErrorCode::UnmappedError`: Generic error
-    pub fn open(
+    fn open(
         instance_id: InstanceId,
         need_defaults: OpenNeedDefaults,
         need_kvs: OpenNeedKvs,
+        dir: Option<String>,
     ) -> Result<Kvs, ErrorCode> {
-        let filename_default = format!("kvs_{instance_id}_default");
-        let filename_prefix = format!("kvs_{instance_id}");
+        let dir = if let Some(dir) = dir {
+            format!("{dir}/")
+        } else {
+            "".to_string()
+        };
+        let filename_default = format!("{dir}kvs_{instance_id}_default");
+        let filename_prefix = format!("{dir}kvs_{instance_id}");
         let filename_kvs = format!("{filename_prefix}_0");
 
-        let default = Self::open_json(&filename_default, need_defaults, OpenJsonVerifyHash::No)?;
-        let kvs = Self::open_json(&filename_kvs, need_kvs, OpenJsonVerifyHash::Yes)?;
+        let default = Self::open_json(&filename_default, need_defaults)?;
+        let kvs = Self::open_json(&filename_kvs, need_kvs)?;
 
         println!("opened KVS: instance '{instance_id}'");
         println!("max snapshot count: {KVS_MAX_SNAPSHOTS}");
@@ -557,7 +578,7 @@ impl Kvs {
     ///
     /// # Parameters
     ///   * `flush_on_exit`: Flag to control flush-on-exit behaviour
-    pub fn flush_on_exit(self, flush_on_exit: bool) {
+    pub fn flush_on_exit(&self, flush_on_exit: bool) {
         self.flush_on_exit
             .store(flush_on_exit, atomic::Ordering::Relaxed);
     }
@@ -583,7 +604,6 @@ impl Kvs {
     fn open_json<T>(
         filename_prefix: &str,
         need_file: T,
-        verify_hash: OpenJsonVerifyHash,
     ) -> Result<HashMap<String, KvsValue>, ErrorCode>
     where
         T: Into<OpenJsonNeedFile>,
@@ -592,43 +612,34 @@ impl Kvs {
         let filename_hash = format!("{filename_prefix}.hash");
         match fs::read_to_string(&filename_json) {
             Ok(data) => {
-                if verify_hash == OpenJsonVerifyHash::Yes {
-                    // data exists, read hash file
-                    match fs::read(&filename_hash) {
-                        Ok(hash) => {
-                            let hash_kvs = RollingAdler32::from_buffer(data.as_bytes()).hash();
-                            if u32::from_be_bytes(hash.try_into()?) != hash_kvs {
-                                eprintln!(
-                                    "error: KVS data corrupted ({filename_json}, {filename_hash})"
-                                );
-                                Err(ErrorCode::ValidationFailed)
-                            } else {
-                                println!("JSON data has valid hash");
-                                let data: JsonValue = data.parse()?;
-                                println!("parsing file {filename_json}");
-                                Ok(data
-                                    .get::<HashMap<_, _>>()
-                                    .ok_or(ErrorCode::JsonParserError)?
-                                    .iter()
-                                    .map(|(key, value)| (key.clone(), value.into()))
-                                    .collect())
-                            }
-                        }
-                        Err(err) => {
+                let hash_kvs = RollingAdler32::from_buffer(data.as_bytes()).hash();
+
+                // data exists, read hash file
+                match fs::read(&filename_hash) {
+                    Ok(hash) => {
+                        let hash_calc = u32::from_be_bytes(hash.try_into()?);
+                        if hash_calc != hash_kvs {
                             eprintln!(
-                                "error: hash file {filename_hash} could not be read: {err:#?}"
+                                "error: KVS data corrupted {filename_json}: calculated = {hash_calc:#x}, stored = {hash_kvs:#x}"
                             );
-                            Err(ErrorCode::KvsHashFileReadError)
+                            Err(ErrorCode::ValidationFailed)
+                        } else {
+                            println!("JSON data has valid hash");
+                            let data: JsonValue = data.parse()?;
+                            println!("parsing file {filename_json}");
+                            Ok(data
+                                .get::<HashMap<_, _>>()
+                                .ok_or(ErrorCode::JsonParserError)?
+                                .iter()
+                                .map(|(key, value)| Ok((key.clone(), value.try_into()?)))
+                                .collect::<Result<HashMap<String, KvsValue>, ErrorCode>>()?)
                         }
                     }
-                } else {
-                    Ok(data
-                        .parse::<JsonValue>()?
-                        .get::<HashMap<_, _>>()
-                        .ok_or(ErrorCode::JsonParserError)?
-                        .iter()
-                        .map(|(key, value)| (key.clone(), value.into()))
-                        .collect())
+                    Err(err) => {
+                        eprintln!("error: hash file {filename_hash} could not be read: {err:#?}");
+                        eprintln!("error: required hash file content: {hash_kvs:#x}");
+                        Err(ErrorCode::KvsHashFileReadError)
+                    }
                 }
             }
             Err(err) => {
@@ -662,7 +673,10 @@ impl Kvs {
         Ok(self.kvs.lock()?.keys().map(|x| x.to_string()).collect())
     }
 
-    /// Check if a key exists
+    /// Reports if a manually stored value exists for a given key in the KVS
+    ///
+    /// If the key was never written it will always return false even if a default value for the
+    /// key is available.
     ///
     /// # Parameters
     ///   * `key`: Key to check for existence
@@ -677,9 +691,6 @@ impl Kvs {
 
     /// Get the assigned value for a given key
     ///
-    /// See [Variants](https://docs.rs/tinyjson/latest/tinyjson/enum.JsonValue.html#variants) for
-    /// supported value types.
-    ///
     /// # Features
     ///   * `FEAT_REQ__KVS__default_values`
     ///
@@ -691,34 +702,13 @@ impl Kvs {
     ///   * `ErrorCode::MutexLockFailed`: Mutex locking failed
     ///   * `ErrorCode::ConversionFailed`: Type conversion failed
     ///   * `ErrorCode::KeyNotFound`: Key wasn't found in KVS nor in defaults
-    pub fn get_value<T>(&self, key: &str) -> Result<T, ErrorCode>
-    where
-        for<'a> T: TryFrom<&'a KvsValue> + std::clone::Clone,
-        for<'a> <T as TryFrom<&'a KvsValue>>::Error: std::fmt::Debug,
-    {
+    pub fn get_value(&self, key: &str) -> Result<KvsValue, ErrorCode> {
         let kvs = self.kvs.lock()?;
 
         if let Some(value) = kvs.get(key) {
-            match T::try_from(value) {
-                Ok(value) => Ok(value),
-                Err(err) => {
-                    eprintln!(
-                        "error: get_value could not convert KvsValue from KVS store: {err:#?}"
-                    );
-                    Err(ErrorCode::ConversionFailed)
-                }
-            }
+            Ok(value.clone())
         } else if let Some(value) = self.default.get(key) {
-            // check if key has a default value
-            match T::try_from(value) {
-                Ok(value) => Ok(value),
-                Err(err) => {
-                    eprintln!(
-                        "error: get_value could not convert KvsValue from default store: {err:#?}"
-                    );
-                    Err(ErrorCode::ConversionFailed)
-                }
-            }
+            Ok(value.clone())
         } else {
             eprintln!("error: get_value could not find key: {key}");
 
@@ -746,7 +736,10 @@ impl Kvs {
         }
     }
 
-    /// Return if the value wasn't set yet and uses its default value
+    /// Return if the value is equal to its default
+    ///
+    /// If no default value for a given key is available or the current key value doesn't match the
+    /// default the function will return `false`. Otherwise it will return `true`.
     ///
     /// # Features
     ///   * `FEAT_REQ__KVS__default_values`
@@ -755,17 +748,48 @@ impl Kvs {
     ///   * `key`: Key to check if a default exists
     ///
     /// # Return Values
-    ///   * Ok(true): Key currently returns the default value
-    ///   * Ok(false): Key returns the set value
+    ///   * true: Key contains default value
+    ///   * false: Key hasn't a default or value varies from default
+    pub fn has_default_value(&self, key: &str) -> bool {
+        if let Some(default) = self.default.get(key) {
+            if let Ok(kvs) = self.kvs.lock() {
+                if let Some(current) = kvs.get(key) {
+                    if default == current {
+                        // values match => value is default
+                        return true;
+                    }
+                } else {
+                    // value isn't set but default found
+                    return true;
+                }
+            }
+        }
+
+        false
+    }
+
+    /// Set the key value to its default value
+    ///
+    /// Overwrite the current value of the key with its default value. If the value has a default
+    /// but wasn't written yet it will fixate the current default value even if the default changes
+    /// later until it is rewritten. If no default exist a `ErrorCode::KeyDefaultNotFound` error is
+    /// returned.
+    ///
+    /// # Parameters
+    ///   * `key`: Key to write default value to
+    ///
+    /// # Return Values
+    ///   * Ok: Default value was assigned to key
     ///   * `ErrorCode::MutexLockFailed`: Mutex locking failed
-    ///   * `ErrorCode::KeyNotFound`: Key wasn't found
-    pub fn is_value_default(&self, key: &str) -> Result<bool, ErrorCode> {
-        if self.kvs.lock()?.contains_key(key) {
-            Ok(false)
-        } else if self.default.contains_key(key) {
-            Ok(true)
+    ///   * `ErrorCode::KeyDefaultNotFound`: Default value not found for key
+    pub fn set_default_value<S: Into<String>>(&self, key: S) -> Result<(), ErrorCode> {
+        let key = key.into();
+
+        if let Some(default) = self.default.get(&key) {
+            self.kvs.lock()?.insert(key, default.clone());
+            Ok(())
         } else {
-            Err(ErrorCode::KeyNotFound)
+            Err(ErrorCode::KeyDefaultNotFound)
         }
     }
 
@@ -774,6 +798,7 @@ impl Kvs {
     /// # Parameters
     ///   * `key`: Key to set value
     ///   * `value`: Value to be set
+    ///   * `key`: Key to write default value to
     ///
     /// # Return Values
     ///   * Ok: Value was assigned to key
@@ -822,8 +847,8 @@ impl Kvs {
             .kvs
             .lock()?
             .iter()
-            .map(|(key, value)| (key.clone(), value.into()))
-            .collect();
+            .map(|(key, value)| Ok((key.clone(), value.try_into()?)))
+            .collect::<Result<HashMap<String, JsonValue>, ErrorCode>>()?;
         let json = JsonValue::from(json);
         let mut buf = Vec::new();
         let mut gen = JsonGenerator::new(&mut buf).indent("  ");
@@ -907,7 +932,6 @@ impl Kvs {
         let kvs = Self::open_json(
             &format!("{}_{}", self.filename_prefix, id.0),
             OpenJsonNeedFile::Required,
-            OpenJsonVerifyHash::Yes,
         )?;
         *self.kvs.lock()? = kvs;
 
@@ -935,14 +959,14 @@ impl Kvs {
             if let Err(err) = res {
                 if err.kind() != std::io::ErrorKind::NotFound {
                     return Err(err.into());
+                } else {
+                    continue;
                 }
             }
 
             let res = fs::rename(snap_old, snap_new);
             if let Err(err) = res {
-                if err.kind() != std::io::ErrorKind::NotFound {
-                    return Err(err.into());
-                }
+                return Err(err.into());
             }
         }
 
@@ -980,33 +1004,49 @@ impl Drop for Kvs {
     }
 }
 
-impl From<&JsonValue> for KvsValue {
-    fn from(val: &JsonValue) -> KvsValue {
-        match val {
+impl TryFrom<&JsonValue> for KvsValue {
+    type Error = ErrorCode;
+
+    fn try_from(val: &JsonValue) -> Result<Self, Self::Error> {
+        Ok(match val {
             JsonValue::Number(val) => KvsValue::Number(*val),
             JsonValue::Boolean(val) => KvsValue::Boolean(*val),
             JsonValue::String(val) => KvsValue::String(val.clone()),
             JsonValue::Null => KvsValue::Null,
-            JsonValue::Array(val) => KvsValue::Array(val.iter().map(|x| x.into()).collect()),
-            JsonValue::Object(val) => {
-                KvsValue::Object(val.iter().map(|(x, y)| (x.clone(), y.into())).collect())
-            }
-        }
+            JsonValue::Array(val) => KvsValue::Array(
+                val.iter()
+                    .map(|x| x.try_into())
+                    .collect::<Result<Vec<KvsValue>, ErrorCode>>()?,
+            ),
+            JsonValue::Object(val) => KvsValue::Object(
+                val.iter()
+                    .map(|(x, y)| Ok((x.clone(), y.try_into()?)))
+                    .collect::<Result<HashMap<String, KvsValue>, ErrorCode>>()?,
+            ),
+        })
     }
 }
 
-impl From<&KvsValue> for JsonValue {
-    fn from(val: &KvsValue) -> JsonValue {
-        match val {
+impl TryFrom<&KvsValue> for JsonValue {
+    type Error = ErrorCode;
+
+    fn try_from(val: &KvsValue) -> Result<Self, Self::Error> {
+        Ok(match val {
             KvsValue::Number(val) => JsonValue::Number(*val),
             KvsValue::Boolean(val) => JsonValue::Boolean(*val),
             KvsValue::String(val) => JsonValue::String(val.clone()),
             KvsValue::Null => JsonValue::Null,
-            KvsValue::Array(val) => JsonValue::Array(val.iter().map(|x| x.into()).collect()),
-            KvsValue::Object(val) => {
-                JsonValue::Object(val.iter().map(|(x, y)| (x.clone(), y.into())).collect())
-            }
-        }
+            KvsValue::Array(val) => JsonValue::Array(
+                val.iter()
+                    .map(|x| x.try_into())
+                    .collect::<Result<Vec<JsonValue>, ErrorCode>>()?,
+            ),
+            KvsValue::Object(val) => JsonValue::Object(
+                val.iter()
+                    .map(|(x, y)| Ok((x.clone(), y.try_into()?)))
+                    .collect::<Result<HashMap<String, JsonValue>, ErrorCode>>()?,
+            ),
+        })
     }
 }
 
@@ -1034,13 +1074,15 @@ impl From<()> for KvsValue {
 
 macro_rules! impl_from_kvs_value_to_t {
     ($to:ty, $item:ident) => {
-        impl<'a> From<&'a KvsValue> for $to {
-            fn from(val: &'a KvsValue) -> $to {
-                if let KvsValue::$item(val) = val {
-                    return val.clone();
-                }
+        impl<'a> TryFrom<&'a KvsValue> for $to {
+            type Error = ErrorCode;
 
-                panic!("Invalid KvsValue type");
+            fn try_from(val: &'a KvsValue) -> Result<$to, Self::Error> {
+                if let KvsValue::$item(val) = val {
+                    Ok(val.clone())
+                } else {
+                    Err(ErrorCode::InvalidValueType)
+                }
             }
         }
     };
@@ -1052,13 +1094,15 @@ impl_from_kvs_value_to_t!(String, String);
 impl_from_kvs_value_to_t!(Vec<KvsValue>, Array);
 impl_from_kvs_value_to_t!(HashMap<String, KvsValue>, Object);
 
-impl<'a> From<&'a KvsValue> for () {
-    fn from(val: &'a KvsValue) {
-        if let KvsValue::Null = val {
-            return;
-        }
+impl<'a> TryFrom<&'a KvsValue> for () {
+    type Error = ErrorCode;
 
-        panic!("Invalid KvsValue type for ()");
+    fn try_from(val: &'a KvsValue) -> Result<(), Self::Error> {
+        if let KvsValue::Null = val {
+            Ok(())
+        } else {
+            Err(ErrorCode::InvalidValueType)
+        }
     }
 }
 
@@ -1102,10 +1146,503 @@ impl Index<usize> for KvsValue {
         let array = match self {
             KvsValue::Array(a) => a,
             _ => panic!(
-                "Attempted to access to an array with index {} but actually the value was {:?}",
-                index, self,
+                "Attempted to access to an array with index {index} but actually the value was {self:?}",
             ),
         };
         &array[index]
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::Arc;
+    use std::thread;
+    use tempdir::TempDir;
+
+    #[must_use]
+    fn test_dir() -> (TempDir, String) {
+        let temp_dir = TempDir::new("").unwrap();
+        let temp_path = temp_dir.path().display().to_string();
+        (temp_dir, temp_path)
+    }
+
+    #[test]
+    fn test_new_kvs_builder() {
+        let instance_id = InstanceId::new(0);
+        let builder = KvsBuilder::new(instance_id.clone()).dir(test_dir().1);
+
+        assert_eq!(builder.instance_id, instance_id);
+        assert!(!builder.need_defaults);
+        assert!(!builder.need_kvs);
+    }
+
+    #[test]
+    fn test_need_defaults() {
+        let instance_id = InstanceId::new(0);
+        let builder = KvsBuilder::new(instance_id.clone())
+            .dir(test_dir().1)
+            .need_defaults(true);
+
+        assert!(builder.need_defaults);
+    }
+
+    #[test]
+    fn test_need_kvs() {
+        let instance_id = InstanceId::new(0);
+        let builder = KvsBuilder::new(instance_id.clone())
+            .dir(test_dir().1)
+            .need_kvs(true);
+
+        assert!(builder.need_kvs);
+    }
+
+    #[test]
+    fn test_build() {
+        let instance_id = InstanceId::new(0);
+        let builder = KvsBuilder::new(instance_id.clone()).dir(test_dir().1);
+
+        builder.build().unwrap();
+    }
+
+    #[test]
+    fn test_build_with_defaults() {
+        let instance_id = InstanceId::new(0);
+        let builder = KvsBuilder::new(instance_id.clone())
+            .dir(test_dir().1)
+            .need_defaults(true);
+
+        assert!(builder.build().is_err());
+    }
+
+    #[test]
+    fn test_build_with_kvs() {
+        let instance_id = InstanceId::new(0);
+        let temp_dir = test_dir();
+
+        // negative
+        let builder = KvsBuilder::new(instance_id.clone())
+            .dir(temp_dir.1.clone())
+            .need_kvs(true);
+        assert!(builder.build().is_err());
+
+        KvsBuilder::new(instance_id.clone())
+            .dir(temp_dir.1.clone())
+            .build()
+            .unwrap();
+
+        // positive
+        let builder = KvsBuilder::new(instance_id).dir(temp_dir.1).need_kvs(true);
+        builder.build().unwrap();
+    }
+
+    #[test]
+    fn test_unknown_error_code_from_io_error() {
+        let error = std::io::Error::new(std::io::ErrorKind::InvalidInput, "Invalid input provided");
+        assert_eq!(ErrorCode::from(error), ErrorCode::UnmappedError);
+    }
+
+    #[test]
+    fn test_unknown_error_code_from_json_parse_error() {
+        let error = tinyjson::JsonParser::new("[1, 2, 3".chars())
+            .parse()
+            .unwrap_err();
+        assert_eq!(ErrorCode::from(error), ErrorCode::JsonParserError);
+    }
+
+    #[test]
+    fn test_unknown_error_code_from_json_generate_error() {
+        let data: JsonValue = JsonValue::Number(f64::INFINITY);
+        let error = data.stringify().unwrap_err();
+        assert_eq!(ErrorCode::from(error), ErrorCode::JsonGeneratorError);
+    }
+
+    #[test]
+    fn test_conversion_failed_from_utf8_error() {
+        // test from: https://doc.rust-lang.org/std/string/struct.FromUtf8Error.html
+        let bytes = vec![0, 159];
+        let error = String::from_utf8(bytes).unwrap_err();
+        assert_eq!(ErrorCode::from(error), ErrorCode::ConversionFailed);
+    }
+
+    #[test]
+    fn test_conversion_failed_from_slice_error() {
+        let bytes = [0x12, 0x34, 0x56, 0x78, 0xab];
+        let bytes_ptr: &[u8] = &bytes;
+        let error = TryInto::<[u8; 8]>::try_into(bytes_ptr).unwrap_err();
+        assert_eq!(ErrorCode::from(error), ErrorCode::ConversionFailed);
+    }
+
+    #[test]
+    fn test_conversion_failed_from_vec_u8() {
+        let bytes: Vec<u8> = vec![];
+        assert_eq!(ErrorCode::from(bytes), ErrorCode::ConversionFailed);
+    }
+
+    #[test]
+    fn test_mutex_lock_failed_from_poison_error() {
+        let mutex: Arc<Mutex<HashMap<String, KvsValue>>> = Arc::default();
+
+        // test from: https://doc.rust-lang.org/std/sync/struct.PoisonError.html
+        let c_mutex = Arc::clone(&mutex);
+        let _ = thread::spawn(move || {
+            let _unused = c_mutex.lock().unwrap();
+            panic!();
+        })
+        .join();
+
+        let error = mutex.lock().unwrap_err();
+        assert_eq!(ErrorCode::from(error), ErrorCode::MutexLockFailed);
+    }
+
+    #[test]
+    fn test_flush_on_exit() {
+        let instance_id = InstanceId::new(0);
+        let temp_dir = test_dir();
+        let kvs = KvsBuilder::new(instance_id.clone())
+            .dir(temp_dir.1.clone())
+            .build()
+            .unwrap();
+        kvs.flush_on_exit(true);
+    }
+
+    #[test]
+    fn test_reset() {
+        let instance_id = InstanceId::new(0);
+        let temp_dir = test_dir();
+        let kvs = KvsBuilder::new(instance_id.clone())
+            .dir(temp_dir.1.clone())
+            .build()
+            .unwrap();
+        let _ = kvs.reset();
+    }
+
+    #[test]
+    fn test_get_all_keys() {
+        let instance_id = InstanceId::new(0);
+        let temp_dir = test_dir();
+        let kvs = KvsBuilder::new(instance_id.clone())
+            .dir(temp_dir.1.clone())
+            .build()
+            .unwrap();
+        let _ = kvs.set_value("test", KvsValue::Number(1.0));
+        let _ = kvs.get_all_keys();
+    }
+
+    #[test]
+    fn test_key_exists() {
+        let instance_id = InstanceId::new(0);
+        let temp_dir = test_dir();
+        let kvs = KvsBuilder::new(instance_id.clone())
+            .dir(temp_dir.1.clone())
+            .build()
+            .unwrap();
+        let _ = kvs.key_exists("test");
+    }
+
+    #[test]
+    fn test_get_default_value() {
+        let instance_id = InstanceId::new(0);
+        let temp_dir = test_dir();
+
+        std::fs::copy(
+            "tests/kvs_0_default.json",
+            format!("{}/kvs_0_default.json", temp_dir.1.clone()),
+        )
+        .unwrap();
+
+        std::fs::copy(
+            "tests/kvs_0_default.hash",
+            format!("{}/kvs_0_default.hash", temp_dir.1.clone()),
+        )
+        .unwrap();
+
+        let kvs = KvsBuilder::new(instance_id.clone())
+            .dir(temp_dir.1.clone())
+            .need_defaults(true)
+            .build()
+            .unwrap();
+
+        // negative
+        let _ = kvs.get_default_value("test");
+
+        // positive
+        let _ = kvs.get_default_value("bool1");
+    }
+
+    #[test]
+    fn test_has_default_value() {
+        let instance_id = InstanceId::new(0);
+        let temp_dir = test_dir();
+        let kvs = KvsBuilder::new(instance_id.clone())
+            .dir(temp_dir.1.clone())
+            .build()
+            .unwrap();
+        let _ = kvs.has_default_value("test");
+    }
+
+    #[test]
+    fn test_remove_key() {
+        let instance_id = InstanceId::new(0);
+        let temp_dir = test_dir();
+        let kvs = KvsBuilder::new(instance_id.clone())
+            .dir(temp_dir.1.clone())
+            .build()
+            .unwrap();
+        let _ = kvs.remove_key("test");
+        let _ = kvs.set_value("test", KvsValue::Number(1.0));
+        let _ = kvs.remove_key("test");
+    }
+
+    #[test]
+    fn test_restore_snapshot() {
+        let instance_id = InstanceId::new(0);
+        let temp_dir = test_dir();
+        let kvs = KvsBuilder::new(instance_id.clone())
+            .dir(temp_dir.1.clone())
+            .build()
+            .unwrap();
+
+        assert!(kvs.flush().is_ok());
+        assert!(kvs.snapshot_restore(SnapshotId::new(1)).is_err());
+        assert!(kvs.flush().is_ok());
+        assert!(kvs.snapshot_restore(SnapshotId::new(1)).is_ok());
+        assert!(kvs.snapshot_restore(SnapshotId::new(0)).is_err());
+
+        let snapshot = format!("{}/kvs_0_1.hash", temp_dir.1.clone());
+        let _ = std::fs::remove_file(snapshot.clone());
+
+        assert!(kvs.snapshot_restore(SnapshotId::new(1)).is_err());
+    }
+
+    #[test]
+    fn test_rotate_snapshot() {
+        let instance_id = InstanceId::new(0);
+        let temp_dir = test_dir();
+        let kvs = KvsBuilder::new(instance_id.clone())
+            .dir(temp_dir.1.clone())
+            .build()
+            .unwrap();
+        let _ = kvs.flush();
+
+        let metadata = fs::metadata(temp_dir.1.clone()).unwrap();
+        let mut permissions = metadata.permissions();
+
+        permissions.set_readonly(true);
+        fs::set_permissions(temp_dir.1.clone(), permissions.clone()).unwrap();
+        assert!(kvs.snapshot_rotate().is_err());
+
+        permissions.set_readonly(false);
+        fs::set_permissions(temp_dir.1.clone(), permissions).unwrap();
+        assert!(kvs.snapshot_rotate().is_ok());
+
+        assert!(fs::remove_file(format!("{}/kvs_0_1.json", temp_dir.1.clone())).is_ok());
+        assert!(kvs.snapshot_rotate().is_err());
+    }
+
+    #[test]
+    fn test_get_filename() {
+        let instance_id = InstanceId::new(0);
+        let temp_dir = test_dir();
+        let kvs = KvsBuilder::new(instance_id.clone())
+            .dir(temp_dir.1.clone())
+            .build()
+            .unwrap();
+        let _ = kvs.get_kvs_filename(SnapshotId::new(0));
+    }
+
+    #[test]
+    fn test_get_value() {
+        let instance_id = InstanceId::new(0);
+        let temp_dir = test_dir();
+        let kvs = Arc::new(
+            KvsBuilder::new(instance_id.clone())
+                .dir(temp_dir.1.clone())
+                .build()
+                .unwrap(),
+        );
+        let _ = kvs.set_value("test", KvsValue::Number(123.0));
+
+        let c_kvs = kvs.clone();
+        let _ = thread::spawn(move || {
+            let _ = c_kvs.get_value("test");
+            panic!();
+        })
+        .join();
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_kvs_value_array_index_fail() {
+        let _ = KvsValue::Number(123.0)[10];
+    }
+
+    #[test]
+    fn test_from_kvs_value_f64_null() {
+        let res = f64::try_from(&KvsValue::Null);
+        assert!(res.is_err());
+    }
+
+    #[test]
+    fn test_get_inner_value() {
+        let value = KvsValue::Null;
+        let _ = f64::get_inner_value(&value);
+    }
+
+    #[test]
+    fn test_drop() {
+        let instance_id = InstanceId::new(0);
+        let temp_dir = test_dir();
+        let kvs = Arc::new(
+            KvsBuilder::new(instance_id.clone())
+                .dir(temp_dir.1.clone())
+                .build()
+                .unwrap(),
+        );
+        kvs.flush_on_exit(false);
+    }
+
+    impl<'a> TryFrom<&'a KvsValue> for u64 {
+        type Error = ErrorCode;
+
+        fn try_from(_val: &'a KvsValue) -> Result<u64, Self::Error> {
+            Err(ErrorCode::ConversionFailed)
+        }
+    }
+
+    #[test]
+    fn test_get_value_try_from_error() {
+        let instance_id = InstanceId::new(0);
+        let temp_dir = test_dir();
+
+        std::fs::copy(
+            "tests/kvs_0_default.json",
+            format!("{}/kvs_0_default.json", temp_dir.1.clone()),
+        )
+        .unwrap();
+
+        std::fs::copy(
+            "tests/kvs_0_default.hash",
+            format!("{}/kvs_0_default.hash", temp_dir.1.clone()),
+        )
+        .unwrap();
+
+        let kvs = Arc::new(
+            KvsBuilder::new(instance_id.clone())
+                .dir(temp_dir.1.clone())
+                .need_defaults(true)
+                .build()
+                .unwrap(),
+        );
+        let _ = kvs.set_value("test", KvsValue::Number(123.0));
+
+        // stored value
+        let _ = kvs.get_value("test");
+
+        // default value
+        let _ = kvs.get_value("bool1");
+    }
+
+    #[test]
+    fn test_snapshot_id() {
+        let snapshot_id: SnapshotId = 123.into();
+        assert_eq!(snapshot_id, SnapshotId(123));
+    }
+
+    #[test]
+    fn test_set_default_value() {
+        let instance_id = InstanceId::new(0);
+        let temp_dir = test_dir();
+
+        std::fs::copy(
+            "tests/kvs_0_default.json",
+            format!("{}/kvs_0_default.json", temp_dir.1.clone()),
+        )
+        .unwrap();
+
+        std::fs::copy(
+            "tests/kvs_0_default.hash",
+            format!("{}/kvs_0_default.hash", temp_dir.1.clone()),
+        )
+        .unwrap();
+
+        let kvs = Arc::new(
+            KvsBuilder::new(instance_id.clone())
+                .dir(temp_dir.1.clone())
+                .need_defaults(true)
+                .build()
+                .unwrap(),
+        );
+
+        assert_eq!(
+            kvs.get_value("string1"),
+            Ok(KvsValue::String("Hello".to_string()))
+        );
+        assert!(kvs
+            .set_value("string1", KvsValue::String("Bye".to_string()))
+            .is_ok());
+        assert_eq!(
+            kvs.get_value("string1"),
+            Ok(KvsValue::String("Bye".to_string()))
+        );
+        assert!(kvs.set_default_value("string1").is_ok());
+        assert_eq!(
+            kvs.get_value("string1"),
+            Ok(KvsValue::String("Hello".to_string()))
+        );
+        assert_eq!(
+            kvs.set_default_value("string2").err(),
+            Some(ErrorCode::KeyDefaultNotFound)
+        );
+    }
+
+    #[test]
+    fn test_has_default_value_with_mutex_lock_fail() {
+        let instance_id = InstanceId::new(0);
+        let temp_dir = test_dir();
+
+        std::fs::copy(
+            "tests/kvs_0_default.json",
+            format!("{}/kvs_0_default.json", temp_dir.1.clone()),
+        )
+        .unwrap();
+
+        std::fs::copy(
+            "tests/kvs_0_default.hash",
+            format!("{}/kvs_0_default.hash", temp_dir.1.clone()),
+        )
+        .unwrap();
+
+        let kvs = Arc::new(
+            KvsBuilder::new(instance_id.clone())
+                .dir(temp_dir.1.clone())
+                .need_defaults(true)
+                .build()
+                .unwrap(),
+        );
+
+        // test from: https://doc.rust-lang.org/std/sync/struct.PoisonError.html
+        let c_kvs = kvs.clone();
+        let _ = thread::spawn(move || {
+            let _unused = c_kvs.kvs.lock().unwrap();
+            panic!();
+        })
+        .join();
+
+        assert!(!kvs.has_default_value("string1"));
+    }
+
+    #[test]
+    fn test_try_from_kvs_value() {
+        assert!(f64::try_from(&KvsValue::Number(123.0)).is_ok());
+        assert!(<()>::try_from(&KvsValue::Null).is_ok());
+        assert_eq!(
+            <()>::try_from(&KvsValue::Number(123.0)),
+            Err(ErrorCode::InvalidValueType)
+        );
+        assert_eq!(
+            u64::try_from(&KvsValue::Number(123.0)),
+            Err(ErrorCode::ConversionFailed)
+        );
     }
 }

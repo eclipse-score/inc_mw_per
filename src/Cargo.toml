@@ -1,0 +1,18 @@
+[package]
+name = "rust-kvs"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+adler32.workspace = true
+tinyjson.workspace = true
+pico-args.workspace = true
+
+
+[[bin]]
+name = "kvs_tool"
+path = "kvs_tool.rs"
+
+[lib]
+name = "rust_kvs"
+path = "lib.rs"

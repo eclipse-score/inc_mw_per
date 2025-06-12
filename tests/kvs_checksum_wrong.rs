@@ -11,7 +11,7 @@
 
 //! # Verify KVS Open with wrong Checksum
 
-use rust_kvs::{ErrorCode, InstanceId, Kvs, KvsValue, OpenNeedDefaults, OpenNeedKvs, SnapshotId};
+use rust_kvs::{ErrorCode, InstanceId, KvsBuilder, KvsValue, SnapshotId};
 
 mod common;
 use crate::common::TempDir;
@@ -22,11 +22,10 @@ fn kvs_checksum_wrong() -> Result<(), ErrorCode> {
     let dir = TempDir::create()?;
     dir.set_current_dir()?;
 
-    let kvs = Kvs::open(
-        InstanceId::new(0),
-        OpenNeedDefaults::Optional,
-        OpenNeedKvs::Optional,
-    )?;
+    let kvs = KvsBuilder::new(InstanceId::new(0))
+        .need_defaults(false)
+        .need_kvs(false)
+        .build()?;
 
     kvs.set_value("number", 123.0)?;
     kvs.set_value("bool", true)?;
@@ -51,11 +50,11 @@ fn kvs_checksum_wrong() -> Result<(), ErrorCode> {
     std::fs::write(hash_filename, vec![0x12, 0x34, 0x56, 0x78])?;
 
     // opening must fail because of the missing checksum file
-    let kvs = Kvs::open(
-        InstanceId::new(0),
-        OpenNeedDefaults::Optional,
-        OpenNeedKvs::Required,
-    );
+    let kvs = KvsBuilder::new(InstanceId::new(0))
+        .need_defaults(false)
+        .need_kvs(true)
+        .build();
+
     assert_eq!(kvs.err(), Some(ErrorCode::ValidationFailed));
 
     Ok(())

@@ -15,7 +15,7 @@ module(
     version = "1.0",
 )
 
-bazel_dep(name = "rules_python", version = "1.0.0")
+bazel_dep(name = "rules_python", version = "1.4.1")
 
 PYTHON_VERSION = "3.12"
 

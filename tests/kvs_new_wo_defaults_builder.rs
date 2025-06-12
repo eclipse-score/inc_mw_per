@@ -11,7 +11,7 @@
 
 //! # Verify KVS Base Functionality without Defaults
 
-use rust_kvs::{ErrorCode, InstanceId, Kvs, KvsBuilder, KvsValue, OpenNeedDefaults, OpenNeedKvs};
+use rust_kvs::{ErrorCode, InstanceId, KvsBuilder, KvsValue};
 use std::collections::HashMap;
 
 mod common;
@@ -23,11 +23,10 @@ fn kvs_without_defaults_builder() -> Result<(), ErrorCode> {
     let dir = TempDir::create()?;
     dir.set_current_dir()?;
 
-    let kvs = Kvs::open(
-        InstanceId::new(0),
-        OpenNeedDefaults::Optional,
-        OpenNeedKvs::Optional,
-    )?;
+    let kvs = KvsBuilder::new(InstanceId::new(0))
+        .need_defaults(false)
+        .need_kvs(false)
+        .build()?;
 
     kvs.set_value("number", 123.0)?;
     kvs.set_value("bool", true)?;

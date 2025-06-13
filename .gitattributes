@@ -1,0 +1,12 @@
+# .gitattributes
+# More information about this file:
+#  http://git-scm.com/book/en/v2/Customizing-Git-Git-Attributes
+#  https://git-scm.com/docs/gitattributes
+#
+
+# Set the default behavior, in case people don't have core.autocrlf set.
+# More information:
+# https://docs.github.com/en/get-started/getting-started-with-git/configuring-git-to-handle-line-endings
+
+* text=auto
+* eol=lf

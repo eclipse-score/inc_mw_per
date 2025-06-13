@@ -1,17 +1,17 @@
-[package]
-name = "rust-kvs"
+[workspace]
+resolver = "2"
+members=[
+    "src",
+]
+
+[workspace.package]
 version = "0.1.0"
 edition = "2021"
 
-[dependencies]
+
+[workspace.dependencies]
+rust-kvs = { path = "src" }
+
 adler32 = "1.2.0"
 tinyjson = "2.5.1"
 pico-args = "0.5"
-
-[[bin]]
-name = "kvs_tool"
-path = "src/kvs_tool.rs"
-
-[lib]
-name = "rust_kvs"
-path = "src/lib.rs"

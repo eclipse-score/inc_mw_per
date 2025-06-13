@@ -28,14 +28,6 @@ copyright_checker(
     visibility = ["//visibility:public"],
 )
 
-filegroup(
-    name = "cargo_lock",
-    srcs = [
-        "Cargo.lock",
-    ],
-    visibility = ["//visibility:public"],
-)
-
 dash_license_checker(
     src = ":cargo_lock",
     file_type = "",  # let it auto-detect based on project_config
@@ -45,3 +37,7 @@ dash_license_checker(
 
 # Add target for formatting checks
 use_format_targets()
+
+exports_files([
+    "MODULE.bazel",
+])

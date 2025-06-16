@@ -11,7 +11,7 @@
 
 //! # Verify KVS Default Value Functionality
 
-use rust_kvs::{ErrorCode, InstanceId, Kvs, KvsValue, OpenNeedDefaults, OpenNeedKvs};
+use rust_kvs::{ErrorCode, InstanceId, KvsBuilder, KvsValue};
 use std::collections::HashMap;
 use tinyjson::{JsonGenerator, JsonValue};
 
@@ -47,11 +47,10 @@ fn kvs_without_defaults() -> Result<(), ErrorCode> {
     std::fs::write("kvs_0_default.json", &data)?;
 
     // create KVS
-    let kvs = Kvs::open(
-        InstanceId::new(0),
-        OpenNeedDefaults::Required,
-        OpenNeedKvs::Optional,
-    )?;
+    let kvs = KvsBuilder::new(InstanceId::new(0))
+        .need_defaults(true)
+        .need_kvs(false)
+        .build()?;
 
     kvs.set_value("number2", 345.0)?;
     kvs.set_value("bool2", false)?;
@@ -84,11 +83,10 @@ fn kvs_without_defaults() -> Result<(), ErrorCode> {
     // drop the current instance with flush-on-exit enabled and reopen storage
     drop(kvs);
 
-    let kvs = Kvs::open(
-        InstanceId::new(0),
-        OpenNeedDefaults::Optional,
-        OpenNeedKvs::Required,
-    )?;
+    let kvs = KvsBuilder::new(InstanceId::new(0))
+        .need_defaults(false)
+        .need_kvs(true)
+        .build()?;
 
     assert!(kvs.get_value::<bool>("bool1")?);
     assert!(!kvs.is_value_default("bool1")?);
@@ -115,11 +113,10 @@ fn kvs_without_defaults() -> Result<(), ErrorCode> {
     let data = String::from_utf8(buf)?;
     std::fs::write("kvs_0_default.json", &data)?;
 
-    let kvs = Kvs::open(
-        InstanceId::new(0),
-        OpenNeedDefaults::Optional,
-        OpenNeedKvs::Required,
-    )?;
+    let kvs = KvsBuilder::new(InstanceId::new(0))
+        .need_defaults(false)
+        .need_kvs(true)
+        .build()?;
 
     assert_eq!(kvs.get_value::<f64>("number1")?, 987.0);
     assert!(kvs.is_value_default("number1")?);

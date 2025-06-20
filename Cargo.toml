@@ -1,7 +1,7 @@
 [workspace]
 resolver = "2"
 members=[
-    "src",
+    "src/rust",
 ]
 
 [workspace.package]
@@ -10,7 +10,7 @@ edition = "2021"
 
 
 [workspace.dependencies]
-rust-kvs = { path = "src" }
+rust-kvs = { path = "src/rust" }
 
 adler32 = "1.2.0"
 tinyjson = "2.5.1"

@@ -41,3 +41,15 @@ use_format_targets()
 exports_files([
     "MODULE.bazel",
 ])
+
+alias(
+    name = "kvs_cpp",
+    actual = "//src/cpp:kvs_cpp",
+    visibility = ["//visibility:public"],
+)
+
+test_suite(
+    name = "test_kvs_cpp",
+    tests = ["//tests/cpp:test_kvs_cpp"],
+    visibility = ["//visibility:public"],
+)

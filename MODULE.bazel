@@ -76,7 +76,21 @@ crate.from_cargo(
     cargo_lockfile = "//:Cargo.lock",
     manifests = [
         "//:Cargo.toml",
-        "//src:Cargo.toml",
+        "//src/rust:Cargo.toml",
     ],
 )
 use_repo(crate, "crates")
+
+#bazel_dep on module 'rules_boost' has no version -> override needed
+archive_override(
+    module_name = "rules_boost",
+    strip_prefix = "rules_boost-master",
+    urls = ["https://github.com/nelhage/rules_boost/archive/refs/heads/master.tar.gz"],
+)
+
+bazel_dep(name = "score-baselibs", version = "0.0.0")
+git_override(
+    module_name = "score-baselibs",
+    commit = "f0a394a602986ddf7abac6a238b9d44535a4b597",
+    remote = "git@github.com:eclipse-score/baselibs.git",
+)

@@ -79,6 +79,9 @@
 //! ```
 //!
 
+#[cfg(target_os = "nto")]
+mod nto;
+
 use pico_args::Arguments;
 use rust_kvs::{ErrorCode, InstanceId, Kvs, KvsValue, OpenNeedDefaults, OpenNeedKvs, SnapshotId};
 use std::collections::HashMap;

@@ -5,6 +5,7 @@ edition.workspace = true
 
 [dependencies]
 adler32.workspace = true
+tempdir.workspace = true
 tinyjson.workspace = true
 pico-args.workspace = true
 

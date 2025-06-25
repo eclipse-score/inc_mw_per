@@ -13,5 +13,6 @@ edition = "2021"
 rust-kvs = { path = "src" }
 
 adler32 = "1.2.0"
+tempdir = "0.3.7"
 tinyjson = "2.5.1"
 pico-args = "0.5"

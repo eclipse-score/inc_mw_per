@@ -5,6 +5,7 @@ edition.workspace = true
 
 [dependencies]
 adler32.workspace = true
+tempdir.workspace = true
 tinyjson.workspace = true
 pico-args.workspace = true
 
@@ -16,3 +17,6 @@ path = "kvs_tool.rs"
 [lib]
 name = "rust_kvs"
 path = "lib.rs"
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(coverage_nightly)'] }

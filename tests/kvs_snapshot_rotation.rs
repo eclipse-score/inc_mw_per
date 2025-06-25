@@ -11,7 +11,7 @@
 
 //! # Verify Snapshot Rotation
 
-use rust_kvs::{ErrorCode, InstanceId, Kvs, KvsValue, OpenNeedDefaults, OpenNeedKvs, SnapshotId};
+use rust_kvs::{ErrorCode, InstanceId, Kvs, KvsBuilder, KvsValue, SnapshotId};
 use std::collections::HashMap;
 
 mod common;
@@ -40,11 +40,10 @@ fn kvs_snapshot_rotation() -> Result<(), ErrorCode> {
 
         // drop the current instance with flush-on-exit enabled and re-open it
         drop(kvs);
-        kvs = Kvs::open(
-            InstanceId::new(0),
-            OpenNeedDefaults::Optional,
-            OpenNeedKvs::Required,
-        )?;
+        kvs = KvsBuilder::new(InstanceId::new(0))
+            .need_defaults(false)
+            .need_kvs(true)
+            .build()?;
     }
 
     // restore the oldest snapshot
@@ -61,11 +60,10 @@ fn kvs_snapshot_rotation() -> Result<(), ErrorCode> {
 
 /// Create an example KVS
 fn create_kvs() -> Result<Kvs, ErrorCode> {
-    let kvs = Kvs::open(
-        InstanceId::new(0),
-        OpenNeedDefaults::Optional,
-        OpenNeedKvs::Optional,
-    )?;
+    let kvs = KvsBuilder::new(InstanceId::new(0))
+        .need_defaults(false)
+        .need_kvs(false)
+        .build()?;
 
     kvs.set_value("number", 123.0)?;
     kvs.set_value("bool", true)?;

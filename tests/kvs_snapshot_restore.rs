@@ -11,7 +11,7 @@
 
 //! # Verify Snapshot Recovery
 
-use rust_kvs::{ErrorCode, InstanceId, Kvs, OpenNeedDefaults, OpenNeedKvs, SnapshotId};
+use rust_kvs::{ErrorCode, InstanceId, Kvs, KvsBuilder, KvsValue, SnapshotId};
 
 mod common;
 use crate::common::TempDir;
@@ -23,11 +23,10 @@ fn kvs_snapshot_restore() -> Result<(), ErrorCode> {
     dir.set_current_dir()?;
 
     let max_count = Kvs::snapshot_max_count();
-    let mut kvs = Kvs::open(
-        InstanceId::new(0),
-        OpenNeedDefaults::Optional,
-        OpenNeedKvs::Optional,
-    )?;
+    let mut kvs = KvsBuilder::new(InstanceId::new(0))
+        .need_defaults(false)
+        .need_kvs(false)
+        .build()?;
 
     // we need a double zero here because after the first flush no snapshot is created
     // and the max count is also added twice to make sure we rotate once
@@ -44,17 +43,19 @@ fn kvs_snapshot_restore() -> Result<(), ErrorCode> {
 
         // drop the current instance with flush-on-exit enabled and re-open it
         drop(kvs);
-        kvs = Kvs::open(
-            InstanceId::new(0),
-            OpenNeedDefaults::Optional,
-            OpenNeedKvs::Required,
-        )?;
+        kvs = KvsBuilder::new(InstanceId::new(0))
+            .need_defaults(false)
+            .need_kvs(true)
+            .build()?;
     }
 
     // restore snapshots and check `counter` value
     for idx in 1..=max_count {
         kvs.snapshot_restore(SnapshotId::new(idx))?;
-        assert_eq!(kvs.get_value::<f64>("counter")?, (counter - idx) as f64);
+        assert_eq!(
+            kvs.get_value("counter")?,
+            KvsValue::Number((counter - idx) as f64)
+        );
     }
 
     Ok(())

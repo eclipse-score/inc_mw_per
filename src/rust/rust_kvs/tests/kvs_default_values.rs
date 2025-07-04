@@ -13,10 +13,9 @@
 
 use rust_kvs::{ErrorCode, InstanceId, Kvs, KvsApi, KvsBuilder, KvsValue};
 use std::collections::HashMap;
+use std::env::set_current_dir;
+use tempfile::tempdir;
 use tinyjson::{JsonGenerator, JsonValue};
-
-mod common;
-use crate::common::TempDir;
 
 /// Test default values
 ///   * Default file must exist
@@ -27,8 +26,8 @@ use crate::common::TempDir;
 ///   * Change in default must be ignored when key was once set
 #[test]
 fn kvs_without_defaults() -> Result<(), ErrorCode> {
-    let dir = TempDir::create()?;
-    dir.set_current_dir()?;
+    let dir = tempdir()?;
+    set_current_dir(dir.path())?;
 
     // create defaults file
     let defaults: HashMap<String, KvsValue> = HashMap::from([

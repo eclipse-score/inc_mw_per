@@ -13,15 +13,14 @@
 
 use rust_kvs::{ErrorCode, InstanceId, Kvs, KvsApi, KvsBuilder, KvsValue, SnapshotId};
 use std::collections::HashMap;
-
-mod common;
-use crate::common::TempDir;
+use std::env::set_current_dir;
+use tempfile::tempdir;
 
 /// Test snapshot rotation
 #[test]
 fn kvs_snapshot_rotation() -> Result<(), ErrorCode> {
-    let dir = TempDir::create()?;
-    dir.set_current_dir()?;
+    let dir = tempdir()?;
+    set_current_dir(dir.path())?;
 
     let max_count = Kvs::snapshot_max_count();
     let mut kvs = create_kvs()?;

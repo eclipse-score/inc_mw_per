@@ -12,15 +12,14 @@
 //! # Verify KVS Open with missing Checksum
 
 use rust_kvs::{ErrorCode, InstanceId, Kvs, KvsApi, KvsBuilder, KvsValue, SnapshotId};
-
-mod common;
-use crate::common::TempDir;
+use std::env::set_current_dir;
+use tempfile::tempdir;
 
 /// Create a KVS, close it, delete checksum and try to reopen it.
 #[test]
 fn kvs_checksum_missing() -> Result<(), ErrorCode> {
-    let dir = TempDir::create()?;
-    dir.set_current_dir()?;
+    let dir = tempdir()?;
+    set_current_dir(dir.path())?;
 
     let kvs = KvsBuilder::<Kvs>::new(InstanceId::new(0))
         .need_defaults(false)

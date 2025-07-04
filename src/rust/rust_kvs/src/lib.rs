@@ -1185,19 +1185,15 @@ mod tests {
     use super::*;
     use std::sync::Arc;
     use std::thread;
-    use tempdir::TempDir;
-
-    #[must_use]
-    fn test_dir() -> (TempDir, String) {
-        let temp_dir = TempDir::new("").unwrap();
-        let temp_path = temp_dir.path().display().to_string();
-        (temp_dir, temp_path)
-    }
+    use tempfile::tempdir;
 
     #[test]
     fn test_new_kvs_builder() {
+        let dir = tempdir().unwrap();
+        let dir_path = dir.path().to_string_lossy().to_string();
+
         let instance_id = InstanceId::new(0);
-        let builder = KvsBuilder::<Kvs>::new(instance_id.clone()).dir(test_dir().1);
+        let builder = KvsBuilder::<Kvs>::new(instance_id.clone()).dir(dir_path);
 
         assert_eq!(builder.instance_id, instance_id);
         assert!(!builder.need_defaults);
@@ -1206,9 +1202,12 @@ mod tests {
 
     #[test]
     fn test_need_defaults() {
+        let dir = tempdir().unwrap();
+        let dir_path = dir.path().to_string_lossy().to_string();
+
         let instance_id = InstanceId::new(0);
         let builder = KvsBuilder::<Kvs>::new(instance_id.clone())
-            .dir(test_dir().1)
+            .dir(dir_path)
             .need_defaults(true);
 
         assert!(builder.need_defaults);
@@ -1216,9 +1215,12 @@ mod tests {
 
     #[test]
     fn test_need_kvs() {
+        let dir = tempdir().unwrap();
+        let dir_path = dir.path().to_string_lossy().to_string();
+
         let instance_id = InstanceId::new(0);
         let builder = KvsBuilder::<Kvs>::new(instance_id.clone())
-            .dir(test_dir().1)
+            .dir(dir_path)
             .need_kvs(true);
 
         assert!(builder.need_kvs);
@@ -1226,17 +1228,23 @@ mod tests {
 
     #[test]
     fn test_build() {
+        let dir = tempdir().unwrap();
+        let dir_path = dir.path().to_string_lossy().to_string();
+
         let instance_id = InstanceId::new(0);
-        let builder = KvsBuilder::<Kvs>::new(instance_id.clone()).dir(test_dir().1);
+        let builder = KvsBuilder::<Kvs>::new(instance_id.clone()).dir(dir_path);
 
         builder.build().unwrap();
     }
 
     #[test]
     fn test_build_with_defaults() {
+        let dir = tempdir().unwrap();
+        let dir_path = dir.path().to_string_lossy().to_string();
+
         let instance_id = InstanceId::new(0);
         let builder = KvsBuilder::<Kvs>::new(instance_id.clone())
-            .dir(test_dir().1)
+            .dir(dir_path)
             .need_defaults(true);
 
         assert!(builder.build().is_err());
@@ -1244,23 +1252,25 @@ mod tests {
 
     #[test]
     fn test_build_with_kvs() {
+        let dir = tempdir().unwrap();
+        let dir_path = dir.path().to_string_lossy().to_string();
+
         let instance_id = InstanceId::new(0);
-        let temp_dir = test_dir();
 
         // negative
         let builder = KvsBuilder::<Kvs>::new(instance_id.clone())
-            .dir(temp_dir.1.clone())
+            .dir(dir_path.clone())
             .need_kvs(true);
         assert!(builder.build().is_err());
 
         KvsBuilder::<Kvs>::new(instance_id.clone())
-            .dir(temp_dir.1.clone())
+            .dir(dir_path.clone())
             .build()
             .unwrap();
 
         // positive
         let builder = KvsBuilder::<Kvs>::new(instance_id)
-            .dir(temp_dir.1)
+            .dir(dir_path)
             .need_kvs(true);
         builder.build().unwrap();
     }
@@ -1326,10 +1336,12 @@ mod tests {
 
     #[test]
     fn test_flush_on_exit() {
+        let dir = tempdir().unwrap();
+        let dir_path = dir.path().to_string_lossy().to_string();
+
         let instance_id = InstanceId::new(0);
-        let temp_dir = test_dir();
         let kvs = KvsBuilder::<Kvs>::new(instance_id.clone())
-            .dir(temp_dir.1.clone())
+            .dir(dir_path.clone())
             .build()
             .unwrap();
         kvs.flush_on_exit(true);
@@ -1337,10 +1349,12 @@ mod tests {
 
     #[test]
     fn test_reset() {
+        let dir = tempdir().unwrap();
+        let dir_path = dir.path().to_string_lossy().to_string();
+
         let instance_id = InstanceId::new(0);
-        let temp_dir = test_dir();
         let kvs = KvsBuilder::<Kvs>::new(instance_id.clone())
-            .dir(temp_dir.1.clone())
+            .dir(dir_path.clone())
             .build()
             .unwrap();
         let _ = kvs.set_value("test", KvsValue::Number(1.0));
@@ -1350,10 +1364,12 @@ mod tests {
 
     #[test]
     fn test_get_all_keys() {
+        let dir = tempdir().unwrap();
+        let dir_path = dir.path().to_string_lossy().to_string();
+
         let instance_id = InstanceId::new(0);
-        let temp_dir = test_dir();
         let kvs = KvsBuilder::<Kvs>::new(instance_id.clone())
-            .dir(temp_dir.1.clone())
+            .dir(dir_path.clone())
             .build()
             .unwrap();
         let _ = kvs.set_value("test", KvsValue::Number(1.0));
@@ -1368,10 +1384,12 @@ mod tests {
 
     #[test]
     fn test_key_exists() {
+        let dir = tempdir().unwrap();
+        let dir_path = dir.path().to_string_lossy().to_string();
+
         let instance_id = InstanceId::new(0);
-        let temp_dir = test_dir();
         let kvs = KvsBuilder::<Kvs>::new(instance_id.clone())
-            .dir(temp_dir.1.clone())
+            .dir(dir_path.clone())
             .build()
             .unwrap();
         let exists = kvs.key_exists("test");
@@ -1385,10 +1403,12 @@ mod tests {
 
     #[test]
     fn test_get_filename() {
+        let dir = tempdir().unwrap();
+        let dir_path = dir.path().to_string_lossy().to_string();
+
         let instance_id = InstanceId::new(0);
-        let temp_dir = test_dir();
         let kvs = KvsBuilder::<Kvs>::new(instance_id.clone())
-            .dir(temp_dir.1.clone())
+            .dir(dir_path.clone())
             .build()
             .unwrap();
         let filename = kvs.get_kvs_filename(SnapshotId::new(0));
@@ -1400,11 +1420,13 @@ mod tests {
 
     #[test]
     fn test_get_value() {
+        let dir = tempdir().unwrap();
+        let dir_path = dir.path().to_string_lossy().to_string();
+
         let instance_id = InstanceId::new(0);
-        let temp_dir = test_dir();
         let kvs = Arc::new(
             KvsBuilder::<Kvs>::new(instance_id.clone())
-                .dir(temp_dir.1.clone())
+                .dir(dir_path.clone())
                 .build()
                 .unwrap(),
         );
@@ -1426,11 +1448,13 @@ mod tests {
 
     #[test]
     fn test_drop() {
+        let dir = tempdir().unwrap();
+        let dir_path = dir.path().to_string_lossy().to_string();
+
         let instance_id = InstanceId::new(0);
-        let temp_dir = test_dir();
         let kvs = Arc::new(
             KvsBuilder::<Kvs>::new(instance_id.clone())
-                .dir(temp_dir.1.clone())
+                .dir(dir_path.clone())
                 .build()
                 .unwrap(),
         );
@@ -1453,18 +1477,20 @@ mod tests {
     #[cfg_attr(miri, ignore)]
     #[test]
     fn test_get_value_try_from_error() {
+        let dir = tempdir().unwrap();
+        let dir_path = dir.path().to_string_lossy().to_string();
+
         let instance_id = InstanceId::new(0);
-        let temp_dir = test_dir();
 
         std::fs::copy(
             "tests/kvs_0_default.json",
-            format!("{}/kvs_0_default.json", temp_dir.1.clone()),
+            format!("{}/kvs_0_default.json", dir_path.clone()),
         )
         .unwrap();
 
         let kvs = Arc::new(
             KvsBuilder::<Kvs>::new(instance_id.clone())
-                .dir(temp_dir.1.clone())
+                .dir(dir_path.clone())
                 .need_defaults(true)
                 .build()
                 .unwrap(),
@@ -1489,13 +1515,15 @@ mod tests {
 
     #[test]
     fn test_kvs_open_and_set_get_value() {
+        let dir = tempdir().unwrap();
+        let dir_path = dir.path().to_string_lossy().to_string();
+
         let instance_id = InstanceId::new(42);
-        let temp_dir = test_dir();
         let kvs = Kvs::open(
             instance_id.clone(),
             OpenNeedDefaults::Optional,
             OpenNeedKvs::Optional,
-            Some(temp_dir.1.clone()),
+            Some(dir_path.clone()),
         )
         .unwrap();
         let _ = kvs.set_value("direct", KvsValue::String("abc".to_string()));
@@ -1505,13 +1533,15 @@ mod tests {
 
     #[test]
     fn test_kvs_reset() {
+        let dir = tempdir().unwrap();
+        let dir_path = dir.path().to_string_lossy().to_string();
+
         let instance_id = InstanceId::new(43);
-        let temp_dir = test_dir();
         let kvs = Kvs::open(
             instance_id.clone(),
             OpenNeedDefaults::Optional,
             OpenNeedKvs::Optional,
-            Some(temp_dir.1.clone()),
+            Some(dir_path.clone()),
         )
         .unwrap();
         let _ = kvs.set_value("reset", KvsValue::Number(1.0));
@@ -1525,13 +1555,15 @@ mod tests {
 
     #[test]
     fn test_kvs_key_exists_and_get_all_keys() {
+        let dir = tempdir().unwrap();
+        let dir_path = dir.path().to_string_lossy().to_string();
+
         let instance_id = InstanceId::new(44);
-        let temp_dir = test_dir();
         let kvs = Kvs::open(
             instance_id.clone(),
             OpenNeedDefaults::Optional,
             OpenNeedKvs::Optional,
-            Some(temp_dir.1.clone()),
+            Some(dir_path.clone()),
         )
         .unwrap();
         assert!(!kvs.key_exists("foo").unwrap());
@@ -1543,13 +1575,15 @@ mod tests {
 
     #[test]
     fn test_kvs_remove_key() {
+        let dir = tempdir().unwrap();
+        let dir_path = dir.path().to_string_lossy().to_string();
+
         let instance_id = InstanceId::new(45);
-        let temp_dir = test_dir();
         let kvs = Kvs::open(
             instance_id.clone(),
             OpenNeedDefaults::Optional,
             OpenNeedKvs::Optional,
-            Some(temp_dir.1.clone()),
+            Some(dir_path.clone()),
         )
         .unwrap();
         let _ = kvs.set_value("bar", KvsValue::Number(2.0));
@@ -1560,13 +1594,15 @@ mod tests {
 
     #[test]
     fn test_kvs_flush_and_snapshot() {
+        let dir = tempdir().unwrap();
+        let dir_path = dir.path().to_string_lossy().to_string();
+
         let instance_id = InstanceId::new(46);
-        let temp_dir = test_dir();
         let kvs = Kvs::open(
             instance_id.clone(),
             OpenNeedDefaults::Optional,
             OpenNeedKvs::Optional,
-            Some(temp_dir.1.clone()),
+            Some(dir_path.clone()),
         )
         .unwrap();
         let _ = kvs.set_value("snap", KvsValue::Number(3.0));

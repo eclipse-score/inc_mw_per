@@ -12,15 +12,14 @@
 //! # Verify File Check for non-existing KVS File
 
 use rust_kvs::{ErrorCode, InstanceId, Kvs, KvsBuilder};
-
-mod common;
-use crate::common::TempDir;
+use std::env::set_current_dir;
+use tempfile::tempdir;
 
 /// Start with no KVS and check if the `need_kvs` flag is working
 #[test]
 fn kvs_check_needs_kvs() -> Result<(), ErrorCode> {
-    let dir = TempDir::create()?;
-    dir.set_current_dir()?;
+    let dir = tempdir()?;
+    set_current_dir(dir.path())?;
 
     let kvs = KvsBuilder::<Kvs>::new(InstanceId::new(0))
         .need_defaults(false)

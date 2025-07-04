@@ -12,15 +12,14 @@
 //! # Verify Snapshot Recovery
 
 use rust_kvs::{ErrorCode, InstanceId, Kvs, KvsApi, KvsBuilder, SnapshotId};
-
-mod common;
-use crate::common::TempDir;
+use std::env::set_current_dir;
+use tempfile::tempdir;
 
 /// Test snapshot recovery
 #[test]
 fn kvs_snapshot_restore() -> Result<(), ErrorCode> {
-    let dir = TempDir::create()?;
-    dir.set_current_dir()?;
+    let dir = tempdir()?;
+    set_current_dir(dir.path())?;
 
     let max_count = Kvs::snapshot_max_count();
     let mut kvs = KvsBuilder::<Kvs>::new(InstanceId::new(0))

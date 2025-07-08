@@ -15,7 +15,7 @@ use std::ops::Index;
 use tinyjson::JsonValue;
 
 /// Key-value-storage value
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum KvsValue {
     /// Number
     Number(f64),

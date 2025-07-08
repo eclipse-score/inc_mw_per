@@ -216,6 +216,9 @@ pub enum ErrorCode {
     /// Key not found
     KeyNotFound,
 
+    // Key has no default value
+    KeyDefaultNotFound,
+
     /// Serialization failed
     SerializationFailed,
 
@@ -267,7 +270,7 @@ pub struct Kvs {
 }
 
 /// Key-value-storage value
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum KvsValue {
     /// Number
     Number(f64),
@@ -460,6 +463,7 @@ pub trait KvsApi {
         Self: Sized;
 
     fn reset(&self) -> Result<(), ErrorCode>;
+    fn reset_key(&self, key: &str) -> Result<(), ErrorCode>;
     fn get_all_keys(&self) -> Result<Vec<String>, ErrorCode>;
     fn key_exists(&self, key: &str) -> Result<bool, ErrorCode>;
     fn get_value(&self, key: &str) -> Result<KvsValue, ErrorCode>;
@@ -758,6 +762,46 @@ impl KvsApi for Kvs {
     fn reset(&self) -> Result<(), ErrorCode> {
         *self.kvs.lock()? = HashMap::new();
         Ok(())
+    }
+
+    /// Reset a key-value pair in the storage to its initial state
+    /// 
+    /// # Parameters
+    ///    * 'key': Key being reset to default
+    /// 
+    /// # Return Values
+    ///    * Ok: Reset of the key-value pair was successful
+    ///    * `ErrorCode::MutexLockFailed`: Mutex locking failed
+    ///    * `ErrorCode::KeyDefaultNotFound`: Key has no default value 
+    fn reset_key(&self, key: &str) -> Result<(), ErrorCode> {
+        let should_remove = {
+            let kvs = self.kvs.lock()?; 
+
+            if let Some(value) = kvs.get(key) {
+                if let Some(def_value) = self.default.get(key) {
+                    if def_value == value {
+                        return Ok(());
+                    }
+                    true 
+                } else {
+                    eprintln!("error: resetting key without a default value");
+                    return Err(ErrorCode::KeyDefaultNotFound);
+                }
+            } else {
+                return if self.default.get(key).is_some() {
+                    Ok(())
+                } else {
+                    eprintln!("error: resetting key without a default value");
+                    Err(ErrorCode::KeyDefaultNotFound)
+                };
+            }
+        }; 
+
+        if should_remove {
+            self.remove_key(key)
+        } else {
+            Ok(())
+        }
     }
 
     /// Get list of all keys

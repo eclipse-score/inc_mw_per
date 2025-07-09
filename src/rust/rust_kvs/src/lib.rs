@@ -58,11 +58,12 @@
 //! ```
 //! use rust_kvs::{ErrorCode, InstanceId,Kvs,KvsApi, KvsBuilder, KvsValue};
 //! use std::collections::HashMap;
+//! use tempfile::tempdir;
 //!
 //! fn main() -> Result<(), ErrorCode> {
-//!    
-//!     
-//!     let kvs = KvsBuilder::<Kvs>::new(InstanceId::new(0)).dir("").build()?;
+//!     let dir = tempdir()?;
+//!     let dir_path = dir.path().to_path_buf();
+//!     let kvs = KvsBuilder::<Kvs>::new(InstanceId::new(0), dir_path).build()?;
 //!
 //!     kvs.set_value("number", 123.0)?;
 //!     kvs.set_value("bool", true)?;
@@ -146,7 +147,7 @@ use core::ops::Index;
 //std libs
 use std::collections::HashMap;
 use std::fs;
-use std::path::Path;
+use std::path::PathBuf;
 use std::sync::{
     atomic::{self, AtomicBool},
     Mutex, MutexGuard, PoisonError,
@@ -176,6 +177,9 @@ pub enum ErrorCode {
 
     /// File not found
     FileNotFound,
+
+    /// Not a directory
+    NotADirectory,
 
     /// KVS file read error
     KvsFileReadError,
@@ -234,14 +238,14 @@ pub struct KvsBuilder<T: KvsApi = Kvs> {
     /// Instance ID
     instance_id: InstanceId,
 
+    /// Working directory
+    dir: PathBuf,
+
     /// Need-defaults flag
     need_defaults: bool,
 
     /// Need-KVS flag
     need_kvs: bool,
-
-    /// Working directory
-    dir: Option<String>,
 
     /// Phantom data for drop check
     _phantom: std::marker::PhantomData<T>,
@@ -258,6 +262,9 @@ pub struct Kvs {
     ///
     /// Feature: `FEAT_REQ__KVS__default_values`
     default: HashMap<String, KvsValue>,
+
+    /// Working directory
+    dir: PathBuf,
 
     /// Filename prefix
     filename_prefix: String,
@@ -369,6 +376,7 @@ impl From<std::io::Error> for ErrorCode {
         let kind = cause.kind();
         match kind {
             std::io::ErrorKind::NotFound => ErrorCode::FileNotFound,
+            std::io::ErrorKind::NotADirectory => ErrorCode::NotADirectory,
             _ => {
                 eprintln!("error: unmapped error: {kind}");
                 ErrorCode::UnmappedError
@@ -452,9 +460,9 @@ impl SnapshotId {
 pub trait KvsApi {
     fn open(
         instance_id: InstanceId,
+        dir: PathBuf,
         need_defaults: OpenNeedDefaults,
         need_kvs: OpenNeedKvs,
-        dir: Option<String>,
     ) -> Result<Self, ErrorCode>
     where
         Self: Sized;
@@ -481,8 +489,8 @@ pub trait KvsApi {
     where
         Self: Sized;
     fn snapshot_restore(&self, id: SnapshotId) -> Result<(), ErrorCode>;
-    fn get_kvs_filename(&self, id: SnapshotId) -> String;
-    fn get_hash_filename(&self, id: SnapshotId) -> String;
+    fn get_kvs_filename(&self, id: SnapshotId) -> PathBuf;
+    fn get_hash_filename(&self, id: SnapshotId) -> PathBuf;
 }
 
 impl<T> KvsBuilder<T>
@@ -491,20 +499,21 @@ where
 {
     /// Create a builder to open the key-value-storage
     ///
-    /// Only the instance ID must be set. All other settings are using default values until changed
-    /// via the builder API.
+    /// Instance ID and working directory must be set.
+    /// All other settings are using default values until changed via the builder API.
     ///
     /// # Parameters
     ///   * `instance_id`: Instance ID
+    ///   * `dir`: Working directory
     ///
     /// # Return Values
     ///   * KvsBuilder instance
-    pub fn new(instance_id: InstanceId) -> Self {
+    pub fn new(instance_id: InstanceId, dir: PathBuf) -> Self {
         Self {
             instance_id,
+            dir,
             need_defaults: false,
             need_kvs: false,
-            dir: None,
             _phantom: std::marker::PhantomData,
         }
     }
@@ -533,17 +542,6 @@ where
         self
     }
 
-    /// Set the key-value-storage permanent storage directory
-    ///
-    /// # Parameters
-    ///   * `dir`: Path to permanent storage
-    ///
-    /// # Return Values
-    pub fn dir<P: Into<String>>(mut self, dir: P) -> Self {
-        self.dir = Some(dir.into());
-        self
-    }
-
     /// Finalize the builder and open the key-value-storage
     ///
     /// Calls `Kvs::open` with the configured settings.
@@ -563,9 +561,9 @@ where
     pub fn build(self) -> Result<T, ErrorCode> {
         T::open(
             self.instance_id,
+            self.dir,
             self.need_defaults.into(),
             self.need_kvs.into(),
-            self.dir,
         )
     }
 }
@@ -579,6 +577,8 @@ impl Kvs {
     ///   * `FEAT_REQ__KVS__integrity_check`
     ///
     /// # Parameters
+    ///   * `dir`: Working directory
+    ///   * `filename_prefix`: Filename prefix
     ///   * `need_file`: fail if file doesn't exist
     ///   * `verify_hash`: content is verified against a hash file
     ///
@@ -590,15 +590,16 @@ impl Kvs {
     ///   * `ErrorCode::KvsHashFileReadError`: KVS hash file read error
     ///   * `ErrorCode::UnmappedError`: Generic error
     fn open_json<T>(
-        filename_prefix: &str,
+        dir: &PathBuf,
+        filename_prefix: &String,
         need_file: T,
         verify_hash: OpenJsonVerifyHash,
     ) -> Result<HashMap<String, KvsValue>, ErrorCode>
     where
         T: Into<OpenJsonNeedFile>,
     {
-        let filename_json = format!("{filename_prefix}.json");
-        let filename_hash = format!("{filename_prefix}.hash");
+        let filename_json = dir.join(format!("{filename_prefix}.json"));
+        let filename_hash = dir.join(format!("{filename_prefix}.hash"));
         match fs::read_to_string(&filename_json) {
             Ok(data) => {
                 if verify_hash == OpenJsonVerifyHash::Yes {
@@ -608,13 +609,15 @@ impl Kvs {
                             let hash_kvs = RollingAdler32::from_buffer(data.as_bytes()).hash();
                             if u32::from_be_bytes(hash.try_into()?) != hash_kvs {
                                 eprintln!(
-                                    "error: KVS data corrupted ({filename_json}, {filename_hash})"
+                                    "error: KVS data corrupted ({}, {})",
+                                    filename_json.display(),
+                                    filename_hash.display()
                                 );
                                 Err(ErrorCode::ValidationFailed)
                             } else {
                                 println!("JSON data has valid hash");
                                 let data: JsonValue = data.parse()?;
-                                println!("parsing file {filename_json}");
+                                println!("parsing file {}", filename_json.display());
                                 Ok(data
                                     .get::<HashMap<_, _>>()
                                     .ok_or(ErrorCode::JsonParserError)?
@@ -625,7 +628,8 @@ impl Kvs {
                         }
                         Err(err) => {
                             eprintln!(
-                                "error: hash file {filename_hash} could not be read: {err:#?}"
+                                "error: hash file {} could not be read: {err:#?}",
+                                filename_hash.display()
                             );
                             Err(ErrorCode::KvsHashFileReadError)
                         }
@@ -642,10 +646,16 @@ impl Kvs {
             }
             Err(err) => {
                 if need_file.into() == OpenJsonNeedFile::Required {
-                    eprintln!("error: file {filename_json} could not be read: {err:#?}");
+                    eprintln!(
+                        "error: file {} could not be read: {err:#?}",
+                        filename_json.display()
+                    );
                     Err(ErrorCode::KvsFileReadError)
                 } else {
-                    println!("file {filename_json} not found, using empty data");
+                    println!(
+                        "file {} not found, using empty data",
+                        filename_json.display()
+                    );
                     Ok(HashMap::new())
                 }
             }
@@ -662,12 +672,20 @@ impl Kvs {
     ///   * `ErrorCode::UnmappedError`: Unmapped error
     fn snapshot_rotate(&self) -> Result<(), ErrorCode> {
         for idx in (1..=KVS_MAX_SNAPSHOTS).rev() {
-            let hash_old = format!("{}_{}.hash", self.filename_prefix, idx - 1);
-            let hash_new = format!("{}_{}.hash", self.filename_prefix, idx);
-            let snap_old = format!("{}_{}.json", self.filename_prefix, idx - 1);
-            let snap_new = format!("{}_{}.json", self.filename_prefix, idx);
+            let hash_old = self
+                .dir
+                .join(format!("{}_{}.hash", self.filename_prefix, idx - 1));
+            let hash_new = self
+                .dir
+                .join(format!("{}_{}.hash", self.filename_prefix, idx));
+            let snap_old = self
+                .dir
+                .join(format!("{}_{}.json", self.filename_prefix, idx - 1));
+            let snap_new = self
+                .dir
+                .join(format!("{}_{}.json", self.filename_prefix, idx));
 
-            println!("rotating: {snap_old} -> {snap_new}");
+            println!("rotating: {} -> {}", snap_old.display(), snap_new.display());
 
             let res = fs::rename(hash_old, hash_new);
             if let Err(err) = res {
@@ -713,21 +731,25 @@ impl KvsApi for Kvs {
     ///   * `ErrorCode::UnmappedError`: Generic error
     fn open(
         instance_id: InstanceId,
+        dir: PathBuf,
         need_defaults: OpenNeedDefaults,
         need_kvs: OpenNeedKvs,
-        dir: Option<String>,
     ) -> Result<Kvs, ErrorCode> {
-        let dir = if let Some(dir) = dir {
-            format!("{dir}/")
-        } else {
-            "".to_string()
-        };
-        let filename_default = format!("{dir}kvs_{instance_id}_default");
-        let filename_prefix = format!("{dir}kvs_{instance_id}");
+        if !dir.is_dir() {
+            return Err(ErrorCode::NotADirectory);
+        }
+        let dir = dir.canonicalize()?;
+        let filename_default = format!("kvs_{instance_id}_default");
+        let filename_prefix = format!("kvs_{instance_id}");
         let filename_kvs = format!("{filename_prefix}_0");
 
-        let default = Self::open_json(&filename_default, need_defaults, OpenJsonVerifyHash::No)?;
-        let kvs = Self::open_json(&filename_kvs, need_kvs, OpenJsonVerifyHash::Yes)?;
+        let default = Self::open_json(
+            &dir,
+            &filename_default,
+            need_defaults,
+            OpenJsonVerifyHash::No,
+        )?;
+        let kvs = Self::open_json(&dir, &filename_kvs, need_kvs, OpenJsonVerifyHash::Yes)?;
 
         println!("opened KVS: instance '{instance_id}'");
         println!("max snapshot count: {KVS_MAX_SNAPSHOTS}");
@@ -735,6 +757,7 @@ impl KvsApi for Kvs {
         Ok(Self {
             kvs: Mutex::new(kvs),
             default,
+            dir,
             filename_prefix,
             flush_on_exit: AtomicBool::new(true),
         })
@@ -939,11 +962,11 @@ impl KvsApi for Kvs {
 
         let hash = RollingAdler32::from_buffer(&buf).hash();
 
-        let filename_json = format!("{}_0.json", self.filename_prefix);
+        let filename_json = self.dir.join(format!("{}_0.json", self.filename_prefix));
         let data = String::from_utf8(buf)?;
         fs::write(filename_json, &data)?;
 
-        let filename_hash = format!("{}_0.hash", self.filename_prefix);
+        let filename_hash = self.dir.join(format!("{}_0.hash", self.filename_prefix));
         fs::write(filename_hash, hash.to_be_bytes()).ok();
 
         Ok(())
@@ -957,7 +980,10 @@ impl KvsApi for Kvs {
         let mut count = 0;
 
         for idx in 0..=KVS_MAX_SNAPSHOTS {
-            if !Path::new(&format!("{}_{}.json", self.filename_prefix, idx)).exists() {
+            let snapshot_path = self
+                .dir
+                .join(format!("{}_{}.json", self.filename_prefix, idx));
+            if !snapshot_path.exists() {
                 break;
             }
 
@@ -1011,6 +1037,7 @@ impl KvsApi for Kvs {
         }
 
         let kvs = Self::open_json(
+            &self.dir,
             &format!("{}_{}", self.filename_prefix, id.0),
             OpenJsonNeedFile::Required,
             OpenJsonVerifyHash::Yes,
@@ -1026,9 +1053,10 @@ impl KvsApi for Kvs {
     ///   * `id`: Snapshot ID to get the filename for
     ///
     /// # Return Values
-    ///   * String: Filename for ID
-    fn get_kvs_filename(&self, id: SnapshotId) -> String {
-        format!("{}_{}.json", self.filename_prefix, id)
+    ///   * PathBuf: Filename for ID
+    fn get_kvs_filename(&self, id: SnapshotId) -> PathBuf {
+        self.dir
+            .join(format!("{}_{}.json", self.filename_prefix, id))
     }
 
     /// Return the hash-filename for a given snapshot ID
@@ -1037,9 +1065,10 @@ impl KvsApi for Kvs {
     ///   * `id`: Snapshot ID to get the hash filename for
     ///
     /// # Return Values
-    ///   * String: Hash filename for ID
-    fn get_hash_filename(&self, id: SnapshotId) -> String {
-        format!("{}_{}.hash", self.filename_prefix, id)
+    ///   * PathBuf: Hash filename for ID
+    fn get_hash_filename(&self, id: SnapshotId) -> PathBuf {
+        self.dir
+            .join(format!("{}_{}.hash", self.filename_prefix, id))
     }
 }
 
@@ -1183,21 +1212,18 @@ impl Index<usize> for KvsValue {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs::File;
     use std::sync::Arc;
     use std::thread;
-    use tempdir::TempDir;
-
-    #[must_use]
-    fn test_dir() -> (TempDir, String) {
-        let temp_dir = TempDir::new("").unwrap();
-        let temp_path = temp_dir.path().display().to_string();
-        (temp_dir, temp_path)
-    }
+    use tempfile::tempdir;
 
     #[test]
     fn test_new_kvs_builder() {
+        let dir = tempdir().unwrap();
+        let dir_path = dir.path().to_path_buf();
+
         let instance_id = InstanceId::new(0);
-        let builder = KvsBuilder::<Kvs>::new(instance_id.clone()).dir(test_dir().1);
+        let builder = KvsBuilder::<Kvs>::new(instance_id.clone(), dir_path);
 
         assert_eq!(builder.instance_id, instance_id);
         assert!(!builder.need_defaults);
@@ -1206,62 +1232,65 @@ mod tests {
 
     #[test]
     fn test_need_defaults() {
+        let dir = tempdir().unwrap();
+        let dir_path = dir.path().to_path_buf();
+
         let instance_id = InstanceId::new(0);
-        let builder = KvsBuilder::<Kvs>::new(instance_id.clone())
-            .dir(test_dir().1)
-            .need_defaults(true);
+        let builder = KvsBuilder::<Kvs>::new(instance_id.clone(), dir_path).need_defaults(true);
 
         assert!(builder.need_defaults);
     }
 
     #[test]
     fn test_need_kvs() {
+        let dir = tempdir().unwrap();
+        let dir_path = dir.path().to_path_buf();
+
         let instance_id = InstanceId::new(0);
-        let builder = KvsBuilder::<Kvs>::new(instance_id.clone())
-            .dir(test_dir().1)
-            .need_kvs(true);
+        let builder = KvsBuilder::<Kvs>::new(instance_id.clone(), dir_path).need_kvs(true);
 
         assert!(builder.need_kvs);
     }
 
     #[test]
     fn test_build() {
+        let dir = tempdir().unwrap();
+        let dir_path = dir.path().to_path_buf();
+
         let instance_id = InstanceId::new(0);
-        let builder = KvsBuilder::<Kvs>::new(instance_id.clone()).dir(test_dir().1);
+        let builder = KvsBuilder::<Kvs>::new(instance_id.clone(), dir_path);
 
         builder.build().unwrap();
     }
 
     #[test]
     fn test_build_with_defaults() {
+        let dir = tempdir().unwrap();
+        let dir_path = dir.path().to_path_buf();
+
         let instance_id = InstanceId::new(0);
-        let builder = KvsBuilder::<Kvs>::new(instance_id.clone())
-            .dir(test_dir().1)
-            .need_defaults(true);
+        let builder = KvsBuilder::<Kvs>::new(instance_id.clone(), dir_path).need_defaults(true);
 
         assert!(builder.build().is_err());
     }
 
     #[test]
     fn test_build_with_kvs() {
+        let dir = tempdir().unwrap();
+        let dir_path = dir.path().to_path_buf();
+
         let instance_id = InstanceId::new(0);
-        let temp_dir = test_dir();
 
         // negative
-        let builder = KvsBuilder::<Kvs>::new(instance_id.clone())
-            .dir(temp_dir.1.clone())
-            .need_kvs(true);
+        let builder = KvsBuilder::<Kvs>::new(instance_id.clone(), dir_path.clone()).need_kvs(true);
         assert!(builder.build().is_err());
 
-        KvsBuilder::<Kvs>::new(instance_id.clone())
-            .dir(temp_dir.1.clone())
+        KvsBuilder::<Kvs>::new(instance_id.clone(), dir_path.clone())
             .build()
             .unwrap();
 
         // positive
-        let builder = KvsBuilder::<Kvs>::new(instance_id)
-            .dir(temp_dir.1)
-            .need_kvs(true);
+        let builder = KvsBuilder::<Kvs>::new(instance_id, dir_path).need_kvs(true);
         builder.build().unwrap();
     }
 
@@ -1326,10 +1355,11 @@ mod tests {
 
     #[test]
     fn test_flush_on_exit() {
+        let dir = tempdir().unwrap();
+        let dir_path = dir.path().to_path_buf();
+
         let instance_id = InstanceId::new(0);
-        let temp_dir = test_dir();
-        let kvs = KvsBuilder::<Kvs>::new(instance_id.clone())
-            .dir(temp_dir.1.clone())
+        let kvs = KvsBuilder::<Kvs>::new(instance_id.clone(), dir_path)
             .build()
             .unwrap();
         kvs.flush_on_exit(true);
@@ -1337,10 +1367,11 @@ mod tests {
 
     #[test]
     fn test_reset() {
+        let dir = tempdir().unwrap();
+        let dir_path = dir.path().to_path_buf();
+
         let instance_id = InstanceId::new(0);
-        let temp_dir = test_dir();
-        let kvs = KvsBuilder::<Kvs>::new(instance_id.clone())
-            .dir(temp_dir.1.clone())
+        let kvs = KvsBuilder::<Kvs>::new(instance_id.clone(), dir_path)
             .build()
             .unwrap();
         let _ = kvs.set_value("test", KvsValue::Number(1.0));
@@ -1350,10 +1381,11 @@ mod tests {
 
     #[test]
     fn test_get_all_keys() {
+        let dir = tempdir().unwrap();
+        let dir_path = dir.path().to_path_buf();
+
         let instance_id = InstanceId::new(0);
-        let temp_dir = test_dir();
-        let kvs = KvsBuilder::<Kvs>::new(instance_id.clone())
-            .dir(temp_dir.1.clone())
+        let kvs = KvsBuilder::<Kvs>::new(instance_id.clone(), dir_path)
             .build()
             .unwrap();
         let _ = kvs.set_value("test", KvsValue::Number(1.0));
@@ -1368,10 +1400,11 @@ mod tests {
 
     #[test]
     fn test_key_exists() {
+        let dir = tempdir().unwrap();
+        let dir_path = dir.path().to_path_buf();
+
         let instance_id = InstanceId::new(0);
-        let temp_dir = test_dir();
-        let kvs = KvsBuilder::<Kvs>::new(instance_id.clone())
-            .dir(temp_dir.1.clone())
+        let kvs = KvsBuilder::<Kvs>::new(instance_id.clone(), dir_path)
             .build()
             .unwrap();
         let exists = kvs.key_exists("test");
@@ -1385,26 +1418,28 @@ mod tests {
 
     #[test]
     fn test_get_filename() {
+        let dir = tempdir().unwrap();
+        let dir_path = dir.path().to_path_buf();
+
         let instance_id = InstanceId::new(0);
-        let temp_dir = test_dir();
-        let kvs = KvsBuilder::<Kvs>::new(instance_id.clone())
-            .dir(temp_dir.1.clone())
+        let kvs = KvsBuilder::<Kvs>::new(instance_id.clone(), dir_path)
             .build()
             .unwrap();
         let filename = kvs.get_kvs_filename(SnapshotId::new(0));
         assert!(
-            filename.ends_with("_0.json"),
+            filename.to_string_lossy().to_string().ends_with("_0.json"),
             "Expected filename to end with _0.json"
         );
     }
 
     #[test]
     fn test_get_value() {
+        let dir = tempdir().unwrap();
+        let dir_path = dir.path().to_path_buf();
+
         let instance_id = InstanceId::new(0);
-        let temp_dir = test_dir();
         let kvs = Arc::new(
-            KvsBuilder::<Kvs>::new(instance_id.clone())
-                .dir(temp_dir.1.clone())
+            KvsBuilder::<Kvs>::new(instance_id.clone(), dir_path)
                 .build()
                 .unwrap(),
         );
@@ -1426,11 +1461,12 @@ mod tests {
 
     #[test]
     fn test_drop() {
+        let dir = tempdir().unwrap();
+        let dir_path = dir.path().to_path_buf();
+
         let instance_id = InstanceId::new(0);
-        let temp_dir = test_dir();
         let kvs = Arc::new(
-            KvsBuilder::<Kvs>::new(instance_id.clone())
-                .dir(temp_dir.1.clone())
+            KvsBuilder::<Kvs>::new(instance_id.clone(), dir_path)
                 .build()
                 .unwrap(),
         );
@@ -1453,18 +1489,19 @@ mod tests {
     #[cfg_attr(miri, ignore)]
     #[test]
     fn test_get_value_try_from_error() {
+        let dir = tempdir().unwrap();
+        let dir_path = dir.path().to_path_buf();
+
         let instance_id = InstanceId::new(0);
-        let temp_dir = test_dir();
 
         std::fs::copy(
             "tests/kvs_0_default.json",
-            format!("{}/kvs_0_default.json", temp_dir.1.clone()),
+            format!("{}/kvs_0_default.json", dir_path.clone().display()),
         )
         .unwrap();
 
         let kvs = Arc::new(
-            KvsBuilder::<Kvs>::new(instance_id.clone())
-                .dir(temp_dir.1.clone())
+            KvsBuilder::<Kvs>::new(instance_id.clone(), dir_path)
                 .need_defaults(true)
                 .build()
                 .unwrap(),
@@ -1489,13 +1526,15 @@ mod tests {
 
     #[test]
     fn test_kvs_open_and_set_get_value() {
+        let dir = tempdir().unwrap();
+        let dir_path = dir.path().to_path_buf();
+
         let instance_id = InstanceId::new(42);
-        let temp_dir = test_dir();
         let kvs = Kvs::open(
             instance_id.clone(),
+            dir_path,
             OpenNeedDefaults::Optional,
             OpenNeedKvs::Optional,
-            Some(temp_dir.1.clone()),
         )
         .unwrap();
         let _ = kvs.set_value("direct", KvsValue::String("abc".to_string()));
@@ -1505,13 +1544,15 @@ mod tests {
 
     #[test]
     fn test_kvs_reset() {
+        let dir = tempdir().unwrap();
+        let dir_path = dir.path().to_path_buf();
+
         let instance_id = InstanceId::new(43);
-        let temp_dir = test_dir();
         let kvs = Kvs::open(
             instance_id.clone(),
+            dir_path,
             OpenNeedDefaults::Optional,
             OpenNeedKvs::Optional,
-            Some(temp_dir.1.clone()),
         )
         .unwrap();
         let _ = kvs.set_value("reset", KvsValue::Number(1.0));
@@ -1525,13 +1566,15 @@ mod tests {
 
     #[test]
     fn test_kvs_key_exists_and_get_all_keys() {
+        let dir = tempdir().unwrap();
+        let dir_path = dir.path().to_path_buf();
+
         let instance_id = InstanceId::new(44);
-        let temp_dir = test_dir();
         let kvs = Kvs::open(
             instance_id.clone(),
+            dir_path,
             OpenNeedDefaults::Optional,
             OpenNeedKvs::Optional,
-            Some(temp_dir.1.clone()),
         )
         .unwrap();
         assert!(!kvs.key_exists("foo").unwrap());
@@ -1543,13 +1586,15 @@ mod tests {
 
     #[test]
     fn test_kvs_remove_key() {
+        let dir = tempdir().unwrap();
+        let dir_path = dir.path().to_path_buf();
+
         let instance_id = InstanceId::new(45);
-        let temp_dir = test_dir();
         let kvs = Kvs::open(
             instance_id.clone(),
+            dir_path,
             OpenNeedDefaults::Optional,
             OpenNeedKvs::Optional,
-            Some(temp_dir.1.clone()),
         )
         .unwrap();
         let _ = kvs.set_value("bar", KvsValue::Number(2.0));
@@ -1560,13 +1605,15 @@ mod tests {
 
     #[test]
     fn test_kvs_flush_and_snapshot() {
+        let dir = tempdir().unwrap();
+        let dir_path = dir.path().to_path_buf();
+
         let instance_id = InstanceId::new(46);
-        let temp_dir = test_dir();
         let kvs = Kvs::open(
             instance_id.clone(),
+            dir_path,
             OpenNeedDefaults::Optional,
             OpenNeedKvs::Optional,
-            Some(temp_dir.1.clone()),
         )
         .unwrap();
         let _ = kvs.set_value("snap", KvsValue::Number(3.0));
@@ -1580,5 +1627,32 @@ mod tests {
         if kvs.snapshot_count() > 0 {
             kvs.snapshot_restore(SnapshotId::new(1)).unwrap();
         }
+    }
+
+    #[test]
+    fn test_kvs_working_dir_not_found() {
+        let result = Kvs::open(
+            InstanceId::new(0),
+            PathBuf::from("/definitely/invalid/"),
+            OpenNeedDefaults::Optional,
+            OpenNeedKvs::Optional,
+        );
+        assert!(result.is_err_and(|e| e == ErrorCode::NotADirectory));
+    }
+
+    #[test]
+    fn test_kvs_working_dir_is_file() {
+        let dir = tempdir().unwrap();
+        let dir_path = dir.path().to_path_buf();
+        let file_path = dir_path.join("example");
+        File::create_new(&file_path).unwrap();
+
+        let result = Kvs::open(
+            InstanceId::new(0),
+            file_path,
+            OpenNeedDefaults::Optional,
+            OpenNeedKvs::Optional,
+        );
+        assert!(result.is_err_and(|e| e == ErrorCode::NotADirectory));
     }
 }

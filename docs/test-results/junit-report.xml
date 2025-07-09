@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites>
+  <testsuite id="0" name="cargo test #0" package="testsuite/cargo test #0" tests="29" errors="0" failures="0" hostname="localhost" timestamp="2025-07-08T09:38:01.825483389Z" time="0">
+    <testcase name="test_conversion_failed_from_slice_error" time="0" classname="tests" />
+    <testcase name="test_conversion_failed_from_vec_u8" time="0" classname="tests" />
+    <testcase name="test_conversion_failed_from_utf8_error" time="0" classname="tests" />
+    <testcase name="test_get_inner_value" time="0" classname="tests" />
+    <testcase name="test_drop" time="0" classname="tests" />
+    <testcase name="test_flush_on_exit" time="0" classname="tests" />
+    <testcase name="test_get_filename" time="0" classname="tests" />
+    <testcase name="test_get_value_try_from_error" time="0" classname="tests" />
+    <testcase name="test_build_with_defaults" time="0" classname="tests" />
+    <testcase name="test_build" time="0" classname="tests" />
+    <testcase name="test_get_all_keys" time="0" classname="tests" />
+    <testcase name="test_get_value" time="0" classname="tests" />
+    <testcase name="test_build_with_kvs" time="0" classname="tests" />
+    <testcase name="test_key_exists" time="0" classname="tests" />
+    <testcase name="test_kvs_flush_and_snapshot" time="0" classname="tests" />
+    <testcase name="test_kvs_key_exists_and_get_all_keys" time="0" classname="tests" />
+    <testcase name="test_kvs_open_and_set_get_value" time="0" classname="tests" />
+    <testcase name="test_kvs_remove_key" time="0" classname="tests" />
+    <testcase name="test_kvs_working_dir_not_found" time="0" classname="tests" />
+    <testcase name="test_mutex_lock_failed_from_poison_error" time="0" classname="tests" />
+    <testcase name="test_kvs_working_dir_is_file" time="0" classname="tests" />
+    <testcase name="test_unknown_error_code_from_io_error" time="0" classname="tests" />
+    <testcase name="test_unknown_error_code_from_json_generate_error" time="0" classname="tests" />
+    <testcase name="test_unknown_error_code_from_json_parse_error" time="0" classname="tests" />
+    <testcase name="test_need_kvs" time="0" classname="tests" />
+    <testcase name="test_new_kvs_builder" time="0" classname="tests" />
+    <testcase name="test_kvs_reset" time="0" classname="tests" />
+    <testcase name="test_need_defaults" time="0" classname="tests" />
+    <testcase name="test_reset" time="0" classname="tests" />
+  </testsuite>
+  <testsuite id="1" name="cargo test #1" package="testsuite/cargo test #1" tests="3" errors="0" failures="0" hostname="localhost" timestamp="2025-07-08T09:38:01.825483389Z" time="0">
+    <testcase name="cit_persistency_flush_on_exit_disabled_drop_data" time="0" classname="" />
+    <testcase name="cit_persistency_flush_on_exit_disabled_manual_flush" time="0" classname="" />
+    <testcase name="cit_persistency_flush_on_exit_enabled" time="0" classname="" />
+  </testsuite>
+  <testsuite id="2" name="cargo test #2" package="testsuite/cargo test #2" tests="1" errors="0" failures="0" hostname="localhost" timestamp="2025-07-08T09:38:01.825483389Z" time="0">
+    <testcase name="kvs_check_needs_defaults" time="0" classname="" />
+  </testsuite>
+  <testsuite id="3" name="cargo test #3" package="testsuite/cargo test #3" tests="1" errors="0" failures="0" hostname="localhost" timestamp="2025-07-08T09:38:01.825483389Z" time="0">
+    <testcase name="kvs_check_needs_kvs" time="0" classname="" />
+  </testsuite>
+  <testsuite id="4" name="cargo test #4" package="testsuite/cargo test #4" tests="1" errors="0" failures="0" hostname="localhost" timestamp="2025-07-08T09:38:01.825483389Z" time="0">
+    <testcase name="kvs_checksum_missing" time="0" classname="" />
+  </testsuite>
+  <testsuite id="5" name="cargo test #5" package="testsuite/cargo test #5" tests="1" errors="0" failures="0" hostname="localhost" timestamp="2025-07-08T09:38:01.825483389Z" time="0">
+    <testcase name="kvs_checksum_wrong" time="0" classname="" />
+  </testsuite>
+  <testsuite id="6" name="cargo test #6" package="testsuite/cargo test #6" tests="1" errors="0" failures="0" hostname="localhost" timestamp="2025-07-08T09:38:01.825483389Z" time="0">
+    <testcase name="kvs_without_defaults" time="0" classname="" />
+  </testsuite>
+  <testsuite id="7" name="cargo test #7" package="testsuite/cargo test #7" tests="1" errors="0" failures="0" hostname="localhost" timestamp="2025-07-08T09:38:01.825483389Z" time="0">
+    <testcase name="kvs_without_defaults" time="0" classname="" />
+  </testsuite>
+  <testsuite id="8" name="cargo test #8" package="testsuite/cargo test #8" tests="1" errors="0" failures="0" hostname="localhost" timestamp="2025-07-08T09:38:01.825483389Z" time="0">
+    <testcase name="kvs_without_defaults_builder" time="0" classname="" />
+  </testsuite>
+  <testsuite id="9" name="cargo test #9" package="testsuite/cargo test #9" tests="1" errors="0" failures="0" hostname="localhost" timestamp="2025-07-08T09:38:01.825483389Z" time="0">
+    <testcase name="kvs_snapshot_restore" time="0" classname="" />
+  </testsuite>
+  <testsuite id="10" name="cargo test #10" package="testsuite/cargo test #10" tests="1" errors="0" failures="0" hostname="localhost" timestamp="2025-07-08T09:38:01.825483389Z" time="0">
+    <testcase name="kvs_snapshot_rotation" time="0" classname="" />
+  </testsuite>
+  <testsuite id="11" name="cargo test #11" package="testsuite/cargo test #11" tests="0" errors="0" failures="0" hostname="localhost" timestamp="2025-07-08T09:38:01.825483389Z" time="0" />
+  <testsuite id="12" name="cargo test #12" package="testsuite/cargo test #12" tests="1" errors="0" failures="0" hostname="localhost" timestamp="2025-07-08T09:38:01.825483389Z" time="0">
+    <testcase name="src/rust/rust_kvs/src/lib.rs - (line 58)" time="0" classname="" />
+  </testsuite>
+</testsuites>

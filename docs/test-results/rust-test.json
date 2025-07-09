@@ -1,0 +1,110 @@
+{ "type": "suite", "event": "started", "test_count": 29 }
+{ "type": "test", "event": "started", "name": "tests::test_build" }
+{ "type": "test", "event": "started", "name": "tests::test_build_with_defaults" }
+{ "type": "test", "event": "started", "name": "tests::test_build_with_kvs" }
+{ "type": "test", "event": "started", "name": "tests::test_conversion_failed_from_slice_error" }
+{ "type": "test", "event": "started", "name": "tests::test_conversion_failed_from_utf8_error" }
+{ "type": "test", "event": "started", "name": "tests::test_conversion_failed_from_vec_u8" }
+{ "type": "test", "event": "started", "name": "tests::test_drop" }
+{ "type": "test", "event": "started", "name": "tests::test_flush_on_exit" }
+{ "type": "test", "name": "tests::test_conversion_failed_from_slice_error", "event": "ok" }
+{ "type": "test", "event": "started", "name": "tests::test_get_all_keys" }
+{ "type": "test", "name": "tests::test_conversion_failed_from_vec_u8", "event": "ok" }
+{ "type": "test", "event": "started", "name": "tests::test_get_filename" }
+{ "type": "test", "name": "tests::test_conversion_failed_from_utf8_error", "event": "ok" }
+{ "type": "test", "event": "started", "name": "tests::test_get_inner_value" }
+{ "type": "test", "name": "tests::test_get_inner_value", "event": "ok" }
+{ "type": "test", "event": "started", "name": "tests::test_get_value" }
+{ "type": "test", "name": "tests::test_drop", "event": "ok" }
+{ "type": "test", "event": "started", "name": "tests::test_get_value_try_from_error" }
+{ "type": "test", "name": "tests::test_flush_on_exit", "event": "ok" }
+{ "type": "test", "event": "started", "name": "tests::test_key_exists" }
+{ "type": "test", "name": "tests::test_get_filename", "event": "ok" }
+{ "type": "test", "event": "started", "name": "tests::test_kvs_flush_and_snapshot" }
+{ "type": "test", "name": "tests::test_get_value_try_from_error", "event": "ok" }
+{ "type": "test", "event": "started", "name": "tests::test_kvs_key_exists_and_get_all_keys" }
+{ "type": "test", "name": "tests::test_build_with_defaults", "event": "ok" }
+{ "type": "test", "event": "started", "name": "tests::test_kvs_open_and_set_get_value" }
+{ "type": "test", "name": "tests::test_build", "event": "ok" }
+{ "type": "test", "event": "started", "name": "tests::test_kvs_remove_key" }
+{ "type": "test", "name": "tests::test_get_all_keys", "event": "ok" }
+{ "type": "test", "event": "started", "name": "tests::test_kvs_reset" }
+{ "type": "test", "name": "tests::test_get_value", "event": "ok" }
+{ "type": "test", "event": "started", "name": "tests::test_kvs_working_dir_is_file" }
+{ "type": "test", "name": "tests::test_build_with_kvs", "event": "ok" }
+{ "type": "test", "event": "started", "name": "tests::test_kvs_working_dir_not_found" }
+{ "type": "test", "name": "tests::test_key_exists", "event": "ok" }
+{ "type": "test", "event": "started", "name": "tests::test_mutex_lock_failed_from_poison_error" }
+{ "type": "test", "name": "tests::test_kvs_flush_and_snapshot", "event": "ok" }
+{ "type": "test", "event": "started", "name": "tests::test_need_defaults" }
+{ "type": "test", "name": "tests::test_kvs_key_exists_and_get_all_keys", "event": "ok" }
+{ "type": "test", "event": "started", "name": "tests::test_need_kvs" }
+{ "type": "test", "name": "tests::test_kvs_open_and_set_get_value", "event": "ok" }
+{ "type": "test", "event": "started", "name": "tests::test_new_kvs_builder" }
+{ "type": "test", "name": "tests::test_kvs_remove_key", "event": "ok" }
+{ "type": "test", "event": "started", "name": "tests::test_reset" }
+{ "type": "test", "name": "tests::test_kvs_working_dir_not_found", "event": "ok" }
+{ "type": "test", "event": "started", "name": "tests::test_unknown_error_code_from_io_error" }
+{ "type": "test", "name": "tests::test_mutex_lock_failed_from_poison_error", "event": "ok" }
+{ "type": "test", "event": "started", "name": "tests::test_unknown_error_code_from_json_generate_error" }
+{ "type": "test", "name": "tests::test_kvs_working_dir_is_file", "event": "ok" }
+{ "type": "test", "event": "started", "name": "tests::test_unknown_error_code_from_json_parse_error" }
+{ "type": "test", "name": "tests::test_unknown_error_code_from_io_error", "event": "ok" }
+{ "type": "test", "name": "tests::test_unknown_error_code_from_json_generate_error", "event": "ok" }
+{ "type": "test", "name": "tests::test_unknown_error_code_from_json_parse_error", "event": "ok" }
+{ "type": "test", "name": "tests::test_need_kvs", "event": "ok" }
+{ "type": "test", "name": "tests::test_new_kvs_builder", "event": "ok" }
+{ "type": "test", "name": "tests::test_kvs_reset", "event": "ok" }
+{ "type": "test", "name": "tests::test_need_defaults", "event": "ok" }
+{ "type": "test", "name": "tests::test_reset", "event": "ok" }
+{ "type": "suite", "event": "ok", "passed": 29, "failed": 0, "ignored": 0, "measured": 0, "filtered_out": 0, "exec_time": 0.021810895 }
+{ "type": "suite", "event": "started", "test_count": 3 }
+{ "type": "test", "event": "started", "name": "cit_persistency_flush_on_exit_disabled_drop_data" }
+{ "type": "test", "event": "started", "name": "cit_persistency_flush_on_exit_disabled_manual_flush" }
+{ "type": "test", "event": "started", "name": "cit_persistency_flush_on_exit_enabled" }
+{ "type": "test", "name": "cit_persistency_flush_on_exit_disabled_drop_data", "event": "ok" }
+{ "type": "test", "name": "cit_persistency_flush_on_exit_disabled_manual_flush", "event": "ok" }
+{ "type": "test", "name": "cit_persistency_flush_on_exit_enabled", "event": "ok" }
+{ "type": "suite", "event": "ok", "passed": 3, "failed": 0, "ignored": 0, "measured": 0, "filtered_out": 0, "exec_time": 0.001635728 }
+{ "type": "suite", "event": "started", "test_count": 1 }
+{ "type": "test", "event": "started", "name": "kvs_check_needs_defaults" }
+{ "type": "test", "name": "kvs_check_needs_defaults", "event": "ok" }
+{ "type": "suite", "event": "ok", "passed": 1, "failed": 0, "ignored": 0, "measured": 0, "filtered_out": 0, "exec_time": 0.000578276 }
+{ "type": "suite", "event": "started", "test_count": 1 }
+{ "type": "test", "event": "started", "name": "kvs_check_needs_kvs" }
+{ "type": "test", "name": "kvs_check_needs_kvs", "event": "ok" }
+{ "type": "suite", "event": "ok", "passed": 1, "failed": 0, "ignored": 0, "measured": 0, "filtered_out": 0, "exec_time": 0.000304167 }
+{ "type": "suite", "event": "started", "test_count": 1 }
+{ "type": "test", "event": "started", "name": "kvs_checksum_missing" }
+{ "type": "test", "name": "kvs_checksum_missing", "event": "ok" }
+{ "type": "suite", "event": "ok", "passed": 1, "failed": 0, "ignored": 0, "measured": 0, "filtered_out": 0, "exec_time": 0.000704232 }
+{ "type": "suite", "event": "started", "test_count": 1 }
+{ "type": "test", "event": "started", "name": "kvs_checksum_wrong" }
+{ "type": "test", "name": "kvs_checksum_wrong", "event": "ok" }
+{ "type": "suite", "event": "ok", "passed": 1, "failed": 0, "ignored": 0, "measured": 0, "filtered_out": 0, "exec_time": 0.000873368 }
+{ "type": "suite", "event": "started", "test_count": 1 }
+{ "type": "test", "event": "started", "name": "kvs_without_defaults" }
+{ "type": "test", "name": "kvs_without_defaults", "event": "ok" }
+{ "type": "suite", "event": "ok", "passed": 1, "failed": 0, "ignored": 0, "measured": 0, "filtered_out": 0, "exec_time": 0.001370442 }
+{ "type": "suite", "event": "started", "test_count": 1 }
+{ "type": "test", "event": "started", "name": "kvs_without_defaults" }
+{ "type": "test", "name": "kvs_without_defaults", "event": "ok" }
+{ "type": "suite", "event": "ok", "passed": 1, "failed": 0, "ignored": 0, "measured": 0, "filtered_out": 0, "exec_time": 0.0008213 }
+{ "type": "suite", "event": "started", "test_count": 1 }
+{ "type": "test", "event": "started", "name": "kvs_without_defaults_builder" }
+{ "type": "test", "name": "kvs_without_defaults_builder", "event": "ok" }
+{ "type": "suite", "event": "ok", "passed": 1, "failed": 0, "ignored": 0, "measured": 0, "filtered_out": 0, "exec_time": 0.000572513 }
+{ "type": "suite", "event": "started", "test_count": 1 }
+{ "type": "test", "event": "started", "name": "kvs_snapshot_restore" }
+{ "type": "test", "name": "kvs_snapshot_restore", "event": "ok" }
+{ "type": "suite", "event": "ok", "passed": 1, "failed": 0, "ignored": 0, "measured": 0, "filtered_out": 0, "exec_time": 0.00131247 }
+{ "type": "suite", "event": "started", "test_count": 1 }
+{ "type": "test", "event": "started", "name": "kvs_snapshot_rotation" }
+{ "type": "test", "name": "kvs_snapshot_rotation", "event": "ok" }
+{ "type": "suite", "event": "ok", "passed": 1, "failed": 0, "ignored": 0, "measured": 0, "filtered_out": 0, "exec_time": 0.002026067 }
+{ "type": "suite", "event": "started", "test_count": 0 }
+{ "type": "suite", "event": "ok", "passed": 0, "failed": 0, "ignored": 0, "measured": 0, "filtered_out": 0, "exec_time": 0.00002947 }
+{ "type": "suite", "event": "started", "test_count": 1 }
+{ "type": "test", "event": "started", "name": "src/rust/rust_kvs/src/lib.rs - (line 58)" }
+{ "type": "test", "name": "src/rust/rust_kvs/src/lib.rs - (line 58)", "event": "ok" }
+{ "type": "suite", "event": "ok", "passed": 1, "failed": 0, "ignored": 0, "measured": 0, "filtered_out": 0, "exec_time": 0.123733832 }

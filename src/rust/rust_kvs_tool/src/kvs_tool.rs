@@ -440,7 +440,7 @@ fn _getkvsfilename(kvs: Kvs, mut args: Arguments) -> Result<(), ErrorCode> {
     };
     let snapshot_id = SnapshotId::new(snapshot_id as usize);
     let filename = kvs.get_kvs_filename(snapshot_id);
-    println!("KVS Filename: {}", filename);
+    println!("KVS Filename: {}", filename.display());
     println!("----------------------");
     Ok(())
 }
@@ -462,7 +462,7 @@ fn _gethashfilename(kvs: Kvs, mut args: Arguments) -> Result<(), ErrorCode> {
     };
     let snapshot_id = SnapshotId::new(snapshot_id as usize);
     let filename = kvs.get_hash_filename(snapshot_id);
-    println!("Hash Filename: {}", filename);
+    println!("Hash Filename: {}", filename.display());
     println!("----------------------");
     Ok(())
 }
@@ -529,8 +529,9 @@ fn _createtestdata(kvs: Kvs) -> Result<(), ErrorCode> {
 /// Main function to run the KVS tool command line interface.
 fn main() -> Result<(), ErrorCode> {
     let mut args = Arguments::from_env();
+    let cwd = std::env::current_dir()?;
 
-    let builder = KvsBuilder::new(InstanceId::new(0))
+    let builder = KvsBuilder::new(InstanceId::new(0), cwd)
         .need_defaults(false)
         .need_kvs(false);
 

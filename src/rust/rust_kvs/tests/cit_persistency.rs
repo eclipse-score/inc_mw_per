@@ -71,7 +71,7 @@ fn cmp_array(left: Vec<KvsValue>, right: Vec<KvsValue>) -> bool {
 fn cit_persistency_flush_on_exit_enabled() -> Result<(), ErrorCode> {
     // Temp directory.
     let dir = tempdir()?;
-    let dir_path = dir.path().to_string_lossy().to_string();
+    let dir_path = dir.path().to_path_buf();
 
     // Values.
     let kv_number = ("number", 123.4);
@@ -94,9 +94,9 @@ fn cit_persistency_flush_on_exit_enabled() -> Result<(), ErrorCode> {
         // First KVS run.
         let kvs = Kvs::open(
             InstanceId::new(0),
+            dir_path.clone(),
             OpenNeedDefaults::Optional,
             OpenNeedKvs::Optional,
-            Some(dir_path.clone()),
         )?;
 
         // Set value of each type.
@@ -114,9 +114,9 @@ fn cit_persistency_flush_on_exit_enabled() -> Result<(), ErrorCode> {
         // KVS file is expected to exist.
         let kvs = Kvs::open(
             InstanceId::new(0),
+            dir_path,
             OpenNeedDefaults::Optional,
             OpenNeedKvs::Required,
-            Some(dir_path),
         )?;
 
         // Compare each value.
@@ -141,7 +141,7 @@ fn cit_persistency_flush_on_exit_enabled() -> Result<(), ErrorCode> {
 fn cit_persistency_flush_on_exit_disabled_drop_data() -> Result<(), ErrorCode> {
     // Temp directory.
     let dir = tempdir()?;
-    let dir_path = dir.path().to_string_lossy().to_string();
+    let dir_path = dir.path().to_path_buf();
 
     // Values.
     let kv_number = ("number", 123.4);
@@ -164,9 +164,9 @@ fn cit_persistency_flush_on_exit_disabled_drop_data() -> Result<(), ErrorCode> {
         // First KVS run.
         let kvs = Kvs::open(
             InstanceId::new(0),
+            dir_path.clone(),
             OpenNeedDefaults::Optional,
             OpenNeedKvs::Optional,
-            Some(dir_path.clone()),
         )?;
         kvs.flush_on_exit(false);
 
@@ -185,9 +185,9 @@ fn cit_persistency_flush_on_exit_disabled_drop_data() -> Result<(), ErrorCode> {
         // KVS file is expected to not to exist.
         let kvs = Kvs::open(
             InstanceId::new(0),
+            dir_path,
             OpenNeedDefaults::Optional,
             OpenNeedKvs::Optional,
-            Some(dir_path),
         )?;
 
         // Make sure no keys are defined.
@@ -201,7 +201,7 @@ fn cit_persistency_flush_on_exit_disabled_drop_data() -> Result<(), ErrorCode> {
 fn cit_persistency_flush_on_exit_disabled_manual_flush() -> Result<(), ErrorCode> {
     // Temp directory.
     let dir = tempdir()?;
-    let dir_path = dir.path().to_string_lossy().to_string();
+    let dir_path = dir.path().to_path_buf();
 
     // Values.
     let kv_number = ("number", 123.4);
@@ -224,9 +224,9 @@ fn cit_persistency_flush_on_exit_disabled_manual_flush() -> Result<(), ErrorCode
         // First KVS run.
         let kvs = Kvs::open(
             InstanceId::new(0),
+            dir_path.clone(),
             OpenNeedDefaults::Optional,
             OpenNeedKvs::Optional,
-            Some(dir_path.clone()),
         )?;
         kvs.flush_on_exit(false);
 
@@ -248,9 +248,9 @@ fn cit_persistency_flush_on_exit_disabled_manual_flush() -> Result<(), ErrorCode
         // KVS file is expected to exist.
         let kvs = Kvs::open(
             InstanceId::new(0),
+            dir_path,
             OpenNeedDefaults::Optional,
             OpenNeedKvs::Required,
-            Some(dir_path),
         )?;
 
         // Compare each value.

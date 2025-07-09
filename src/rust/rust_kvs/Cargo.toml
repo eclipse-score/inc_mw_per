@@ -8,5 +8,4 @@ adler32.workspace = true
 tinyjson.workspace = true
 
 [dev-dependencies]
-tempdir = "0.3"
 tempfile = "3.20"

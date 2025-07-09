@@ -60,8 +60,28 @@ bazel_dep(name = "score_format_checker", version = "0.1.1")
 bazel_dep(name = "aspect_rules_lint", version = "1.0.3")
 bazel_dep(name = "buildifier_prebuilt", version = "7.3.1")
 
+# Provides, pytest & venv
+bazel_dep(name = "score_python_basics", version = "0.3.2")
+
 #docs-as-code
 bazel_dep(name = "score_docs_as_code", version = "0.3.3")
+
+#local_path_override(
+#    module_name = "score_docs_as_code",
+#    path = "/home/dcalavrezo/sources/docs-as-code",
+#)
+
+
+
+
+git_override(
+    module_name = "score_docs_as_code",
+    remote = "https://github.com/qorix-group/docs-as-code",
+    commit = "5291e3ac506eca9a37d4a4dccf08aa26b920ff9b",
+)
+
+# Additional Python rules provided by aspect, e.g. an improved version of
+bazel_dep(name = "aspect_rules_py", version = "1.4.0")
 
 # Module deps
 

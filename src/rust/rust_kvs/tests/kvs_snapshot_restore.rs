@@ -51,7 +51,7 @@ fn kvs_snapshot_restore() -> Result<(), ErrorCode> {
     // restore snapshots and check `counter` value
     for idx in 1..=max_count {
         kvs.snapshot_restore(SnapshotId::new(idx))?;
-        assert_eq!(kvs.get_value::<f64>("counter")?, (counter - idx) as f64);
+        assert_eq!(kvs.get_value_as::<f64>("counter")?, (counter - idx) as f64);
     }
 
     Ok(())

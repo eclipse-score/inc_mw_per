@@ -38,10 +38,10 @@
 //! and a `KvsValue` as second parameter. Either `KvsValue::Number(123.0)` or `123.0` can be
 //! used as there will be an auto-Into performed when calling the function.
 //!
-//! To read a value call [`Kvs::get_value::<T>`](Kvs::get_value) with the `key` as first
-//! parameter. `T` represents the type to read and can be `f64`, `bool`, `String`, `()`,
-//! `Vec<KvsValue>`, `HashMap<String, KvsValue` or `KvsValue`. Also `let value: f64 =
-//! kvs.get_value()` can be used.
+//! To read a value call [`Kvs::get_value`](Kvs::get_value) or [`Kvs::get_value_as::<T>`](Kvs::get_value_as)
+//! with the `key` as first parameter. `T` represents the type to read and can be `f64`, `bool`, `String`, `()`,
+//! `Vec<KvsValue>`, `HashMap<String, KvsValue>` or `KvsValue`.
+//! Also `let value: f64 = kvs.get_value_as()` can be used.
 //!
 //! If a `key` isn't available in the KVS a lookup into the defaults storage will be performed and
 //! if the `value` is found the default will be returned. The default value isn't stored when
@@ -462,7 +462,8 @@ pub trait KvsApi {
     fn reset(&self) -> Result<(), ErrorCode>;
     fn get_all_keys(&self) -> Result<Vec<String>, ErrorCode>;
     fn key_exists(&self, key: &str) -> Result<bool, ErrorCode>;
-    fn get_value<T>(&self, key: &str) -> Result<T, ErrorCode>
+    fn get_value(&self, key: &str) -> Result<KvsValue, ErrorCode>;
+    fn get_value_as<T>(&self, key: &str) -> Result<T, ErrorCode>
     where
         for<'a> T: TryFrom<&'a KvsValue> + Clone,
         for<'a> <T as TryFrom<&'a KvsValue>>::Error: std::fmt::Debug;
@@ -783,6 +784,31 @@ impl KvsApi for Kvs {
 
     /// Get the assigned value for a given key
     ///
+    /// # Features
+    ///   * `FEAT_REQ__KVS__default_values`
+    ///
+    /// # Parameters
+    ///   * `key`: Key to retrieve the value from
+    ///
+    /// # Return Value
+    ///   * Ok: Type specific value if key was found
+    ///   * `ErrorCode::MutexLockFailed`: Mutex locking failed
+    ///   * `ErrorCode::KeyNotFound`: Key wasn't found in KVS nor in defaults
+    fn get_value(&self, key: &str) -> Result<KvsValue, ErrorCode> {
+        let kvs = self.kvs.lock()?;
+
+        if let Some(value) = kvs.get(key) {
+            Ok(value.clone())
+        } else if let Some(value) = self.default.get(key) {
+            Ok(value.clone())
+        } else {
+            eprintln!("error: get_value could not find key: {key}");
+            Err(ErrorCode::KeyNotFound)
+        }
+    }
+
+    /// Get the assigned value for a given key
+    ///
     /// See [Variants](https://docs.rs/tinyjson/latest/tinyjson/enum.JsonValue.html#variants) for
     /// supported value types.
     ///
@@ -797,7 +823,7 @@ impl KvsApi for Kvs {
     ///   * `ErrorCode::MutexLockFailed`: Mutex locking failed
     ///   * `ErrorCode::ConversionFailed`: Type conversion failed
     ///   * `ErrorCode::KeyNotFound`: Key wasn't found in KVS nor in defaults
-    fn get_value<T>(&self, key: &str) -> Result<T, ErrorCode>
+    fn get_value_as<T>(&self, key: &str) -> Result<T, ErrorCode>
     where
         for<'a> T: TryFrom<&'a KvsValue> + std::clone::Clone,
         for<'a> <T as TryFrom<&'a KvsValue>>::Error: std::fmt::Debug,
@@ -1431,7 +1457,28 @@ mod tests {
                 .unwrap(),
         );
         let _ = kvs.set_value("test", KvsValue::Number(123.0));
-        let value = kvs.get_value::<f64>("test");
+        let value = kvs.get_value("test").unwrap();
+        assert_eq!(
+            *value.get::<f64>().unwrap(),
+            123.0,
+            "Expected to retrieve the inserted value"
+        );
+    }
+
+    #[test]
+    fn test_get_value_as() {
+        let dir = tempdir().unwrap();
+        let dir_path = dir.path().to_string_lossy().to_string();
+
+        let instance_id = InstanceId::new(0);
+        let kvs = Arc::new(
+            KvsBuilder::<Kvs>::new(instance_id.clone())
+                .dir(dir_path.clone())
+                .build()
+                .unwrap(),
+        );
+        let _ = kvs.set_value("test", KvsValue::Number(123.0));
+        let value = kvs.get_value_as::<f64>("test");
         assert_eq!(
             value.unwrap(),
             123.0,
@@ -1499,14 +1546,14 @@ mod tests {
         let _ = kvs.set_value("test", KvsValue::Number(123.0f64));
 
         // stored value: should return ConversionFailed
-        let result = kvs.get_value::<u64>("test");
+        let result = kvs.get_value_as::<u64>("test");
         assert!(
             matches!(result, Err(ErrorCode::ConversionFailed)),
             "Expected ConversionFailed for stored value"
         );
 
         // default value: should return ConversionFailed
-        let result = kvs.get_value::<u64>("bool1");
+        let result = kvs.get_value_as::<u64>("bool1");
         assert!(
             matches!(result, Err(ErrorCode::ConversionFailed)),
             "Expected ConversionFailed for default value"
@@ -1527,8 +1574,8 @@ mod tests {
         )
         .unwrap();
         let _ = kvs.set_value("direct", KvsValue::String("abc".to_string()));
-        let value = kvs.get_value::<String>("direct");
-        assert_eq!(value.unwrap(), "abc");
+        let value = kvs.get_value("direct").unwrap();
+        assert_eq!(value.get::<String>().unwrap(), "abc");
     }
 
     #[test]
@@ -1545,10 +1592,10 @@ mod tests {
         )
         .unwrap();
         let _ = kvs.set_value("reset", KvsValue::Number(1.0));
-        assert!(kvs.get_value::<f64>("reset").is_ok());
+        assert!(kvs.get_value("reset").is_ok());
         kvs.reset().unwrap();
         assert!(matches!(
-            kvs.get_value::<f64>("reset"),
+            kvs.get_value("reset"),
             Err(ErrorCode::KeyNotFound)
         ));
     }

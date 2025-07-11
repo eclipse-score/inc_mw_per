@@ -55,14 +55,14 @@ fn kvs_without_defaults() -> Result<(), ErrorCode> {
     kvs.set_value("bool2", false)?;
     kvs.set_value("string2", "Ola".to_string())?;
 
-    assert_eq!(kvs.get_value::<f64>("number1")?, 123.0);
-    assert_eq!(kvs.get_value::<f64>("number2")?, 345.0);
+    assert_eq!(kvs.get_value_as::<f64>("number1")?, 123.0);
+    assert_eq!(kvs.get_value_as::<f64>("number2")?, 345.0);
 
-    assert!(kvs.get_value::<bool>("bool1")?);
-    assert!(!kvs.get_value::<bool>("bool2")?);
+    assert!(kvs.get_value_as::<bool>("bool1")?);
+    assert!(!kvs.get_value_as::<bool>("bool2")?);
 
-    assert_eq!(kvs.get_value::<String>("string1")?, "Hello".to_string());
-    assert_eq!(kvs.get_value::<String>("string2")?, "Ola".to_string());
+    assert_eq!(kvs.get_value_as::<String>("string1")?, "Hello".to_string());
+    assert_eq!(kvs.get_value_as::<String>("string2")?, "Ola".to_string());
 
     assert!(kvs.is_value_default("number1")?);
     assert!(!kvs.is_value_default("number2")?);
@@ -87,10 +87,13 @@ fn kvs_without_defaults() -> Result<(), ErrorCode> {
         .need_kvs(true)
         .build()?;
 
-    assert!(kvs.get_value::<bool>("bool1")?);
+    assert!(kvs.get_value_as::<bool>("bool1")?);
     assert!(!kvs.is_value_default("bool1")?);
 
-    assert_eq!(kvs.get_value::<String>("string1")?, "Bonjour".to_string());
+    assert_eq!(
+        kvs.get_value_as::<String>("string1")?,
+        "Bonjour".to_string()
+    );
     assert!(!kvs.is_value_default("string1")?);
 
     // drop the current instance with flush-on-exit enabled and reopen storage
@@ -117,10 +120,10 @@ fn kvs_without_defaults() -> Result<(), ErrorCode> {
         .need_kvs(true)
         .build()?;
 
-    assert_eq!(kvs.get_value::<f64>("number1")?, 987.0);
+    assert_eq!(kvs.get_value_as::<f64>("number1")?, 987.0);
     assert!(kvs.is_value_default("number1")?);
 
-    assert!(kvs.get_value::<bool>("bool1")?);
+    assert!(kvs.get_value_as::<bool>("bool1")?);
     assert!(!kvs.is_value_default("bool1")?);
 
     Ok(())

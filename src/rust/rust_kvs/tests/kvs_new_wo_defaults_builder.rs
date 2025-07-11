@@ -65,17 +65,17 @@ fn kvs_without_defaults_builder() -> Result<(), ErrorCode> {
     let builder = builder.need_kvs(true);
     let kvs = builder.build()?;
 
-    assert_eq!(kvs.get_value::<f64>("number")?, 123.0);
-    assert!(kvs.get_value::<bool>("bool")?);
-    assert_eq!(kvs.get_value::<String>("string")?, "Hello");
-    assert_eq!(kvs.get_value::<()>("null"), Ok(()));
+    assert_eq!(kvs.get_value_as::<f64>("number")?, 123.0);
+    assert!(kvs.get_value_as::<bool>("bool")?);
+    assert_eq!(kvs.get_value_as::<String>("string")?, "Hello");
+    assert_eq!(kvs.get_value_as::<()>("null"), Ok(()));
 
-    let json_array = kvs.get_value::<Vec<KvsValue>>("array")?;
+    let json_array = kvs.get_value_as::<Vec<KvsValue>>("array")?;
     assert_eq!(json_array[0].get(), Some(&456.0));
     assert_eq!(json_array[1].get(), Some(&false));
     assert_eq!(json_array[2].get(), Some(&"Bye".to_string()));
 
-    let json_map = kvs.get_value::<HashMap<String, KvsValue>>("object")?;
+    let json_map = kvs.get_value_as::<HashMap<String, KvsValue>>("object")?;
     assert_eq!(json_map["sub-number"].get(), Some(&789.0));
     assert_eq!(json_map["sub-bool"].get(), Some(&true));
     assert_eq!(json_map["sub-string"].get(), Some(&"Hi".to_string()));
@@ -88,7 +88,7 @@ fn kvs_without_defaults_builder() -> Result<(), ErrorCode> {
 
     // test for non-existent values
     assert_eq!(
-        kvs.get_value::<String>("non-existent").err(),
+        kvs.get_value_as::<String>("non-existent").err(),
         Some(ErrorCode::KeyNotFound)
     );
 

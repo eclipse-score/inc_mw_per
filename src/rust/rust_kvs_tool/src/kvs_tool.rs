@@ -208,21 +208,21 @@ fn _getkey(kvs: Kvs, mut args: Arguments) -> Result<(), ErrorCode> {
 
     match get_mode {
         SupportedTypes::Number => {
-            let value = kvs.get_value::<f64>(&key).map_err(|e| {
+            let value = kvs.get_value_as::<f64>(&key).map_err(|e| {
                 eprintln!("KVS get failed: {e:?}");
                 e
             })?;
             println!("Key:'{key}' \nValue: {value}");
         }
         SupportedTypes::Bool => {
-            let value = kvs.get_value::<bool>(&key).map_err(|e| {
+            let value = kvs.get_value_as::<bool>(&key).map_err(|e| {
                 eprintln!("KVS get failed: {e:?}");
                 e
             })?;
             println!("Key:'{key}' \nValue: {value}");
         }
         SupportedTypes::String => {
-            let value = kvs.get_value::<String>(&key).map_err(|e| {
+            let value = kvs.get_value_as::<String>(&key).map_err(|e| {
                 eprintln!("KVS get failed: {e:?}");
                 e
             })?;
@@ -230,14 +230,14 @@ fn _getkey(kvs: Kvs, mut args: Arguments) -> Result<(), ErrorCode> {
         }
         // Different Syntax to be compliant with "clippy::let_unit_value"
         SupportedTypes::Null => {
-            kvs.get_value::<()>(&key).map_err(|e| {
+            kvs.get_value_as::<()>(&key).map_err(|e| {
                 eprintln!("KVS get failed: {e:?}");
                 e
             })?;
             println!("Key:'{}' \nValue: {:?}", key, ());
         }
         SupportedTypes::Array => {
-            let value = kvs.get_value::<Vec<KvsValue>>(&key).map_err(|e| {
+            let value = kvs.get_value_as::<Vec<KvsValue>>(&key).map_err(|e| {
                 eprintln!("KVS get failed: {e:?}");
                 e
             })?;
@@ -245,7 +245,7 @@ fn _getkey(kvs: Kvs, mut args: Arguments) -> Result<(), ErrorCode> {
         }
         SupportedTypes::Object => {
             let value = kvs
-                .get_value::<HashMap<String, KvsValue>>(&key)
+                .get_value_as::<HashMap<String, KvsValue>>(&key)
                 .map_err(|e| {
                     eprintln!("KVS get failed: {e:?}");
                     e

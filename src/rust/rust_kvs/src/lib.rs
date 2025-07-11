@@ -216,6 +216,9 @@ pub enum ErrorCode {
     /// Key not found
     KeyNotFound,
 
+    // Key has no default value
+    KeyDefaultNotFound,
+
     /// Serialization failed
     SerializationFailed,
 
@@ -267,7 +270,7 @@ pub struct Kvs {
 }
 
 /// Key-value-storage value
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum KvsValue {
     /// Number
     Number(f64),
@@ -460,6 +463,7 @@ pub trait KvsApi {
         Self: Sized;
 
     fn reset(&self) -> Result<(), ErrorCode>;
+    fn reset_key(&self, key: &str) -> Result<(), ErrorCode>;
     fn get_all_keys(&self) -> Result<Vec<String>, ErrorCode>;
     fn key_exists(&self, key: &str) -> Result<bool, ErrorCode>;
     fn get_value(&self, key: &str) -> Result<KvsValue, ErrorCode>;
@@ -757,6 +761,27 @@ impl KvsApi for Kvs {
     ///   * `ErrorCode::MutexLockFailed`: Mutex locking failed
     fn reset(&self) -> Result<(), ErrorCode> {
         *self.kvs.lock()? = HashMap::new();
+        Ok(())
+    }
+
+    /// Reset a key-value pair in the storage to its default state
+    ///
+    /// # Parameters
+    ///    * 'key': Key being reset to default
+    ///
+    /// # Return Values
+    ///    * Ok: Reset of the key-value pair was successful
+    ///    * `ErrorCode::MutexLockFailed`: Mutex locking failed
+    ///    * `ErrorCode::KeyDefaultNotFound`: Key has no default value
+    fn reset_key(&self, key: &str) -> Result<(), ErrorCode> {
+        let mut kvs = self.kvs.lock()?;
+
+        if self.default.get(key).is_none() {
+            eprintln!("error: resetting key without a default value");
+            return Err(ErrorCode::KeyDefaultNotFound);
+        }
+
+        let _ = kvs.remove(key);
         Ok(())
     }
 
@@ -1663,5 +1688,44 @@ mod tests {
         if kvs.snapshot_count() > 0 {
             kvs.snapshot_restore(SnapshotId::new(1)).unwrap();
         }
+    }
+
+    #[cfg_attr(miri, ignore)]
+    #[test]
+    fn test_kvs_reset_single() {
+        let instance_id = InstanceId::new(0);
+        let temp_dir = test_dir();
+        std::fs::copy(
+            "tests/kvs_0_default.json",
+            format!("{}/kvs_0_default.json", temp_dir.1.clone()),
+        )
+        .unwrap();
+        let kvs = KvsBuilder::<Kvs>::new(instance_id.clone())
+            .dir(temp_dir.1.clone())
+            .need_defaults(true)
+            .build()
+            .unwrap();
+
+        let _ = kvs.set_value("number1", KvsValue::Number(987f64));
+        let _ = kvs.reset_key("number1");
+        assert_eq!(kvs.get_value::<f64>("number1").unwrap(), 987f64);
+
+        let _ = kvs.set_value("string1", KvsValue::String("Testing".to_string()));
+        let _ = kvs.reset_key("string1");
+        assert_eq!(kvs.get_value::<String>("string1").unwrap(), "Hello");
+
+        let _ = kvs.set_value("bool", KvsValue::Boolean(true));
+        assert!(matches!(
+            kvs.reset_key("bool"),
+            Err(ErrorCode::KeyDefaultNotFound)
+        ));
+
+        let _ = kvs.reset_key("bool1");
+        assert_eq!(kvs.get_value::<bool>("bool1").unwrap(), false);
+
+        assert!(matches!(
+            kvs.reset_key("fail"),
+            Err(ErrorCode::KeyDefaultNotFound)
+        ));
     }
 }

@@ -39,11 +39,10 @@ fn kvs_checksum_missing() -> Result<(), ErrorCode> {
         ],
     )?;
 
-    // remember hash filename
-    let hash_filename = kvs.get_hash_filename(SnapshotId::new(0));
+    kvs.flush()?;
 
-    // drop the current instance with flush-on-exit enabled and reopen storage
-    drop(kvs);
+    // remember hash filename
+    let hash_filename = kvs.get_hash_filename(SnapshotId::new(0))?;
 
     // delete the checksum
     std::fs::remove_file(hash_filename)?;

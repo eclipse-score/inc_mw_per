@@ -39,11 +39,10 @@ fn kvs_checksum_wrong() -> Result<(), ErrorCode> {
         ],
     )?;
 
-    // remember hash filename
-    let hash_filename = kvs.get_hash_filename(SnapshotId::new(0));
+    kvs.flush()?;
 
-    // drop the current instance with flush-on-exit enabled and reopen storage
-    drop(kvs);
+    // remember hash filename
+    let hash_filename = kvs.get_hash_filename(SnapshotId::new(0))?;
 
     // modify the checksum
     std::fs::write(hash_filename, vec![0x12, 0x34, 0x56, 0x78])?;

@@ -25,12 +25,9 @@ fn kvs_snapshot_rotation() -> Result<(), ErrorCode> {
     let max_count = Kvs::snapshot_max_count();
     let mut kvs = create_kvs()?;
 
-    // we need a double zero here because after the first flush no snapshot is created
-    // and the max count is also added twice to make sure we rotate once
-    let mut cnts: Vec<usize> = vec![0];
-    let mut cnts_mid: Vec<usize> = (0..=max_count).collect();
+    // max count is added twice to make sure we rotate once
+    let mut cnts: Vec<usize> = (0..=max_count).collect();
     let mut cnts_post: Vec<usize> = vec![max_count];
-    cnts.append(&mut cnts_mid);
     cnts.append(&mut cnts_post);
 
     // make sure the snapshot count is 0, 0, .., max_count, max_count (rotation)

@@ -146,7 +146,7 @@ use core::ops::Index;
 //std libs
 use std::collections::HashMap;
 use std::fs;
-use std::path::Path;
+use std::path::PathBuf;
 use std::sync::{
     atomic::{self, AtomicBool},
     Mutex, MutexGuard, PoisonError,
@@ -166,6 +166,7 @@ const KVS_MAX_SNAPSHOTS: usize = 3;
 pub struct InstanceId(usize);
 
 /// Snapshot ID
+#[derive(Clone, Debug, PartialEq)]
 pub struct SnapshotId(usize);
 
 /// Runtime Error Codes
@@ -482,8 +483,8 @@ pub trait KvsApi {
     where
         Self: Sized;
     fn snapshot_restore(&self, id: SnapshotId) -> Result<(), ErrorCode>;
-    fn get_kvs_filename(&self, id: SnapshotId) -> String;
-    fn get_hash_filename(&self, id: SnapshotId) -> String;
+    fn get_kvs_filename(&self, id: SnapshotId) -> Result<PathBuf, ErrorCode>;
+    fn get_hash_filename(&self, id: SnapshotId) -> Result<PathBuf, ErrorCode>;
 }
 
 impl<T> KvsBuilder<T>
@@ -982,17 +983,13 @@ impl KvsApi for Kvs {
     fn snapshot_count(&self) -> usize {
         let mut count = 0;
 
-        for idx in 0..=KVS_MAX_SNAPSHOTS {
-            if !Path::new(&format!("{}_{}.json", self.filename_prefix, idx)).exists() {
+        for idx in 0..KVS_MAX_SNAPSHOTS {
+            let snapshot_path = PathBuf::from(format!("{}_{}.json", self.filename_prefix, idx));
+            if !snapshot_path.exists() {
                 break;
             }
 
-            // skip current KVS but make sure it exists before search for snapshots
-            if idx == 0 {
-                continue;
-            }
-
-            count = idx;
+            count += 1;
         }
 
         count
@@ -1052,9 +1049,15 @@ impl KvsApi for Kvs {
     ///   * `id`: Snapshot ID to get the filename for
     ///
     /// # Return Values
-    ///   * String: Filename for ID
-    fn get_kvs_filename(&self, id: SnapshotId) -> String {
-        format!("{}_{}.json", self.filename_prefix, id)
+    ///   * `Ok`: Filename for ID
+    ///   * `ErrorCode::FileNotFound`: KVS file for snapshot ID not found
+    fn get_kvs_filename(&self, id: SnapshotId) -> Result<PathBuf, ErrorCode> {
+        let path = PathBuf::from(format!("{}_{}.json", self.filename_prefix, id));
+        if !path.exists() {
+            Err(ErrorCode::FileNotFound)
+        } else {
+            Ok(path)
+        }
     }
 
     /// Return the hash-filename for a given snapshot ID
@@ -1063,9 +1066,15 @@ impl KvsApi for Kvs {
     ///   * `id`: Snapshot ID to get the hash filename for
     ///
     /// # Return Values
-    ///   * String: Hash filename for ID
-    fn get_hash_filename(&self, id: SnapshotId) -> String {
-        format!("{}_{}.hash", self.filename_prefix, id)
+    ///   * `Ok`: Hash filename for ID
+    ///   * `ErrorCode::FileNotFound`: Hash file for snapshot ID not found
+    fn get_hash_filename(&self, id: SnapshotId) -> Result<PathBuf, ErrorCode> {
+        let path = PathBuf::from(format!("{}_{}.hash", self.filename_prefix, id));
+        if !path.exists() {
+            Err(ErrorCode::FileNotFound)
+        } else {
+            Ok(path)
+        }
     }
 }
 
@@ -1428,6 +1437,20 @@ mod tests {
     }
 
     #[test]
+    fn test_get_filename_before_flush() {
+        let dir = tempdir().unwrap();
+        let dir_path = dir.path().to_string_lossy().to_string();
+
+        let instance_id = InstanceId::new(0);
+        let kvs = KvsBuilder::<Kvs>::new(instance_id.clone())
+            .dir(dir_path)
+            .build()
+            .unwrap();
+        let result = kvs.get_kvs_filename(SnapshotId::new(0));
+        assert!(result.is_err_and(|e| e == ErrorCode::FileNotFound));
+    }
+
+    #[test]
     fn test_get_filename() {
         let dir = tempdir().unwrap();
         let dir_path = dir.path().to_string_lossy().to_string();
@@ -1437,10 +1460,13 @@ mod tests {
             .dir(dir_path.clone())
             .build()
             .unwrap();
-        let filename = kvs.get_kvs_filename(SnapshotId::new(0));
+        kvs.flush().unwrap();
+        let filename = kvs.get_kvs_filename(SnapshotId::new(0)).unwrap();
+        let filename_str = filename.to_string_lossy().to_string();
         assert!(
-            filename.ends_with("_0.json"),
-            "Expected filename to end with _0.json"
+            filename_str.ends_with("_0.json"),
+            "Expected filename to end with _0.json: {}",
+            filename.display()
         );
     }
 
@@ -1653,12 +1679,14 @@ mod tests {
         )
         .unwrap();
         let _ = kvs.set_value("snap", KvsValue::Number(3.0));
-        kvs.flush().unwrap();
-        // After flush, snapshot count should be 0 (no old snapshots yet)
+        // Before flush, snapshot count should be 0 (no snapshots yet)
         assert_eq!(kvs.snapshot_count(), 0);
+        kvs.flush().unwrap();
+        // After flush, snapshot count should be 1
+        assert_eq!(kvs.snapshot_count(), 1);
         // Call flush again to rotate and create a snapshot
         kvs.flush().unwrap();
-        assert!(kvs.snapshot_count() >= 1);
+        assert_eq!(kvs.snapshot_count(), 2);
         // Restore from snapshot if available
         if kvs.snapshot_count() > 0 {
             kvs.snapshot_restore(SnapshotId::new(1)).unwrap();

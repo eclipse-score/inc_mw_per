@@ -11,9 +11,83 @@
 
 use std::path::PathBuf;
 
+//core and alloc libs
+use core::fmt;
+
 use crate::error_code::ErrorCode;
-use crate::kvs::{InstanceId, OpenNeedDefaults, OpenNeedKvs, SnapshotId};
 use crate::kvs_value::KvsValue;
+
+/// Instance ID
+#[derive(Clone, Debug, PartialEq)]
+pub struct InstanceId(usize);
+
+/// Snapshot ID
+#[derive(Clone, Debug, PartialEq)]
+pub struct SnapshotId(pub usize);
+
+impl fmt::Display for InstanceId {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl fmt::Display for SnapshotId {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl InstanceId {
+    /// Create a new instance ID
+    pub fn new(id: usize) -> Self {
+        Self(id)
+    }
+}
+
+impl SnapshotId {
+    /// Create a new Snapshot ID
+    pub fn new(id: usize) -> Self {
+        SnapshotId(id)
+    }
+}
+
+/// Need-Defaults flag
+pub enum OpenNeedDefaults {
+    /// Optional: Open defaults only if available
+    Optional,
+
+    /// Required: Defaults must be available
+    Required,
+}
+
+/// Need-KVS flag
+pub enum OpenNeedKvs {
+    /// Optional: Use an empty KVS if no KVS is available
+    Optional,
+
+    /// Required: KVS must be already exist
+    Required,
+}
+
+impl From<bool> for OpenNeedDefaults {
+    fn from(flag: bool) -> OpenNeedDefaults {
+        if flag {
+            OpenNeedDefaults::Required
+        } else {
+            OpenNeedDefaults::Optional
+        }
+    }
+}
+
+impl From<bool> for OpenNeedKvs {
+    fn from(flag: bool) -> OpenNeedKvs {
+        if flag {
+            OpenNeedKvs::Required
+        } else {
+            OpenNeedKvs::Optional
+        }
+    }
+}
 
 pub trait KvsApi {
     fn open(

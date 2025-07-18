@@ -18,8 +18,6 @@ use crate::kvs_value::KvsValue;
 use std::collections::HashMap;
 use std::sync::{MutexGuard, PoisonError};
 
-use tinyjson::{JsonGenerateError, JsonParseError};
-
 /// Runtime Error Codes
 #[derive(Debug, PartialEq)]
 pub enum ErrorCode {
@@ -94,24 +92,6 @@ impl From<std::io::Error> for ErrorCode {
     }
 }
 
-impl From<JsonParseError> for ErrorCode {
-    fn from(cause: JsonParseError) -> Self {
-        eprintln!(
-            "error: JSON parser error: line = {}, column = {}",
-            cause.line(),
-            cause.column()
-        );
-        ErrorCode::JsonParserError
-    }
-}
-
-impl From<JsonGenerateError> for ErrorCode {
-    fn from(cause: JsonGenerateError) -> Self {
-        eprintln!("error: JSON generator error: msg = {}", cause.message());
-        ErrorCode::JsonGeneratorError
-    }
-}
-
 impl From<FromUtf8Error> for ErrorCode {
     fn from(cause: FromUtf8Error) -> Self {
         eprintln!("error: UTF-8 conversion failed: {cause:#?}");
@@ -145,27 +125,11 @@ mod tests {
     use super::*;
     use std::sync::{Arc, Mutex};
     use std::thread;
-    use tinyjson::JsonValue;
 
     #[test]
     fn test_unknown_error_code_from_io_error() {
         let error = std::io::Error::new(std::io::ErrorKind::InvalidInput, "Invalid input provided");
         assert_eq!(ErrorCode::from(error), ErrorCode::UnmappedError);
-    }
-
-    #[test]
-    fn test_unknown_error_code_from_json_parse_error() {
-        let error = tinyjson::JsonParser::new("[1, 2, 3".chars())
-            .parse()
-            .unwrap_err();
-        assert_eq!(ErrorCode::from(error), ErrorCode::JsonParserError);
-    }
-
-    #[test]
-    fn test_unknown_error_code_from_json_generate_error() {
-        let data: JsonValue = JsonValue::Number(f64::INFINITY);
-        let error = data.stringify().unwrap_err();
-        assert_eq!(ErrorCode::from(error), ErrorCode::JsonGeneratorError);
     }
 
     #[test]

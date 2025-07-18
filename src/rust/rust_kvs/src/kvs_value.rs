@@ -12,10 +12,11 @@
 use std::collections::HashMap;
 use std::ops::Index;
 
-use tinyjson::JsonValue;
+/// Key-value storage map type
+pub type KvsMap = std::collections::HashMap<String, KvsValue>;
 
 /// Key-value-storage value
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum KvsValue {
     /// Number
     Number(f64),
@@ -34,36 +35,6 @@ pub enum KvsValue {
 
     /// Object
     Object(HashMap<String, KvsValue>),
-}
-
-impl From<&JsonValue> for KvsValue {
-    fn from(val: &JsonValue) -> KvsValue {
-        match val {
-            JsonValue::Number(val) => KvsValue::Number(*val),
-            JsonValue::Boolean(val) => KvsValue::Boolean(*val),
-            JsonValue::String(val) => KvsValue::String(val.clone()),
-            JsonValue::Null => KvsValue::Null,
-            JsonValue::Array(val) => KvsValue::Array(val.iter().map(|x| x.into()).collect()),
-            JsonValue::Object(val) => {
-                KvsValue::Object(val.iter().map(|(x, y)| (x.clone(), y.into())).collect())
-            }
-        }
-    }
-}
-
-impl From<&KvsValue> for JsonValue {
-    fn from(val: &KvsValue) -> JsonValue {
-        match val {
-            KvsValue::Number(val) => JsonValue::Number(*val),
-            KvsValue::Boolean(val) => JsonValue::Boolean(*val),
-            KvsValue::String(val) => JsonValue::String(val.clone()),
-            KvsValue::Null => JsonValue::Null,
-            KvsValue::Array(val) => JsonValue::Array(val.iter().map(|x| x.into()).collect()),
-            KvsValue::Object(val) => {
-                JsonValue::Object(val.iter().map(|(x, y)| (x.clone(), y.into())).collect())
-            }
-        }
-    }
 }
 
 macro_rules! impl_from_t_for_kvs_value {
@@ -88,33 +59,37 @@ impl From<()> for KvsValue {
     }
 }
 
-macro_rules! impl_from_kvs_value_to_t {
-    ($to:ty, $item:ident) => {
-        impl<'a> From<&'a KvsValue> for $to {
-            fn from(val: &'a KvsValue) -> $to {
-                if let KvsValue::$item(val) = val {
-                    return val.clone();
-                }
+use std::convert::TryFrom;
 
-                panic!("Invalid KvsValue type");
+macro_rules! impl_tryfrom_kvs_value_to_t {
+    ($to:ty, $item:ident) => {
+        impl<'a> TryFrom<&'a KvsValue> for $to {
+            type Error = ();
+            fn try_from(val: &'a KvsValue) -> Result<$to, Self::Error> {
+                if let KvsValue::$item(ref v) = val {
+                    Ok(v.clone())
+                } else {
+                    Err(())
+                }
             }
         }
     };
 }
 
-impl_from_kvs_value_to_t!(f64, Number);
-impl_from_kvs_value_to_t!(bool, Boolean);
-impl_from_kvs_value_to_t!(String, String);
-impl_from_kvs_value_to_t!(Vec<KvsValue>, Array);
-impl_from_kvs_value_to_t!(HashMap<String, KvsValue>, Object);
+impl_tryfrom_kvs_value_to_t!(f64, Number);
+impl_tryfrom_kvs_value_to_t!(bool, Boolean);
+impl_tryfrom_kvs_value_to_t!(String, String);
+impl_tryfrom_kvs_value_to_t!(Vec<KvsValue>, Array);
+impl_tryfrom_kvs_value_to_t!(HashMap<String, KvsValue>, Object);
 
-impl<'a> From<&'a KvsValue> for () {
-    fn from(val: &'a KvsValue) {
+impl<'a> TryFrom<&'a KvsValue> for () {
+    type Error = ();
+    fn try_from(val: &'a KvsValue) -> Result<(), Self::Error> {
         if let KvsValue::Null = val {
-            return;
+            Ok(())
+        } else {
+            Err(())
         }
-
-        panic!("Invalid KvsValue type for ()");
     }
 }
 

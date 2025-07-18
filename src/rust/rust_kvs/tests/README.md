@@ -20,3 +20,10 @@ SPDX-License-Identifier: Apache-2.0
 All tests are kept in separate files as the working directory is always
 changed. If there is more than one test in a file both tests are run in
 parallel and use the same working directory which will led to wrong results.
+
+## Bazel instruction
+
+In order to run all Component Integration Tests with Bazel there is a single Test Suite created, which can be executed with:
+```bash
+bazel test //src/rust/rust_kvs:cit
+```

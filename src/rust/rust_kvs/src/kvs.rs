@@ -25,7 +25,8 @@ use tinyjson::{JsonGenerator, JsonValue};
 
 use crate::error_code::ErrorCode;
 use crate::kvs_api::KvsApi;
-use crate::kvs_value::KvsValue;
+use crate::kvs_backend::{DefaultPersistKvs, PersistKvs};
+use crate::kvs_value::{KvsMap, KvsValue};
 
 /// Maximum number of snapshots
 ///
@@ -41,7 +42,7 @@ pub struct InstanceId(usize);
 pub struct SnapshotId(usize);
 
 /// Key-value-storage data
-pub struct Kvs {
+pub struct GenericKvs<J: PersistKvs + Default = DefaultPersistKvs> {
     /// Storage data
     ///
     /// Feature: `FEAT_REQ__KVS__thread_safety` (Mutex)
@@ -57,6 +58,8 @@ pub struct Kvs {
 
     /// Flush on exit flag
     flush_on_exit: AtomicBool,
+
+    _backend: std::marker::PhantomData<J>,
 }
 
 /// Need-Defaults flag
@@ -79,7 +82,7 @@ pub enum OpenNeedKvs {
 
 /// Need-File flag
 #[derive(PartialEq)]
-enum OpenJsonNeedFile {
+enum OpenKvsNeedFile {
     /// Optional: If the file doesn't exist, start with empty data
     Optional,
 
@@ -107,27 +110,27 @@ impl From<bool> for OpenNeedKvs {
     }
 }
 
-impl From<OpenNeedDefaults> for OpenJsonNeedFile {
-    fn from(val: OpenNeedDefaults) -> OpenJsonNeedFile {
+impl From<OpenNeedDefaults> for OpenKvsNeedFile {
+    fn from(val: OpenNeedDefaults) -> OpenKvsNeedFile {
         match val {
-            OpenNeedDefaults::Optional => OpenJsonNeedFile::Optional,
-            OpenNeedDefaults::Required => OpenJsonNeedFile::Required,
+            OpenNeedDefaults::Optional => OpenKvsNeedFile::Optional,
+            OpenNeedDefaults::Required => OpenKvsNeedFile::Required,
         }
     }
 }
 
-impl From<OpenNeedKvs> for OpenJsonNeedFile {
-    fn from(val: OpenNeedKvs) -> OpenJsonNeedFile {
+impl From<OpenNeedKvs> for OpenKvsNeedFile {
+    fn from(val: OpenNeedKvs) -> OpenKvsNeedFile {
         match val {
-            OpenNeedKvs::Optional => OpenJsonNeedFile::Optional,
-            OpenNeedKvs::Required => OpenJsonNeedFile::Required,
+            OpenNeedKvs::Optional => OpenKvsNeedFile::Optional,
+            OpenNeedKvs::Required => OpenKvsNeedFile::Required,
         }
     }
 }
 
 /// Verify-Hash flag
 #[derive(PartialEq)]
-enum OpenJsonVerifyHash {
+enum OpenKvsVerifyHash {
     /// No: Parse the file without the hash
     No,
 
@@ -161,7 +164,7 @@ impl SnapshotId {
     }
 }
 
-impl Kvs {
+impl<J: PersistKvs + Default> GenericKvs<J> {
     /// Open and parse a JSON file
     ///
     /// Return an empty hash when no file was found.
@@ -174,70 +177,40 @@ impl Kvs {
     ///   * `verify_hash`: content is verified against a hash file
     ///
     /// # Return Values
-    ///   * `Ok`: KVS data as `HashMap<String, KvsValue>`
+    ///   * Ok: KVS data as `HashMap<String, KvsValue>`
     ///   * `ErrorCode::ValidationFailed`: KVS hash validation failed
-    ///   * `ErrorCode::JsonParserError`: JSON parser error
-    ///   * `ErrorCode::KvsFileReadError`: KVS file read error
-    ///   * `ErrorCode::KvsHashFileReadError`: KVS hash file read error
+    ///   * `ErrorCode::JsonParserError`: JSON parser error (invalid JSON or type error)
+    ///   * `ErrorCode::KvsFileReadError`: KVS file read error (I/O error)
+    ///   * `ErrorCode::KvsHashFileReadError`: KVS hash file read error (hash file missing or unreadable)
     ///   * `ErrorCode::UnmappedError`: Generic error
-    fn open_json<T>(
-        filename_prefix: &str,
+    fn open_kvs<T>(
+        filename: &str,
         need_file: T,
-        verify_hash: OpenJsonVerifyHash,
-    ) -> Result<HashMap<String, KvsValue>, ErrorCode>
+        verify_hash: OpenKvsVerifyHash,
+        hash_filename: &str,
+    ) -> Result<KvsMap, ErrorCode>
     where
-        T: Into<OpenJsonNeedFile>,
+        T: Into<OpenKvsNeedFile>,
     {
-        let filename_json = format!("{filename_prefix}.json");
-        let filename_hash = format!("{filename_prefix}.hash");
-        match fs::read_to_string(&filename_json) {
-            Ok(data) => {
-                if verify_hash == OpenJsonVerifyHash::Yes {
-                    // data exists, read hash file
-                    match fs::read(&filename_hash) {
-                        Ok(hash) => {
-                            let hash_kvs = RollingAdler32::from_buffer(data.as_bytes()).hash();
-                            if u32::from_be_bytes(hash.try_into()?) != hash_kvs {
-                                eprintln!(
-                                    "error: KVS data corrupted ({filename_json}, {filename_hash})"
-                                );
-                                Err(ErrorCode::ValidationFailed)
-                            } else {
-                                println!("JSON data has valid hash");
-                                let data: JsonValue = data.parse()?;
-                                println!("parsing file {filename_json}");
-                                Ok(data
-                                    .get::<HashMap<_, _>>()
-                                    .ok_or(ErrorCode::JsonParserError)?
-                                    .iter()
-                                    .map(|(key, value)| (key.clone(), value.into()))
-                                    .collect())
-                            }
-                        }
-                        Err(err) => {
-                            eprintln!(
-                                "error: hash file {filename_hash} could not be read: {err:#?}"
-                            );
-                            Err(ErrorCode::KvsHashFileReadError)
-                        }
-                    }
-                } else {
-                    Ok(data
-                        .parse::<JsonValue>()?
-                        .get::<HashMap<_, _>>()
-                        .ok_or(ErrorCode::JsonParserError)?
-                        .iter()
-                        .map(|(key, value)| (key.clone(), value.into()))
-                        .collect())
-                }
+        // Pass hash check parameters to get_kvs_from_file
+        let do_hash = matches!(verify_hash, OpenKvsVerifyHash::Yes);
+        match J::get_kvs_from_file(&filename, &mut KvsMap::new(), do_hash, hash_filename) {
+            Ok(()) => {
+                let mut map = KvsMap::new();
+                J::get_kvs_from_file(&filename, &mut map, do_hash, hash_filename).map_err(|e| {
+                    eprintln!("error: {e}");
+                    ErrorCode::from(e)
+                })?;
+                Ok(map)
             }
-            Err(err) => {
-                if need_file.into() == OpenJsonNeedFile::Required {
-                    eprintln!("error: file {filename_json} could not be read: {err:#?}");
-                    Err(ErrorCode::KvsFileReadError)
+            Err(e) => {
+                let code = ErrorCode::from(e);
+                if need_file.into() == OpenKvsNeedFile::Required {
+                    eprintln!("error: file {filename} could not be read: {code:?}");
+                    Err(code)
                 } else {
-                    println!("file {filename_json} not found, using empty data");
-                    Ok(HashMap::new())
+                    println!("file {filename} not found, using empty data");
+                    Ok(KvsMap::new())
                 }
             }
         }
@@ -279,7 +252,7 @@ impl Kvs {
     }
 }
 
-impl KvsApi for Kvs {
+impl<J: PersistKvs + Default> KvsApi for GenericKvs<J> {
     /// Open the key-value-storage
     ///
     /// Checks and opens a key-value-storage. Flush on exit is enabled by default and can be
@@ -298,16 +271,16 @@ impl KvsApi for Kvs {
     /// # Return Values
     ///   * Ok: KVS instance
     ///   * `ErrorCode::ValidationFailed`: KVS hash validation failed
-    ///   * `ErrorCode::JsonParserError`: JSON parser error
-    ///   * `ErrorCode::KvsFileReadError`: KVS file read error
-    ///   * `ErrorCode::KvsHashFileReadError`: KVS hash file read error
+    ///   * `ErrorCode::JsonParserError`: JSON parser error (invalid JSON or type error)
+    ///   * `ErrorCode::KvsFileReadError`: KVS file read error (I/O error)
+    ///   * `ErrorCode::KvsHashFileReadError`: KVS hash file read error (hash file missing or unreadable)
     ///   * `ErrorCode::UnmappedError`: Generic error
     fn open(
         instance_id: InstanceId,
         need_defaults: OpenNeedDefaults,
         need_kvs: OpenNeedKvs,
         dir: Option<String>,
-    ) -> Result<Kvs, ErrorCode> {
+    ) -> Result<GenericKvs<J>, ErrorCode> {
         let dir = if let Some(dir) = dir {
             format!("{dir}/")
         } else {
@@ -317,17 +290,25 @@ impl KvsApi for Kvs {
         let filename_prefix = format!("{dir}kvs_{instance_id}");
         let filename_kvs = format!("{filename_prefix}_0");
 
-        let default = Self::open_json(&filename_default, need_defaults, OpenJsonVerifyHash::No)?;
-        let kvs = Self::open_json(&filename_kvs, need_kvs, OpenJsonVerifyHash::Yes)?;
+        let default =
+            GenericKvs::<J>::open_kvs(&filename_default, need_defaults, OpenKvsVerifyHash::No, "")?;
+        // Use hash checking for the main KVS file
+        let kvs = GenericKvs::<J>::open_kvs(
+            &filename_kvs,
+            need_kvs,
+            OpenKvsVerifyHash::Yes,
+            &format!("{filename_prefix}_0.hash"),
+        )?;
 
         println!("opened KVS: instance '{instance_id}'");
         println!("max snapshot count: {KVS_MAX_SNAPSHOTS}");
 
-        Ok(Self {
+        Ok(GenericKvs {
             kvs: Mutex::new(kvs),
             default,
             filename_prefix,
             flush_on_exit: AtomicBool::new(true),
+            _backend: std::marker::PhantomData,
         })
     }
 
@@ -500,10 +481,10 @@ impl KvsApi for Kvs {
     /// # Return Values
     ///   * Ok: Value was assigned to key
     ///   * `ErrorCode::MutexLockFailed`: Mutex locking failed
-    fn set_value<S: Into<String>, J: Into<KvsValue>>(
+    fn set_value<S: Into<String>, V: Into<KvsValue>>(
         &self,
         key: S,
-        value: J,
+        value: V,
     ) -> Result<(), ErrorCode> {
         self.kvs.lock()?.insert(key.into(), value.into());
         Ok(())
@@ -540,28 +521,18 @@ impl KvsApi for Kvs {
     ///   * `ErrorCode::ConversionFailed`: JSON could not serialize into String
     ///   * `ErrorCode::UnmappedError`: Unmapped error
     fn flush(&self) -> Result<(), ErrorCode> {
-        let json: HashMap<String, JsonValue> = self
-            .kvs
-            .lock()?
-            .iter()
-            .map(|(key, value)| (key.clone(), value.into()))
-            .collect();
-        let json = JsonValue::from(json);
-        let mut buf = Vec::new();
-        let mut gen = JsonGenerator::new(&mut buf).indent("  ");
-        gen.generate(&json)?;
-
-        self.snapshot_rotate()?;
-
-        let hash = RollingAdler32::from_buffer(&buf).hash();
-
-        let filename_json = format!("{}_0.json", self.filename_prefix);
-        let data = String::from_utf8(buf)?;
-        fs::write(filename_json, &data)?;
-
-        let filename_hash = format!("{}_0.hash", self.filename_prefix);
-        fs::write(filename_hash, hash.to_be_bytes()).ok();
-
+        self.snapshot_rotate().map_err(|e| {
+            eprintln!("error: snapshot_rotate failed: {e:?}");
+            e
+        })?;
+        let kvs = self.kvs.lock().map_err(|e| {
+            eprintln!("error: Mutex lock failed: {e:?}");
+            ErrorCode::MutexLockFailed
+        })?;
+        J::persist_kvs_to_file(&*kvs, &self.filename_prefix, true).map_err(|e| {
+            eprintln!("error: persist_kvs_to_file failed: {e:?}");
+            e
+        })?;
         Ok(())
     }
 
@@ -622,10 +593,11 @@ impl KvsApi for Kvs {
             return Err(ErrorCode::InvalidSnapshotId);
         }
 
-        let kvs = Self::open_json(
+        let kvs = Self::open_kvs(
             &format!("{}_{}", self.filename_prefix, id.0),
-            OpenJsonNeedFile::Required,
-            OpenJsonVerifyHash::Yes,
+            OpenKvsNeedFile::Required,
+            OpenKvsVerifyHash::Yes,
+            "",
         )?;
         *self.kvs.lock()? = kvs;
 
@@ -667,10 +639,12 @@ impl KvsApi for Kvs {
     }
 }
 
-impl Drop for Kvs {
+impl<J: PersistKvs + Default> Drop for GenericKvs<J> {
     fn drop(&mut self) {
         if self.flush_on_exit.load(atomic::Ordering::Relaxed) {
-            self.flush().ok();
+            if let Err(e) = self.flush() {
+                eprintln!("GenericKvs::flush() failed in Drop: {:?}", e);
+            }
         }
     }
 }
@@ -687,7 +661,7 @@ mod tests {
 
         let instance_id = InstanceId::new(0);
 
-        let kvs = Kvs::open(
+        let kvs = GenericKvs::<DefaultPersistKvs>::open(
             instance_id.clone(),
             OpenNeedDefaults::Optional,
             OpenNeedKvs::Optional,
@@ -703,21 +677,13 @@ mod tests {
         );
     }
 
-    impl<'a> TryFrom<&'a KvsValue> for u64 {
-        type Error = ErrorCode;
-
-        fn try_from(_val: &'a KvsValue) -> Result<u64, Self::Error> {
-            Err(ErrorCode::ConversionFailed)
-        }
-    }
-
     #[test]
     fn test_kvs_open_and_set_get_value() {
         let dir = tempdir().unwrap();
         let dir_path = dir.path().to_string_lossy().to_string();
 
         let instance_id = InstanceId::new(42);
-        let kvs = Kvs::open(
+        let kvs = GenericKvs::<DefaultPersistKvs>::open(
             instance_id.clone(),
             OpenNeedDefaults::Optional,
             OpenNeedKvs::Optional,
@@ -735,14 +701,14 @@ mod tests {
         let dir_path = dir.path().to_string_lossy().to_string();
 
         let instance_id = InstanceId::new(43);
-        let kvs = Kvs::open(
+        let kvs = GenericKvs::<DefaultPersistKvs>::open(
             instance_id.clone(),
             OpenNeedDefaults::Optional,
             OpenNeedKvs::Optional,
             Some(dir_path.clone()),
         )
         .unwrap();
-        let _ = kvs.set_value("reset", KvsValue::Number(1.0));
+        let _ = kvs.set_value("reset", 1.0);
         assert!(kvs.get_value("reset").is_ok());
         kvs.reset().unwrap();
         assert!(matches!(
@@ -757,7 +723,7 @@ mod tests {
         let dir_path = dir.path().to_string_lossy().to_string();
 
         let instance_id = InstanceId::new(44);
-        let kvs = Kvs::open(
+        let kvs = GenericKvs::<DefaultPersistKvs>::open(
             instance_id.clone(),
             OpenNeedDefaults::Optional,
             OpenNeedKvs::Optional,
@@ -777,14 +743,14 @@ mod tests {
         let dir_path = dir.path().to_string_lossy().to_string();
 
         let instance_id = InstanceId::new(45);
-        let kvs = Kvs::open(
+        let kvs = GenericKvs::<DefaultPersistKvs>::open(
             instance_id.clone(),
             OpenNeedDefaults::Optional,
             OpenNeedKvs::Optional,
             Some(dir_path.clone()),
         )
         .unwrap();
-        let _ = kvs.set_value("bar", KvsValue::Number(2.0));
+        let _ = kvs.set_value("bar", 2.0);
         assert!(kvs.key_exists("bar").unwrap());
         kvs.remove_key("bar").unwrap();
         assert!(!kvs.key_exists("bar").unwrap());
@@ -796,14 +762,14 @@ mod tests {
         let dir_path = dir.path().to_string_lossy().to_string();
 
         let instance_id = InstanceId::new(46);
-        let kvs = Kvs::open(
+        let kvs = GenericKvs::<DefaultPersistKvs>::open(
             instance_id.clone(),
             OpenNeedDefaults::Optional,
             OpenNeedKvs::Optional,
             Some(dir_path.clone()),
         )
         .unwrap();
-        let _ = kvs.set_value("snap", KvsValue::Number(3.0));
+        let _ = kvs.set_value("snap", 3.0);
         // Before flush, snapshot count should be 0 (no snapshots yet)
         assert_eq!(kvs.snapshot_count(), 0);
         kvs.flush().unwrap();

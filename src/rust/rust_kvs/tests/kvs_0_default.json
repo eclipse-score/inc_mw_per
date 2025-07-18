@@ -1,5 +1,5 @@
 {
-  "string1": "Hello",
-  "bool1": false,
-  "number1": 987
+  "string1": { "type": "String", "value": "Hello" },
+  "bool1": { "type": "Boolean", "value": false },
+  "number1": { "type": "I32", "value": 987 }
 }

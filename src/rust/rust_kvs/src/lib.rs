@@ -18,11 +18,11 @@
 //! [Adler32](https://crates.io/crates/adler32) crate. No other direct dependencies are used
 //! besides the Rust `std` library.
 //!
-//! The key-value-storage is opened or initialized with [`KvsBuilder::<Kvs>::new`] where various settings
+//! The key-value-storage is opened or initialized with [`KvsBuilder::<GenericKvs>::new`] where various settings
 //! can be applied before the KVS instance is created.
 //!
 //! Without configuration the KVS is flushed on exit by default. This can be controlled by
-//! [`Kvs::flush_on_exit`]. It is possible to manually flush the KVS by calling [`Kvs::flush`].
+//! [`GenericKvs::flush_on_exit`]. It is possible to manually flush the KVS by calling [`GenericKvs::flush`].
 //!
 //! All `TinyJSON` provided datatypes can be used:
 //!   * `Number`: `f64`
@@ -34,23 +34,23 @@
 //!
 //! Note: JSON arrays are not restricted to only contain values of the same type.
 //!
-//! Writing a value to the KVS can be done by calling [`Kvs::set_value`] with the `key` as first
+//! Writing a value to the KVS can be done by calling [`GenericKvs::set_value`] with the `key` as first
 //! and a `KvsValue` as second parameter. Either `KvsValue::Number(123.0)` or `123.0` can be
 //! used as there will be an auto-Into performed when calling the function.
 //!
-//! To read a value call [`Kvs::get_value`](Kvs::get_value) or [`Kvs::get_value_as::<T>`](Kvs::get_value_as)
+//! To read a value call [`GenericKvs::get_value`](GenericKvs::get_value) or [`GenericKvs::get_value_as::<T>`](GenericKvs::get_value_as)
 //! with the `key` as first parameter. `T` represents the type to read and can be `f64`, `bool`, `String`, `()`,
 //! `Vec<KvsValue>`, `HashMap<String, KvsValue>` or `KvsValue`.
 //! Also `let value: f64 = kvs.get_value_as()` can be used.
 //!
 //! If a `key` isn't available in the KVS a lookup into the defaults storage will be performed and
 //! if the `value` is found the default will be returned. The default value isn't stored when
-//! [`Kvs::flush`] is called unless it's explicitly written with [`Kvs::set_value`]. So when
+//! [`GenericKvs::flush`] is called unless it's explicitly written with [`GenericKvs::set_value`]. So when
 //! defaults change always the latest values will be returned. If that is an unwanted behaviour
 //! it's better to remove the default value and write the value permanently when the KVS is
-//! initialized. To check whether a value has a default call [`Kvs::get_default_value`] and to
+//! initialized. To check whether a value has a default call [`GenericKvs::get_default_value`] and to
 //! see if the value wasn't written yet and will return the default call
-//! [`Kvs::is_value_default`].
+//! [`GenericKvs::is_value_default`].
 //!
 //!
 //! ## Example Usage
@@ -62,7 +62,7 @@
 //! fn main() -> Result<(), ErrorCode> {
 //!    
 //!     
-//!     let kvs = KvsBuilder::<Kvs>::new(InstanceId::new(0)).dir("").build()?;
+//!     let kvs = KvsBuilder::<GenericKvs>::new(InstanceId::new(0)).dir("").build()?;
 //!
 //!     kvs.set_value("number", 123.0)?;
 //!     kvs.set_value("bool", true)?;
@@ -136,20 +136,25 @@
 #![cfg_attr(coverage_nightly, feature(coverage_attribute))]
 
 pub mod error_code;
+mod json_backend;
 pub mod kvs;
 pub mod kvs_api;
+mod kvs_backend;
 pub mod kvs_builder;
 pub mod kvs_value;
+
+pub type Kvs = kvs::GenericKvs<kvs_backend::DefaultPersistKvs>;
 
 /// Prelude module for convenient imports
 pub mod prelude {
     pub use crate::error_code::ErrorCode;
+    pub use crate::kvs::GenericKvs;
     pub use crate::kvs::InstanceId;
-    pub use crate::kvs::Kvs;
     pub use crate::kvs::OpenNeedDefaults;
     pub use crate::kvs::OpenNeedKvs;
     pub use crate::kvs::SnapshotId;
     pub use crate::kvs_api::KvsApi;
     pub use crate::kvs_builder::KvsBuilder;
     pub use crate::kvs_value::KvsValue;
+    pub use crate::Kvs;
 }

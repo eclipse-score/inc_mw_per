@@ -9,10 +9,10 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+use super::Kvs;
 use crate::error_code::ErrorCode;
-use crate::kvs::{InstanceId, Kvs};
+use crate::kvs::InstanceId;
 use crate::kvs_api::KvsApi;
-
 /// Key-value-storage builder
 pub struct KvsBuilder<T: KvsApi = Kvs> {
     /// Instance ID
@@ -235,7 +235,7 @@ mod tests {
             .dir(dir_path.clone())
             .build()
             .unwrap();
-        let _ = kvs.set_value("test", KvsValue::Number(1.0));
+        let _ = kvs.set_value("test", 1.0);
         let result = kvs.reset();
         assert!(result.is_ok(), "Expected Ok for reset");
     }
@@ -250,7 +250,7 @@ mod tests {
             .dir(dir_path.clone())
             .build()
             .unwrap();
-        let _ = kvs.set_value("test", KvsValue::Number(1.0));
+        let _ = kvs.set_value("test", 1.0);
         let keys = kvs.get_all_keys();
         assert!(keys.is_ok(), "Expected Ok for get_all_keys");
         let keys = keys.unwrap();
@@ -273,7 +273,7 @@ mod tests {
         let exists = kvs.key_exists("test");
         assert!(exists.is_ok(), "Expected Ok for key_exists");
         assert!(!exists.unwrap(), "Expected 'test' key to not exist");
-        let _ = kvs.set_value("test", KvsValue::Number(1.0));
+        let _ = kvs.set_value("test", 1.0);
         let exists = kvs.key_exists("test");
         assert!(exists.is_ok(), "Expected Ok for key_exists after set");
         assert!(exists.unwrap(), "Expected 'test' key to exist after set");
@@ -325,7 +325,7 @@ mod tests {
                 .build()
                 .unwrap(),
         );
-        let _ = kvs.set_value("test", KvsValue::Number(123.0));
+        let _ = kvs.set_value("test", 123.0);
         let value = kvs.get_value("test").unwrap();
         assert_eq!(
             *value.get::<f64>().unwrap(),
@@ -346,7 +346,7 @@ mod tests {
                 .build()
                 .unwrap(),
         );
-        let _ = kvs.set_value("test", KvsValue::Number(123.0));
+        let _ = kvs.set_value("test", 123.0);
         let value = kvs.get_value_as::<f64>("test");
         assert_eq!(
             value.unwrap(),
@@ -366,8 +366,8 @@ mod tests {
         // Create the test JSON file locally instead of copying
         let test_json_path = format!("{}/kvs_0_default.json", dir_path.clone());
         let test_json_content = r#"{
-            "bool1": true,
-            "test": 123.0
+            "bool1": { "type": "Boolean", "value": true },
+            "test": { "type": "F64", "value": 123.0 }
         }"#;
         std::fs::write(&test_json_path, test_json_content).unwrap();
 
@@ -379,7 +379,7 @@ mod tests {
                 .unwrap(),
         );
 
-        let _ = kvs.set_value("test", KvsValue::Number(123.0f64));
+        let _ = kvs.set_value("test", 123.0f64);
 
         // stored value: should return ConversionFailed
         let result = kvs.get_value_as::<u64>("test");

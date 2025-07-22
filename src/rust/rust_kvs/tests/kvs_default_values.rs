@@ -30,17 +30,16 @@ fn kvs_without_defaults() -> Result<(), ErrorCode> {
     set_current_dir(dir.path())?;
 
     // create defaults file
-    let defaults: HashMap<String, KvsValue> = HashMap::from([
-        ("number1".to_string(), KvsValue::from(123.0)),
+    let defaults: HashMap<String, JsonValue> = HashMap::from([
+        ("number1".to_string(), JsonValue::from(123.0)),
         ("bool1".to_string(), true.into()),
         ("string1".to_string(), "Hello".to_string().into()),
     ]);
 
-    let json = KvsValue::from(defaults);
-    let json = JsonValue::from(&json);
+    let json_value = JsonValue::from(defaults);
     let mut buf = Vec::new();
     let mut gen = JsonGenerator::new(&mut buf).indent("  ");
-    gen.generate(&json)?;
+    gen.generate(&json_value)?;
 
     let data = String::from_utf8(buf)?;
     std::fs::write("kvs_0_default.json", &data)?;
@@ -100,17 +99,16 @@ fn kvs_without_defaults() -> Result<(), ErrorCode> {
     drop(kvs);
 
     // change default of `number1` and `bool1`
-    let defaults: HashMap<String, KvsValue> = HashMap::from([
-        ("number1".to_string(), KvsValue::from(987.0)),
+    let defaults: HashMap<String, JsonValue> = HashMap::from([
+        ("number1".to_string(), JsonValue::from(987.0)),
         ("bool1".to_string(), false.into()),
         ("string1".to_string(), "Hello".to_string().into()),
     ]);
 
-    let json = KvsValue::from(defaults);
-    let json = JsonValue::from(&json);
+    let json_value = JsonValue::from(defaults);
     let mut buf = Vec::new();
     let mut gen = JsonGenerator::new(&mut buf).indent("  ");
-    gen.generate(&json)?;
+    gen.generate(&json_value)?;
 
     let data = String::from_utf8(buf)?;
     std::fs::write("kvs_0_default.json", &data)?;

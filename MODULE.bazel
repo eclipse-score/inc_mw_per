@@ -42,6 +42,7 @@ bazel_dep(name = "rules_cc", version = "0.1.1")
 
 # LLVM Toolchains Rules - host configuration
 bazel_dep(name = "toolchains_llvm", version = "1.2.0")
+bazel_dep(name = "score_starpls_lsp", version = "0.1.0")
 
 llvm = use_extension("@toolchains_llvm//toolchain/extensions:llvm.bzl", "llvm")
 llvm.toolchain(

@@ -66,6 +66,9 @@ pub enum ErrorCode {
     /// Key not found
     KeyNotFound,
 
+    // Key has no default value
+    KeyDefaultNotFound,
+
     /// Serialization failed
     SerializationFailed,
 

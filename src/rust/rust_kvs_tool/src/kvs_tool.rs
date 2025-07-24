@@ -115,7 +115,7 @@ enum SupportedTypes {
 /// Converts a TinyJSON value to a KVS value.
 fn from_tinyjson(value: &JsonValue) -> KvsValue {
     match value {
-        JsonValue::Number(n) => KvsValue::Number(*n),
+        JsonValue::Number(n) => KvsValue::F64(*n),
         JsonValue::Boolean(b) => KvsValue::Boolean(*b),
         JsonValue::String(s) => KvsValue::String(s.clone()),
         JsonValue::Null => KvsValue::Null,

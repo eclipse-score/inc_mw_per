@@ -37,8 +37,6 @@
 namespace score {
 namespace json {
 
-//Conntrol flags for As Behaviour
-extern bool g_AnyNumberAsShouldFail; // Global flag to control failure of As methods
 
 ////////////////////////////////////////////////////////////////////////////////
 // Null stub
@@ -48,27 +46,59 @@ struct Null {};
 ////////////////////////////////////////////////////////////////////////////////
 // Number stub: holds a double, supports As<T>() for arithmetic T ≠ bool
 ////////////////////////////////////////////////////////////////////////////////
+
+using ArithmeticType = std::variant<std::uint8_t,
+                                    std::uint16_t,
+                                    std::uint32_t,
+                                    std::uint64_t,
+                                    std::int8_t,
+                                    std::int16_t,
+                                    std::int32_t,
+                                    std::int64_t,
+                                    float,
+                                    double>;
+
 class Number
 {
 public:
-  explicit Number(double v) noexcept
+  explicit Number(const ArithmeticType& v) noexcept
     : value_{v}
   {}
 
   template<typename T,
-           typename = std::enable_if_t<std::is_arithmetic_v<T> && !std::is_same_v<T,bool>, bool>>
+           typename = std::enable_if_t<std::is_arithmetic_v<T> && !std::is_same_v<T, bool>, bool>>
   score::Result<T> As() const noexcept
   {
-    if(g_AnyNumberAsShouldFail) {
-        return score::MakeUnexpected(json::Error::kWrongType);
-    }else{
-        return static_cast<T>(value_);
-    }
+    return std::visit(
+      [](auto&& arg) -> score::Result<T> {
+        using ArgType = std::decay_t<decltype(arg)>;
+        if constexpr (std::is_convertible_v<ArgType, T>) {
+          return static_cast<T>(arg);
+        } else {
+          return score::MakeUnexpected(json::Error::kWrongType);
+        }
+      },
+      value_);
   }
 
 private:
-  double value_;
+  ArithmeticType value_;
 };
+
+template score::Result<std::uint64_t> Number::As() const noexcept;
+template score::Result<std::uint32_t> Number::As() const noexcept;
+template score::Result<std::uint16_t> Number::As() const noexcept;
+template score::Result<std::uint8_t> Number::As() const noexcept;
+
+template score::Result<std::int64_t> Number::As() const noexcept;
+template score::Result<std::int32_t> Number::As() const noexcept;
+template score::Result<std::int16_t> Number::As() const noexcept;
+template score::Result<std::int8_t> Number::As() const noexcept;
+
+template score::Result<float> Number::As() const noexcept;
+template score::Result<double> Number::As() const noexcept;
+
+
 
 ////////////////////////////////////////////////////////////////////////////////
 // Forward declarations & aliases
@@ -108,6 +138,15 @@ public:
     explicit Any(List&& l)                           : value_(std::move(l)) {}
     explicit Any(const Object& o)                    : value_(o) {}
     explicit Any(Object&& o)                         : value_(std::move(o)) {}
+
+    explicit Any(std::uint8_t v) noexcept            : value_(Number(v)) {}
+    explicit Any(std::uint16_t v) noexcept           : value_(Number(v)) {}
+    explicit Any(std::uint32_t v) noexcept           : value_(Number(v)) {}
+    explicit Any(std::uint64_t v) noexcept           : value_(Number(v)) {}
+    explicit Any(std::int8_t v) noexcept             : value_(Number(v)) {}
+    explicit Any(std::int16_t v) noexcept            : value_(Number(v)) {}
+    explicit Any(std::int32_t v) noexcept            : value_(Number(v)) {}
+    explicit Any(std::int64_t v) noexcept            : value_(Number(v)) {}
 
     // As<Null>
     template<typename T = Null>

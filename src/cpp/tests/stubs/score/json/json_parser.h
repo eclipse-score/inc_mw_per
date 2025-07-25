@@ -25,7 +25,6 @@ namespace json
 // Global control flags for unittests
 extern bool g_JsonParserShouldFail; // Global flag to control failure of parsing
 extern std::string g_JsonParserReceivedValue; // Global variable to store the received value for testing
-extern bool g_JsonParserReturnDefault; // Global flag to control if the parser returns the default placeholder value
 extern score::json::Any g_JsonParserReturnValue; // Global variable to store the return value of the parser
 
 
@@ -40,16 +39,8 @@ class JsonParser
             return score::MakeUnexpected(Error::kInvalidFilePath);
         }else{
             g_JsonParserReceivedValue = std::string(buffer); // Store the received value for testing purposes
-            score::Result<Any> return_value;
-
-            score::json::Object obj ={};
-            obj.emplace("placeholder", score::json::Any(true)); //Add a placeholder to simulate successfull parsing
-            score::json::Any any_obj(std::move(obj));
-            if(g_JsonParserReturnDefault) {
-                return_value = any_obj;
-            } else {
-                return_value = g_JsonParserReturnValue;
-            }            
+            score::Result<Any> return_value;    
+            return_value = g_JsonParserReturnValue;           
             return return_value;
         }
     }

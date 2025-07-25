@@ -19,7 +19,7 @@ filegroup(
         "inc/**/*.hpp",
     ]),
     visibility = [
-        "//tests/cpp:__pkg__",
+        "//src/cpp/tests:__pkg__",
     ],
 )
 

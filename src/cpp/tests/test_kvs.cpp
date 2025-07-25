@@ -27,6 +27,7 @@
 #undef final
 #include "internal/kvs_helper.hpp"
 
+// TODO Refactor to json parser mock library (if possible)
 ////////////////////////////////////////////////////////////////////////////////
 
 /* Control Flags from stubs/json */
@@ -36,8 +37,6 @@ namespace json {
     std::string g_JsonWriterReturnValue;
     bool g_JsonParserShouldFail = false;
     std::string g_JsonParserReceivedValue;
-    bool g_AnyNumberAsShouldFail = false;
-    bool g_JsonParserReturnDefault = true;
     score::json::Any g_JsonParserReturnValue;
     score::json::Object g_JsonWriterReceivedValue;
 } // namespace json
@@ -48,14 +47,12 @@ namespace json {
 /* Test Environment Setup - Standard Variables for tests*/
 const std::uint32_t instance = 123;
 const InstanceId instance_id{instance};
-const std::string process_name = "my_process";
-const std::string base_dir = "./data_folder";
-const std::string data_dir = base_dir + "/" + process_name;
-const std::string default_prefix = data_dir + "/kvs_"+std::to_string(instance)+"_default";
-const std::string kvs_prefix     = data_dir + "/kvs_"+std::to_string(instance)+"_0";
-const std::string filename_prefix = data_dir + "/kvs_"+std::to_string(instance);
-const std::string default_json = R"({ "default": 5 })";
-const std::string kvs_json     = R"({ "kvs": 2 })";
+const std::string data_dir = "./data_folder/";
+const std::string default_prefix = data_dir + "kvs_"+std::to_string(instance)+"_default";
+const std::string kvs_prefix     = data_dir + "kvs_"+std::to_string(instance)+"_0";
+const std::string filename_prefix = data_dir + "kvs_"+std::to_string(instance);
+const std::string default_json = R"({ "placeholder_invalid": 5 })";
+const std::string kvs_json     = R"({ "placeholder_invalid": 2 })";
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -72,18 +69,16 @@ uint32_t adler32(const std::string& data) {
 
 void cleanup_environment() {
     /* Cleanup the test environment */
-    if (std::filesystem::exists(base_dir)) {
-        for (auto& p : std::filesystem::recursive_directory_iterator(base_dir)) {
+    if (std::filesystem::exists(data_dir)) {
+        for (auto& p : std::filesystem::recursive_directory_iterator(data_dir)) {
             std::filesystem::permissions(p,
                 std::filesystem::perms::owner_all | std::filesystem::perms::group_all | std::filesystem::perms::others_all,
                 std::filesystem::perm_options::replace);
         }
-        std::filesystem::remove_all(base_dir);
+        std::filesystem::remove_all(data_dir);
     }
     /* Reset global flags */
     score::json::g_JsonParserShouldFail = false;
-    score::json::g_JsonParserReturnDefault = true;
-    score::json::g_AnyNumberAsShouldFail = false;
     score::json::g_JsonWriterShouldFail = false;
 
 }
@@ -91,7 +86,6 @@ void cleanup_environment() {
 /* Create Test environment with default data, which is needed in most testcases */
 void prepare_environment(){
     /* Prepare the test environment */
-    mkdir(base_dir.c_str(), 0777);
     mkdir(data_dir.c_str(), 0777);
 
     std::ofstream default_json_file(default_prefix + ".json");
@@ -119,8 +113,14 @@ void prepare_environment(){
     kvs_hash_file.put(kvs_hash & 0xFF);
     kvs_hash_file.close();
 
-    score::json::g_JsonParserReturnValue = score::json::Any(score::json::Object{{"kvs", score::json::Any(2.0)}}); // Mock return value to create default value for unittests
-    score::json::g_JsonParserReturnDefault = false; // Ensure default value is returned
+    /* Set JSON Parser mock return value */
+    score::json::Object obj ={};
+    score::json::Object inner_obj ={};
+    inner_obj.emplace("type", score::json::Any(std::string("I32")));
+    inner_obj.emplace("value", score::json::Any(2));
+    obj.emplace("kvs", score::json::Any(std::move(inner_obj))); //Add a placeholder to simulate successfull parsing
+    score::json::Any any_obj(std::move(obj));
+    score::json::g_JsonParserReturnValue = std::move(any_obj); // Mock return value to create default value for unittests
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -156,71 +156,318 @@ TEST(kvs_calculate_hash_adler32, calculate_hash_adler32_large_data) {
 }
 
 TEST(kvs_any_to_kvsvalue, any_to_kvsvalue_bool) {
-
-    score::json::Any any_bool(true);
-    auto result = any_to_kvsvalue(any_bool);
+    score::json::Object obj;
+    obj.emplace("type", score::json::Any(std::string("Boolean")));
+    obj.emplace("value", score::json::Any(true));
+    score::json::Any any_obj(std::move(obj));
+    auto result = any_to_kvsvalue(any_obj);
     ASSERT_TRUE(result);
     EXPECT_EQ(result.value().getType(), KvsValue::Type::Boolean);
 }
 
-TEST(kvs_any_to_kvsvalue, any_to_kvsvalue_number) {
-
-    score::json::Number num(42);
-    score::json::Any any_num(num);
-    auto result = any_to_kvsvalue(any_num);
+TEST(kvs_any_to_kvsvalue, any_to_kvsvalue_i32) {
+    score::json::Object obj;
+    obj.emplace("type", score::json::Any(std::string("I32")));
+    obj.emplace("value", score::json::Any(42.0));
+    score::json::Any any_obj(std::move(obj));
+    auto result = any_to_kvsvalue(any_obj);
     ASSERT_TRUE(result);
-    EXPECT_EQ(result.value().getType(), KvsValue::Type::Number);
+    EXPECT_EQ(result.value().getType(), KvsValue::Type::I32);
+}
+
+TEST(kvs_any_to_kvsvalue, any_to_kvsvalue_u32) {
+    score::json::Object obj;
+    obj.emplace("type", score::json::Any(std::string("U32")));
+    obj.emplace("value", score::json::Any(42.0));
+    score::json::Any any_obj(std::move(obj));
+    auto result = any_to_kvsvalue(any_obj);
+    ASSERT_TRUE(result);
+    EXPECT_EQ(result.value().getType(), KvsValue::Type::U32);
+}
+
+TEST(kvs_any_to_kvsvalue, any_to_kvsvalue_i64) {
+    score::json::Object obj;
+    obj.emplace("type", score::json::Any(std::string("I64")));
+    obj.emplace("value", score::json::Any(42.0));
+    score::json::Any any_obj(std::move(obj));
+    auto result = any_to_kvsvalue(any_obj);
+    ASSERT_TRUE(result);
+    EXPECT_EQ(result.value().getType(), KvsValue::Type::I64);
+}
+
+TEST(kvs_any_to_kvsvalue, any_to_kvsvalue_u64) {
+    score::json::Object obj;
+    obj.emplace("type", score::json::Any(std::string("U64")));
+    obj.emplace("value", score::json::Any(42.0));
+    score::json::Any any_obj(std::move(obj));
+    auto result = any_to_kvsvalue(any_obj);
+    ASSERT_TRUE(result);
+    EXPECT_EQ(result.value().getType(), KvsValue::Type::U64);
+}
+
+TEST(kvs_any_to_kvsvalue, any_to_kvsvalue_f64) {
+    score::json::Object obj;
+    obj.emplace("type", score::json::Any(std::string("F64")));
+    obj.emplace("value", score::json::Any(42.0));
+    score::json::Any any_obj(std::move(obj));
+    auto result = any_to_kvsvalue(any_obj);
+    ASSERT_TRUE(result);
+    EXPECT_EQ(result.value().getType(), KvsValue::Type::F64);
 }
 
 TEST(kvs_any_to_kvsvalue, any_to_kvsvalue_string) {
-
-    std::string str = "test";
-    score::json::Any any_string(str);
-    auto result = any_to_kvsvalue(any_string);
+    score::json::Object obj;
+    obj.emplace("type", score::json::Any(std::string("String")));
+    obj.emplace("value", score::json::Any(std::string("test")));
+    score::json::Any any_obj(std::move(obj));
+    auto result = any_to_kvsvalue(any_obj);
     ASSERT_TRUE(result);
     EXPECT_EQ(result.value().getType(), KvsValue::Type::String);
 }
 
 TEST(kvs_any_to_kvsvalue, any_to_kvsvalue_null) {
-
-    score::json::Any any_null((score::json::Null()));
-    auto result = any_to_kvsvalue(any_null);
+    score::json::Object obj;
+    obj.emplace("type", score::json::Any(std::string("Null")));
+    obj.emplace("value", score::json::Any(score::json::Null()));
+    score::json::Any any_obj(std::move(obj));
+    auto result = any_to_kvsvalue(any_obj);
     ASSERT_TRUE(result);
     EXPECT_EQ(result.value().getType(), KvsValue::Type::Null);
 }
 
 TEST(kvs_any_to_kvsvalue, any_to_kvsvalue_array) {
-
     score::json::List list;
-    list.push_back(score::json::Any(true));
-    list.push_back(score::json::Any(score::json::Number(1.1)));
-    list.push_back(score::json::Any(std::string("test")));
-    score::json::Any any_list(std::move(list));
-    auto result = any_to_kvsvalue(any_list);
+    list.push_back(score::json::Any(score::json::Object{
+        {"type", score::json::Any(std::string("Boolean"))},
+        {"value", score::json::Any(true)}
+    }));
+    list.push_back(score::json::Any(score::json::Object{
+        {"type", score::json::Any(std::string("F64"))},
+        {"value", score::json::Any(1.1)}
+    }));
+    list.push_back(score::json::Any(score::json::Object{
+        {"type", score::json::Any(std::string("String"))},
+        {"value", score::json::Any(std::string("test"))}
+    }));
+    score::json::Object obj;
+    obj.emplace("type", score::json::Any(std::string("Array")));
+    obj.emplace("value", score::json::Any(std::move(list)));
+    score::json::Any any_obj(std::move(obj));
+    auto result = any_to_kvsvalue(any_obj);
     ASSERT_TRUE(result);
     EXPECT_EQ(result.value().getType(), KvsValue::Type::Array);
 }
 
 TEST(kvs_any_to_kvsvalue, any_to_kvsvalue_object) {
+    score::json::Object inner_obj;
+    inner_obj.emplace("type", score::json::Any(std::string("Boolean")));
+    inner_obj.emplace("value", score::json::Any(true));
 
     score::json::Object obj;
-    obj.emplace("flag", score::json::Any(true));
-    obj.emplace("count", score::json::Any(score::json::Number(42.0)));
+    obj.emplace("type", score::json::Any(std::string("Object")));
+    obj.emplace("value", score::json::Any(score::json::Object{
+        {"flag", score::json::Any(inner_obj)},
+        {"count", score::json::Any(score::json::Object{
+            {"type", score::json::Any(std::string("F64"))},
+            {"value", score::json::Any(42.0)}
+        })}
+    }));
     score::json::Any any_obj(std::move(obj));
     auto result = any_to_kvsvalue(any_obj);
     ASSERT_TRUE(result);
     EXPECT_EQ(result.value().getType(), KvsValue::Type::Object);
 }
 
-TEST(kvs_any_to_kvsvalue, any_to_kvsvalue_invalid) {
+TEST(kvs_any_to_kvsvalue, any_to_kvsvalue_format_invalid) {
+    score::json::Object obj_type;
+    obj_type.emplace("invalid", score::json::Any(std::string("Boolean")));
+    obj_type.emplace("value", score::json::Any(true));
+    score::json::Any any_obj_type(std::move(obj_type));
+    auto result = any_to_kvsvalue(any_obj_type);
+    EXPECT_FALSE(result.has_value());
+    EXPECT_EQ(result.error(), MyErrorCode::InvalidValueType);
 
-    score::json::g_AnyNumberAsShouldFail = true; // Set the global flag to simulate failure
-    score::json::Object obj_invalid; // To get all branches, we create an object with a list containing a number, which will fail
-    score::json::List list_invalid;
-    list_invalid.push_back(score::json::Any(score::json::Number(1.1)));
-    obj_invalid.emplace("invalid", score::json::Any(std::move(list_invalid)));
-    score::json::Any any_invalid(std::move(obj_invalid));
-    auto result = any_to_kvsvalue(any_invalid);
+    score::json::Object obj_value;
+    obj_value.emplace("type", score::json::Any(std::string("Boolean")));
+    obj_value.emplace("invalid", score::json::Any(true));
+    score::json::Any any_obj_value(std::move(obj_value));
+    result = any_to_kvsvalue(any_obj_value);
+    EXPECT_FALSE(result.has_value());
+    EXPECT_EQ(result.error(), MyErrorCode::InvalidValueType);
+}
+
+TEST(kvs_any_to_kvsvalue, any_to_kvsvalue_no_object) {
+    score::json::Any any_bool(true);
+    auto result = any_to_kvsvalue(any_bool);
+    EXPECT_FALSE(result.has_value());
+    EXPECT_EQ(result.error(), MyErrorCode::InvalidValueType);
+}
+
+TEST(kvs_any_to_kvsvalue, any_to_kvsvalue_type_no_string) {
+    score::json::Object obj;
+    obj.emplace("type", score::json::Any(42.0)); // Not a string
+    obj.emplace("value", score::json::Any(true));
+    score::json::Any any_obj(std::move(obj));
+    auto result = any_to_kvsvalue(any_obj);
+    EXPECT_FALSE(result.has_value());
+    EXPECT_EQ(result.error(), MyErrorCode::InvalidValueType);
+}
+
+TEST(kvs_any_to_kvsvalue, any_to_kvsvalue_type_invalid) {
+    score::json::Object obj;
+    obj.emplace("type", "invalid");
+    obj.emplace("value", score::json::Any(true));
+    score::json::Any any_obj(std::move(obj));
+    auto result = any_to_kvsvalue(any_obj);
+    EXPECT_FALSE(result.has_value());
+    EXPECT_EQ(result.error(), MyErrorCode::InvalidValueType);
+}
+
+TEST(kvs_any_to_kvsvalue, any_to_kvsvalue_no_string_type) {
+    score::json::Object obj;
+    obj.emplace("type", score::json::Any(42.0)); // Not a string
+    obj.emplace("value", score::json::Any(true));
+    score::json::Any any_obj(std::move(obj));
+    auto result = any_to_kvsvalue(any_obj);
+    EXPECT_FALSE(result.has_value());
+    EXPECT_EQ(result.error(), MyErrorCode::InvalidValueType);
+}
+
+TEST(kvs_any_to_kvsvalue, any_to_kvsvalue_invalid_i32){
+    score::json::Object obj;
+    obj.emplace("type", score::json::Any(std::string("I32")));
+    obj.emplace("value", score::json::Any("invalid")); // Invalid value for I32
+    score::json::Any any_obj(std::move(obj));
+    auto result = any_to_kvsvalue(any_obj);
+    EXPECT_FALSE(result.has_value());
+    EXPECT_EQ(result.error(), MyErrorCode::InvalidValueType);
+}
+
+TEST(kvs_any_to_kvsvalue, any_to_kvsvalue_invalid_u32){
+    score::json::Object obj;
+    obj.emplace("type", score::json::Any(std::string("U32")));
+    obj.emplace("value", score::json::Any("invalid")); // Invalid value for U32
+    score::json::Any any_obj(std::move(obj));
+    auto result = any_to_kvsvalue(any_obj);
+    EXPECT_FALSE(result.has_value());
+    EXPECT_EQ(result.error(), MyErrorCode::InvalidValueType);
+}
+
+TEST(kvs_any_to_kvsvalue, any_to_kvsvalue_invalid_i64){
+    score::json::Object obj;
+    obj.emplace("type", score::json::Any(std::string("I64")));
+    obj.emplace("value", score::json::Any("invalid")); // Invalid value for I64
+    score::json::Any any_obj(std::move(obj));
+    auto result = any_to_kvsvalue(any_obj);
+    EXPECT_FALSE(result.has_value());
+    EXPECT_EQ(result.error(), MyErrorCode::InvalidValueType);
+}
+
+TEST(kvs_any_to_kvsvalue, any_to_kvsvalue_invalid_u64){
+    score::json::Object obj;
+    obj.emplace("type", score::json::Any(std::string("U64")));
+    obj.emplace("value", score::json::Any("invalid")); // Invalid value for U64
+    score::json::Any any_obj(std::move(obj));
+    auto result = any_to_kvsvalue(any_obj);
+    EXPECT_FALSE(result.has_value());
+    EXPECT_EQ(result.error(), MyErrorCode::InvalidValueType);
+}
+
+TEST(kvs_any_to_kvsvalue, any_to_kvsvalue_invalid_f64){
+    score::json::Object obj;
+    obj.emplace("type", score::json::Any(std::string("F64")));
+    obj.emplace("value", score::json::Any("invalid")); // Invalid value for F64
+    score::json::Any any_obj(std::move(obj));
+    auto result = any_to_kvsvalue(any_obj);
+    EXPECT_FALSE(result.has_value());
+    EXPECT_EQ(result.error(), MyErrorCode::InvalidValueType);
+}
+
+TEST(kvs_any_to_kvsvalue, any_to_kvsvalue_invalid_boolean){
+    score::json::Object obj;
+    obj.emplace("type", score::json::Any(std::string("Boolean")));
+    obj.emplace("value", score::json::Any(42.0)); // Invalid value for Boolean
+    score::json::Any any_obj(std::move(obj));
+    auto result = any_to_kvsvalue(any_obj);
+    EXPECT_FALSE(result.has_value());
+    EXPECT_EQ(result.error(), MyErrorCode::InvalidValueType);
+}
+
+TEST(kvs_any_to_kvsvalue, any_to_kvsvalue_invalid_string){
+    score::json::Object obj;
+    obj.emplace("type", score::json::Any(std::string("String")));
+    obj.emplace("value", score::json::Any(42.0)); // Invalid value for String
+    score::json::Any any_obj(std::move(obj));
+    auto result = any_to_kvsvalue(any_obj);
+    EXPECT_FALSE(result.has_value());
+    EXPECT_EQ(result.error(), MyErrorCode::InvalidValueType);
+}
+
+TEST(kvs_any_to_kvsvalue, any_to_kvsvalue_invalid_null){
+    score::json::Object obj;
+    obj.emplace("type", score::json::Any(std::string("Null")));
+    obj.emplace("value", score::json::Any(42.0)); // Invalid value for Null
+    score::json::Any any_obj(std::move(obj));
+    auto result = any_to_kvsvalue(any_obj);
+    EXPECT_FALSE(result.has_value());
+    EXPECT_EQ(result.error(), MyErrorCode::InvalidValueType);
+}
+
+TEST(kvs_any_to_kvsvalue, any_to_kvsvalue_invalid_array) {
+    score::json::Object obj;
+    obj.emplace("type", score::json::Any(std::string("Array")));
+    obj.emplace("value", score::json::Any(42.0)); // Invalid value for Array
+    score::json::Any any_obj(std::move(obj));
+    auto result = any_to_kvsvalue(any_obj);
+    EXPECT_FALSE(result.has_value());
+    EXPECT_EQ(result.error(), MyErrorCode::InvalidValueType);
+}
+
+TEST(kvs_any_to_kvsvalue, any_to_kvsvalue_invalid_object) {
+    score::json::Object obj;
+    obj.emplace("type", score::json::Any(std::string("Object")));
+    obj.emplace("value", score::json::Any(42.0)); // Invalid value for Object
+    score::json::Any any_obj(std::move(obj));
+    auto result = any_to_kvsvalue(any_obj);
+    EXPECT_FALSE(result.has_value());
+    EXPECT_EQ(result.error(), MyErrorCode::InvalidValueType);
+}
+
+TEST(kvs_any_to_kvsvalue, any_to_kvsvalue_array_with_invalid_element) {
+    score::json::List list;
+    list.push_back(score::json::Any(score::json::Object{
+        {"type", score::json::Any(std::string("Boolean"))},
+        {"value", score::json::Any(true)}
+    }));
+    list.push_back(score::json::Any(score::json::Object{
+        {"type", score::json::Any(std::string("InvalidType"))}, // Ungültiger Typ
+        {"value", score::json::Any(std::string("test"))}
+    }));
+    score::json::Object obj;
+    obj.emplace("type", score::json::Any(std::string("Array")));
+    obj.emplace("value", score::json::Any(std::move(list)));
+    score::json::Any any_obj(std::move(obj));
+    auto result = any_to_kvsvalue(any_obj);
+    EXPECT_FALSE(result.has_value());
+    EXPECT_EQ(result.error(), MyErrorCode::InvalidValueType);
+}
+
+TEST(kvs_any_to_kvsvalue, any_to_kvsvalue_object_with_invalid_value) {
+    score::json::Object inner_obj;
+    inner_obj.emplace("type", score::json::Any(std::string("Boolean")));
+    inner_obj.emplace("value", score::json::Any(true));
+
+    score::json::Object obj;
+    obj.emplace("type", score::json::Any(std::string("Object")));
+    obj.emplace("value", score::json::Any(score::json::Object{
+        {"flag", score::json::Any(inner_obj)},
+        {"count", score::json::Any(score::json::Object{
+            {"type", score::json::Any(std::string("InvalidType"))}, // Ungültiger Typ
+            {"value", score::json::Any(42.0)}
+        })}
+    }));
+    score::json::Any any_obj(std::move(obj));
+    auto result = any_to_kvsvalue(any_obj);
     EXPECT_FALSE(result.has_value());
     EXPECT_EQ(result.error(), MyErrorCode::InvalidValueType);
 }
@@ -234,41 +481,80 @@ public:
     }
 };
 
-TEST(kvs_kvsvalue_to_any, kvsvalue_to_any_null){
-    
+TEST(kvs_kvsvalue_to_any, kvsvalue_to_any_null) {
     KvsValue null_val(nullptr);
     auto result = kvsvalue_to_any(null_val);
     ASSERT_TRUE(result);
-    EXPECT_TRUE(result.value().As<score::json::Null>().has_value());
+    const auto& obj = result.value().As<score::json::Object>().value().get();
+    EXPECT_EQ(obj.at("type").As<std::string>().value().get(), "Null");
+    EXPECT_TRUE(obj.at("value").As<score::json::Null>().has_value());
 }
 
-TEST(kvs_kvsvalue_to_any, kvsvalue_to_any_bool){
-    
+TEST(kvs_kvsvalue_to_any, kvsvalue_to_any_boolean) {
     KvsValue bool_val(true);
     auto result = kvsvalue_to_any(bool_val);
     ASSERT_TRUE(result);
-    EXPECT_TRUE(result.value().As<bool>().has_value());
+    const auto& obj = result.value().As<score::json::Object>().value().get();
+    EXPECT_EQ(obj.at("type").As<std::string>().value().get(), "Boolean");
+    EXPECT_EQ(obj.at("value").As<bool>().value(), true);
 }
 
-TEST(kvs_kvsvalue_to_any, kvsvalue_to_any_number){
-    
-    KvsValue number_val(1.1);
-    auto result = kvsvalue_to_any(number_val);
+TEST(kvs_kvsvalue_to_any, kvsvalue_to_any_i32) {
+    KvsValue i32_val(static_cast<int32_t>(42));
+    auto result = kvsvalue_to_any(i32_val);
     ASSERT_TRUE(result);
-    EXPECT_TRUE(result.value().As<score::json::Number>().has_value());
+    const auto& obj = result.value().As<score::json::Object>().value().get();
+    EXPECT_EQ(obj.at("type").As<std::string>().value().get(), "I32");
+    EXPECT_EQ(obj.at("value").As<double>().value(), 42.0);
 }
 
-TEST(kvs_kvsvalue_to_any, kvsvalue_to_any_string){
-    
+TEST(kvs_kvsvalue_to_any, kvsvalue_to_any_u32) {
+    KvsValue u32_val(static_cast<uint32_t>(42));
+    auto result = kvsvalue_to_any(u32_val);
+    ASSERT_TRUE(result);
+    const auto& obj = result.value().As<score::json::Object>().value().get();
+    EXPECT_EQ(obj.at("type").As<std::string>().value().get(), "U32");
+    EXPECT_EQ(obj.at("value").As<double>().value(), 42.0);
+}
+
+TEST(kvs_kvsvalue_to_any, kvsvalue_to_any_i64) {
+    KvsValue i64_val(static_cast<int64_t>(42));
+    auto result = kvsvalue_to_any(i64_val);
+    ASSERT_TRUE(result);
+    const auto& obj = result.value().As<score::json::Object>().value().get();
+    EXPECT_EQ(obj.at("type").As<std::string>().value().get(), "I64");
+    EXPECT_EQ(obj.at("value").As<double>().value(), 42.0);
+}
+
+TEST(kvs_kvsvalue_to_any, kvsvalue_to_any_u64) {
+    KvsValue u64_val(static_cast<uint64_t>(42));
+    auto result = kvsvalue_to_any(u64_val);
+    ASSERT_TRUE(result);
+    const auto& obj = result.value().As<score::json::Object>().value().get();
+    EXPECT_EQ(obj.at("type").As<std::string>().value().get(), "U64");
+    EXPECT_EQ(obj.at("value").As<double>().value(), 42.0);
+}
+
+TEST(kvs_kvsvalue_to_any, kvsvalue_to_any_f64) {
+    KvsValue f64_val(42.0);
+    auto result = kvsvalue_to_any(f64_val);
+    ASSERT_TRUE(result);
+    const auto& obj = result.value().As<score::json::Object>().value().get();
+    EXPECT_EQ(obj.at("type").As<std::string>().value().get(), "F64");
+    EXPECT_EQ(obj.at("value").As<double>().value(), 42.0);
+}
+
+TEST(kvs_kvsvalue_to_any, kvsvalue_to_any_string) {
     std::string str = "test";
     KvsValue string_val(str);
     auto result = kvsvalue_to_any(string_val);
     ASSERT_TRUE(result);
-    EXPECT_TRUE(result.value().As<std::string>().has_value());
+    const auto& obj = result.value().As<score::json::Object>().value().get();
+    EXPECT_EQ(obj.at("type").As<std::string>().value().get(), "String");
+    EXPECT_EQ(obj.at("value").As<std::string>().value().get(), "test");
 }
 
-TEST(kvs_kvsvalue_to_any, kvsvalue_to_any_array){
-    
+TEST(kvs_kvsvalue_to_any, kvsvalue_to_any_array) {
     KvsValue::Array array;
     array.push_back(KvsValue(true));
     array.push_back(KvsValue(1.1));
@@ -276,20 +562,45 @@ TEST(kvs_kvsvalue_to_any, kvsvalue_to_any_array){
     KvsValue array_val(array);
     auto result = kvsvalue_to_any(array_val);
     ASSERT_TRUE(result);
-    const auto& list = result.value().As<score::json::List>().value().get();
-    EXPECT_TRUE(list[0].As<bool>().has_value());
+    const auto& obj = result.value().As<score::json::Object>().value().get();
+    EXPECT_EQ(obj.at("type").As<std::string>().value().get(), "Array");
+    const auto& list = obj.at("value").As<score::json::List>().value().get();
+    EXPECT_EQ(list.size(), 3);
+
+    const auto& elem0 = list[0].As<score::json::Object>().value().get();
+    EXPECT_EQ(elem0.at("type").As<std::string>().value().get(), "Boolean");
+    EXPECT_EQ(elem0.at("value").As<bool>().value(), true);
+
+    const auto& elem1 = list[1].As<score::json::Object>().value().get();
+    EXPECT_EQ(elem1.at("type").As<std::string>().value().get(), "F64");
+    EXPECT_EQ(elem1.at("value").As<double>().value(), 1.1);
+
+    const auto& elem2 = list[2].As<score::json::Object>().value().get();
+    EXPECT_EQ(elem2.at("type").As<std::string>().value().get(), "String");
+    EXPECT_EQ(elem2.at("value").As<std::string>().value().get(), "test");
 }
 
-TEST(kvs_kvsvalue_to_any, kvsvalue_to_any_object){
-    
+TEST(kvs_kvsvalue_to_any, kvsvalue_to_any_object) {
     KvsValue::Object obj;
-    obj.emplace("flag", KvsValue(true));
-    obj.emplace("count", KvsValue(42.0));
+    obj.emplace("flag", KvsValue(true)); // Boolean
+    obj.emplace("count", KvsValue(42.0)); // F64
     KvsValue obj_val(obj);
+
     auto result = kvsvalue_to_any(obj_val);
     ASSERT_TRUE(result);
-    const auto& object = result.value().As<score::json::Object>().value().get();
-    EXPECT_TRUE(object.at("flag").As<bool>().has_value());
+
+    const auto& outer_obj = result.value().As<score::json::Object>().value().get();
+    EXPECT_EQ(outer_obj.at("type").As<std::string>().value().get(), "Object");
+
+    const auto& inner_obj = outer_obj.at("value").As<score::json::Object>().value().get();
+
+    const auto& flag_entry = inner_obj.at("flag").As<score::json::Object>().value().get();
+    EXPECT_EQ(flag_entry.at("type").As<std::string>().value().get(), "Boolean");
+    EXPECT_EQ(flag_entry.at("value").As<bool>().value(), true);
+
+    const auto& count_entry = inner_obj.at("count").As<score::json::Object>().value().get();
+    EXPECT_EQ(count_entry.at("type").As<std::string>().value().get(), "F64");
+    EXPECT_EQ(count_entry.at("value").As<double>().value(), 42.0);
 }
 
 TEST(kvs_kvsvalue_to_any, kvsvalue_to_any_invalid) {
@@ -299,20 +610,20 @@ TEST(kvs_kvsvalue_to_any, kvsvalue_to_any_invalid) {
     EXPECT_FALSE(result.has_value());
     EXPECT_EQ(result.error(), MyErrorCode::InvalidValueType);
 
-    std::vector<KvsValue> elements;
-    elements.emplace_back(42.0);
-    elements.emplace_back(BrokenKvsValue());
-    KvsValue array_invalid(elements);
-
+    /* Invalid values in array and object */
+    KvsValue::Array array;
+    array.push_back(KvsValue(42.0));
+    array.push_back(invalid);
+    KvsValue array_invalid(array);
     result = kvsvalue_to_any(array_invalid);
     EXPECT_FALSE(result.has_value());
     EXPECT_EQ(result.error(), MyErrorCode::InvalidValueType);
 
-    std::unordered_map<std::string, KvsValue> obj_invalid;
-    obj_invalid.emplace("flag", KvsValue(true));
-    obj_invalid.emplace("broken", BrokenKvsValue());
-    KvsValue object_invalid(obj_invalid);
-    result = kvsvalue_to_any(object_invalid);
+    KvsValue::Object obj;
+    obj.emplace("valid", KvsValue(42.0));
+    obj.emplace("invalid", invalid);
+    KvsValue obj_invalid(obj);
+    result = kvsvalue_to_any(obj_invalid);
     EXPECT_FALSE(result.has_value());
     EXPECT_EQ(result.error(), MyErrorCode::InvalidValueType);
 }
@@ -355,21 +666,22 @@ TEST(kvs_MessageFor, MessageFor) {
 
 }
 
-TEST(kvs_kvsbuilder, kvsbuilder) {
+TEST(kvs_kvsbuilder, kvsbuilder_success) {
     /* This test also checks the kvs open function with the KvsBuilder */
     
     /* Test the KvsBuilder constructor */
-    KvsBuilder builder(std::string("kvsbuilder"), instance_id);
+    KvsBuilder builder(instance_id);
     EXPECT_EQ(builder.instance_id.id, instance_id.id);
     EXPECT_EQ(builder.need_defaults, false);
     EXPECT_EQ(builder.need_kvs, false);
-    EXPECT_EQ(builder.process_name, "kvsbuilder");
 
     /* Test the KvsBuilder methods */
     builder.need_defaults_flag(true);
     EXPECT_EQ(builder.need_defaults, true);
     builder.need_kvs_flag(true);
     EXPECT_EQ(builder.need_kvs, true);
+    builder.dir("./kvsbuilder/");
+    EXPECT_EQ(builder.directory, "./kvsbuilder/");
 
     /* Test the KvsBuilder build method */
     /* We want to check, if OpenNeedDefaults::Required and OpenNeedKvs::Required is passed correctly
@@ -385,9 +697,24 @@ TEST(kvs_kvsbuilder, kvsbuilder) {
     result_build = builder.build();
     EXPECT_TRUE(result_build);
     result_build.value().flush_on_exit = false;
-    std::string expected_filename_prefix = base_dir + "/kvsbuilder/kvs_"+std::to_string(instance_id.id);
+    std::string expected_filename_prefix = "./kvsbuilder/kvs_"+std::to_string(instance_id.id);
     EXPECT_EQ(result_build.value().filename_prefix, expected_filename_prefix);
+}
 
+TEST(kvs_kvsbuilder, kvsbuilder_directory_invalid) {
+
+    /* Test the KvsBuilder with an empty directory */
+    KvsBuilder builder(instance_id);
+    builder.dir("");
+    auto result_build = builder.build();
+    EXPECT_FALSE(result_build);
+    EXPECT_EQ(static_cast<MyErrorCode>(*result_build.error()), MyErrorCode::InvalidArgument);
+
+    /* Test the KvsBuilder with an string which doesnt end with / */
+    builder.dir("./kvsbuilder");
+    result_build = builder.build();
+    EXPECT_FALSE(result_build);
+    EXPECT_EQ(static_cast<MyErrorCode>(*result_build.error()), MyErrorCode::InvalidArgument);
 }
 
 TEST(kvs_constructor, move_constructor) {
@@ -395,13 +722,13 @@ TEST(kvs_constructor, move_constructor) {
     const std::uint32_t instance_b = 5;
     
     /* create object A */
-    auto result_a = Kvs::open(std::string(process_name), InstanceId(instance_b), OpenNeedDefaults::Optional, OpenNeedKvs::Optional);
+    auto result_a = Kvs::open(InstanceId(instance_b), OpenNeedDefaults::Optional, OpenNeedKvs::Optional, std::string(data_dir));
     ASSERT_TRUE(result_a);
     Kvs kvs_a = std::move(result_a.value());
     kvs_a.flush_on_exit = false;
 
     /* create object B */
-    auto result_b = Kvs::open(std::string(process_name), instance_id , OpenNeedDefaults::Optional, OpenNeedKvs::Optional);
+    auto result_b = Kvs::open(instance_id , OpenNeedDefaults::Optional, OpenNeedKvs::Optional, std::string(data_dir));
     ASSERT_TRUE(result_b);
     Kvs kvs_b = std::move(result_b.value());
     kvs_a.flush_on_exit = true;
@@ -436,13 +763,13 @@ TEST(kvs_constructor, move_constructor) {
     EXPECT_EQ(kvs_a.flush_on_exit, true);
     ASSERT_EQ(kvs_b.flush_on_exit, false);
 
-    EXPECT_EQ(kvs_a.filename_prefix, data_dir + "/kvs_"+std::to_string(instance));
+    EXPECT_EQ(kvs_a.filename_prefix, data_dir + "kvs_"+std::to_string(instance));
 
     EXPECT_TRUE(kvs_a.kvs.count("test_kvs"));
     EXPECT_TRUE(kvs_a.default_values.count("test_default"));
 
     const auto& val = kvs_a.kvs.at("test_kvs");
-    EXPECT_EQ(val.getType(), KvsValue::Type::Number);
+    EXPECT_EQ(val.getType(), KvsValue::Type::F64);
     EXPECT_EQ(std::get<double>(val.getValue()), 42.0);
 
     const auto& def = kvs_a.default_values.at("test_default");
@@ -458,41 +785,35 @@ TEST(kvs_constructor, move_constructor) {
 
 TEST(kvs_TEST, parse_json_data){
     /* Success */
-    score::json::g_JsonParserShouldFail = false; // Reset the global flag
-    constexpr const char* json_all_types = R"({
-        "number": 42.5,
-        "boolean": true,
-        "string": "hello",
-        "nullval": null,
-        "array": [2, "two", false],
-        "object": {"inner": "value"}
+    prepare_environment();
+    const char* json_test_data = R"({
+        "booltest": {
+            "type": "Boolean",
+            "value": 1
+        },
     })";
-    auto result = parse_json_data(json_all_types);
+    auto result = parse_json_data(json_test_data); /* Notice: It doesnt actually parse the json_test_data data, since the json stub returns a dummy*/
     ASSERT_TRUE(result);
-    EXPECT_EQ(std::string(json_all_types), score::json::g_JsonParserReceivedValue);
+    EXPECT_EQ(std::string(json_test_data), score::json::g_JsonParserReceivedValue);
 
     /* Json Parser Failure */
     score::json::g_JsonParserShouldFail = true; // Set the global flag to simulate failure
-    constexpr const char* invalid_json = R"({invalid_json})"; //only placeholder string, not actually checked
-    result = parse_json_data(invalid_json);
+    result = parse_json_data(json_test_data);
     EXPECT_FALSE(result.has_value());
     EXPECT_EQ(result.error(), MyErrorCode::JsonParserError);
 
     /* No Object returned Failure */
     score::json::g_JsonParserShouldFail = false;
     score::json::g_JsonParserReturnValue = score::json::Any(42.0); // not a valid json object needed for parsing (only a number)
-    score::json::g_JsonParserReturnDefault = false; // Do not return the default placeholder value
-    result = parse_json_data(invalid_json);
+    result = parse_json_data(json_test_data);
     EXPECT_FALSE(result.has_value());
     EXPECT_EQ(result.error(), MyErrorCode::JsonParserError);
 
     /* any_to_kvsvalue error */
     score::json::g_JsonParserShouldFail = false;
-    score::json::g_JsonParserReturnDefault = false;
-    score::json::g_AnyNumberAsShouldFail = true; // Set the global flag to simulate failure
-    score::json::g_JsonParserReturnValue = score::json::Any(score::json::Object{{"invalid", score::json::Any(42.0)}}); // Object with a number, which will fail in any_to_kvsvalue
+    score::json::g_JsonParserReturnValue = score::json::Any(score::json::Object{{"invalid", score::json::Any(42.0)}}); // Not correct format for any_to_kvsvalue
 
-    result = parse_json_data(invalid_json);
+    result = parse_json_data(json_test_data);
     EXPECT_FALSE(result.has_value());
     EXPECT_EQ(result.error(), MyErrorCode::InvalidValueType); //error is passed from any_to_kvsvalue
 
@@ -504,9 +825,9 @@ TEST(kvs_open_json, open_json_success) {
     prepare_environment();
 
     auto result = open_json(kvs_prefix , OpenJsonNeedFile::Required);
-    ASSERT_TRUE(result);
+    EXPECT_TRUE(result);
     result = open_json(kvs_prefix, OpenJsonNeedFile::Optional);
-    ASSERT_TRUE(result);
+    EXPECT_TRUE(result);
 
     cleanup_environment();
 }
@@ -574,7 +895,7 @@ TEST(kvs_set_flush_on_exit, set_flush_on_exit) {
    
     prepare_environment();
 
-    auto result = Kvs::open(std::string(process_name), instance_id, OpenNeedDefaults::Required, OpenNeedKvs::Required);
+    auto result = Kvs::open(instance_id, OpenNeedDefaults::Required, OpenNeedKvs::Required, std::string(data_dir));
     ASSERT_TRUE(result);
     result.value().flush_on_exit = true;
     result.value().set_flush_on_exit(false);
@@ -591,7 +912,7 @@ TEST(kvs_set_flush_on_exit, set_flush_on_exit) {
 TEST(kvs_reset, reset_success){
     
     prepare_environment();
-    auto result = Kvs::open(std::string(process_name), instance_id, OpenNeedDefaults::Required, OpenNeedKvs::Required);
+    auto result = Kvs::open(instance_id, OpenNeedDefaults::Required, OpenNeedKvs::Required, std::string(data_dir));
     ASSERT_TRUE(result);
     result.value().flush_on_exit = false;
 
@@ -611,7 +932,7 @@ TEST(kvs_reset, reset_failure){
     prepare_environment();
 
     /* Mutex locked */
-    auto result = Kvs::open(std::string(process_name), instance_id, OpenNeedDefaults::Required, OpenNeedKvs::Required);
+    auto result = Kvs::open(instance_id, OpenNeedDefaults::Required, OpenNeedKvs::Required, std::string(data_dir));
     ASSERT_TRUE(result);
     result.value().flush_on_exit = false;
 
@@ -627,7 +948,7 @@ TEST(kvs_get_all_keys, get_all_keys_success){
     
     prepare_environment();
 
-    auto result = Kvs::open(std::string(process_name), instance_id, OpenNeedDefaults::Required, OpenNeedKvs::Required);
+    auto result = Kvs::open(instance_id, OpenNeedDefaults::Required, OpenNeedKvs::Required, std::string(data_dir));
     ASSERT_TRUE(result);
     result.value().flush_on_exit = false;
 
@@ -655,7 +976,7 @@ TEST(kvs_get_all_keys, get_all_keys_failure){
     prepare_environment();
 
     /* Mutex locked */
-    auto result = Kvs::open(std::string(process_name), instance_id, OpenNeedDefaults::Required, OpenNeedKvs::Required);
+    auto result = Kvs::open(instance_id, OpenNeedDefaults::Required, OpenNeedKvs::Required, std::string(data_dir));
     ASSERT_TRUE(result);
     result.value().flush_on_exit = false;
     std::unique_lock<std::mutex> lock(result.value().kvs_mutex);
@@ -671,7 +992,7 @@ TEST(kvs_key_exists, key_exists_success){
     
     prepare_environment();
 
-    auto result = Kvs::open(std::string(process_name), instance_id, OpenNeedDefaults::Required, OpenNeedKvs::Required);
+    auto result = Kvs::open(instance_id, OpenNeedDefaults::Required, OpenNeedKvs::Required, std::string(data_dir));
     ASSERT_TRUE(result);
     result.value().flush_on_exit = false;
 
@@ -695,7 +1016,7 @@ TEST(kvs_key_exists, key_exists_failure){
     prepare_environment();
 
     /* Mutex locked */
-    auto result = Kvs::open(std::string(process_name), instance_id, OpenNeedDefaults::Required, OpenNeedKvs::Required);
+    auto result = Kvs::open(instance_id, OpenNeedDefaults::Required, OpenNeedKvs::Required, std::string(data_dir));
     ASSERT_TRUE(result);
     result.value().flush_on_exit = false;
 
@@ -711,7 +1032,7 @@ TEST(kvs_get_value, get_value_success){
     
     prepare_environment();
 
-    auto result = Kvs::open(std::string(process_name), instance_id, OpenNeedDefaults::Required, OpenNeedKvs::Required);
+    auto result = Kvs::open(instance_id, OpenNeedDefaults::Required, OpenNeedKvs::Required, std::string(data_dir));
     ASSERT_TRUE(result);
     result.value().flush_on_exit = false;
 
@@ -721,20 +1042,21 @@ TEST(kvs_get_value, get_value_success){
     /* Check if value is returned */
     auto get_value_result = result.value().get_value("kvs");
     ASSERT_TRUE(get_value_result);
-    EXPECT_EQ(get_value_result.value().getType(), KvsValue::Type::Number);
-    EXPECT_DOUBLE_EQ(std::get<double>(get_value_result.value().getValue()), 2.0);
+    EXPECT_EQ(get_value_result.value().getType(), KvsValue::Type::I32);
+    EXPECT_EQ(std::get<int32_t>(get_value_result.value().getValue()), 2);
 
     /* Check if default value is returned when no written key exists */
     result.value().kvs.clear();
     ASSERT_TRUE(result.value().kvs.empty()); // Make sure kvs is empty and it uses the default value
+    int32_t default_value(42);
     result.value().default_values.insert_or_assign(
         "kvs", 
-        KvsValue(42.0)
+        KvsValue(default_value)
     );
     get_value_result = result.value().get_value("kvs");
     ASSERT_TRUE(get_value_result);
-    EXPECT_EQ(get_value_result.value().getType(), KvsValue::Type::Number);
-    EXPECT_DOUBLE_EQ(std::get<double>(get_value_result.value().getValue()), 42.0);
+    EXPECT_EQ(get_value_result.value().getType(), KvsValue::Type::I32);
+    EXPECT_EQ(std::get<int32_t>(get_value_result.value().getValue()), 42);
 
     cleanup_environment();
 }
@@ -743,7 +1065,7 @@ TEST(kvs_get_value, get_value_failure){
 
     prepare_environment();
 
-    auto result = Kvs::open(std::string(process_name), instance_id, OpenNeedDefaults::Required, OpenNeedKvs::Required);
+    auto result = Kvs::open(instance_id, OpenNeedDefaults::Required, OpenNeedKvs::Required, std::string(data_dir));
     ASSERT_TRUE(result);
     result.value().flush_on_exit = false;
 
@@ -753,7 +1075,7 @@ TEST(kvs_get_value, get_value_failure){
     EXPECT_EQ(get_value_result.error(), MyErrorCode::KeyNotFound);
 
     /* Mutex locked */
-    result = Kvs::open(std::string(process_name), instance_id, OpenNeedDefaults::Required, OpenNeedKvs::Required);
+    result = Kvs::open(instance_id, OpenNeedDefaults::Required, OpenNeedKvs::Required, std::string(data_dir));
     ASSERT_TRUE(result);
     result.value().flush_on_exit = false;
     std::unique_lock<std::mutex> lock(result.value().kvs_mutex);
@@ -768,21 +1090,22 @@ TEST(kvs_get_default_value, get_default_value_success){
     
     prepare_environment();
 
-    auto result = Kvs::open(std::string(process_name), instance_id, OpenNeedDefaults::Required, OpenNeedKvs::Required);
+    auto result = Kvs::open(instance_id, OpenNeedDefaults::Required, OpenNeedKvs::Required, std::string(data_dir));
     ASSERT_TRUE(result);
     result.value().flush_on_exit = false;
 
     /* Check Data existing */
+    int32_t default_value(42);
     result.value().default_values.insert_or_assign(
         "kvs", 
-        KvsValue(42.0)
+        KvsValue(default_value)
     );
 
     /* Check if default value is returned */
     auto get_def_value_result = result.value().get_default_value("kvs");
     ASSERT_TRUE(get_def_value_result);
-    EXPECT_EQ(get_def_value_result.value().getType(), KvsValue::Type::Number);
-    EXPECT_DOUBLE_EQ(std::get<double>(get_def_value_result.value().getValue()), 42.0);
+    EXPECT_EQ(get_def_value_result.value().getType(), KvsValue::Type::I32);
+    EXPECT_EQ(std::get<int32_t>(get_def_value_result.value().getValue()), 42);
 
     cleanup_environment();
 }
@@ -791,7 +1114,7 @@ TEST(kvs_get_default_value, get_default_value_failure){
     
     prepare_environment();
     
-    auto result = Kvs::open(std::string(process_name), instance_id, OpenNeedDefaults::Required, OpenNeedKvs::Required);
+    auto result = Kvs::open(instance_id, OpenNeedDefaults::Required, OpenNeedKvs::Required, std::string(data_dir));
     ASSERT_TRUE(result);
     result.value().flush_on_exit = false;
 
@@ -807,7 +1130,7 @@ TEST(kvs_reset_key, reset_key_success){
     
     prepare_environment();
 
-    auto result = Kvs::open(std::string(process_name), instance_id, OpenNeedDefaults::Required, OpenNeedKvs::Required);
+    auto result = Kvs::open(instance_id, OpenNeedDefaults::Required, OpenNeedKvs::Required, std::string(data_dir));
     ASSERT_TRUE(result);
     result.value().flush_on_exit = false;
     ASSERT_TRUE(result.value().kvs.count("kvs")); /* Check Data existing */
@@ -837,7 +1160,7 @@ TEST(kvs_reset_key, reset_key_failure){
 
     prepare_environment();
 
-    auto result = Kvs::open(std::string(process_name), instance_id, OpenNeedDefaults::Required, OpenNeedKvs::Required);
+    auto result = Kvs::open(instance_id, OpenNeedDefaults::Required, OpenNeedKvs::Required, std::string(data_dir));
     ASSERT_TRUE(result);
     result.value().flush_on_exit = false;
 
@@ -847,7 +1170,7 @@ TEST(kvs_reset_key, reset_key_failure){
     EXPECT_EQ(reset_key_result.error(), MyErrorCode::KeyDefaultNotFound);
 
     /* Reset a key without default value */
-    result = Kvs::open(std::string(process_name), instance_id, OpenNeedDefaults::Required, OpenNeedKvs::Required);
+    result = Kvs::open(instance_id, OpenNeedDefaults::Required, OpenNeedKvs::Required, std::string(data_dir));
     ASSERT_TRUE(result);
     result.value().flush_on_exit = false;
     result.value().default_values.clear(); // Clear default values to ensure no default value exists for "kvs"
@@ -856,7 +1179,7 @@ TEST(kvs_reset_key, reset_key_failure){
     EXPECT_EQ(reset_key_result.error(), MyErrorCode::KeyDefaultNotFound);
 
     /* Mutex locked */
-    result = Kvs::open(std::string(process_name), instance_id, OpenNeedDefaults::Required, OpenNeedKvs::Required);
+    result = Kvs::open(instance_id, OpenNeedDefaults::Required, OpenNeedKvs::Required, std::string(data_dir));
     ASSERT_TRUE(result);
     result.value().flush_on_exit = false;
     std::unique_lock<std::mutex> lock(result.value().kvs_mutex);
@@ -871,7 +1194,7 @@ TEST(kvs_has_default_value, has_default_value){
     
     prepare_environment();
 
-    auto result = Kvs::open(std::string(process_name), instance_id, OpenNeedDefaults::Required, OpenNeedKvs::Required);
+    auto result = Kvs::open(instance_id, OpenNeedDefaults::Required, OpenNeedKvs::Required, std::string(data_dir));
     ASSERT_TRUE(result);
     result.value().flush_on_exit = false;
 
@@ -897,7 +1220,7 @@ TEST(kvs_has_default_value, has_default_value){
 TEST(kvs_set_value, set_value_success){
 
     prepare_environment();
-    auto result = Kvs::open(std::string(process_name), instance_id, OpenNeedDefaults::Required, OpenNeedKvs::Required);
+    auto result = Kvs::open(instance_id, OpenNeedDefaults::Required, OpenNeedKvs::Required, std::string(data_dir));
     ASSERT_TRUE(result);
     result.value().flush_on_exit = false;
     
@@ -905,13 +1228,13 @@ TEST(kvs_set_value, set_value_success){
     auto set_value_result = result.value().set_value("new_key", KvsValue(3.14));
     EXPECT_TRUE(set_value_result);
     EXPECT_TRUE(result.value().kvs.count("new_key"));
-    EXPECT_EQ(result.value().kvs.at("new_key").getType(), KvsValue::Type::Number);
+    EXPECT_EQ(result.value().kvs.at("new_key").getType(), KvsValue::Type::F64);
     EXPECT_DOUBLE_EQ(std::get<double>(result.value().kvs.at("new_key").getValue()), 3.14);
 
     /* Set a value with an existing key */
     set_value_result = result.value().set_value("kvs", KvsValue(2.718));
     EXPECT_TRUE(set_value_result);
-    EXPECT_EQ(result.value().kvs.at("kvs").getType(), KvsValue::Type::Number);
+    EXPECT_EQ(result.value().kvs.at("kvs").getType(), KvsValue::Type::F64);
     EXPECT_DOUBLE_EQ(std::get<double>(result.value().kvs.at("kvs").getValue()), 2.718);
 
     cleanup_environment();
@@ -922,7 +1245,7 @@ TEST(kvs_set_value, set_value_failure){
     prepare_environment();
 
     /* Mutex locked */
-    auto result = Kvs::open(std::string(process_name), instance_id, OpenNeedDefaults::Required, OpenNeedKvs::Required);
+    auto result = Kvs::open(instance_id, OpenNeedDefaults::Required, OpenNeedKvs::Required, std::string(data_dir));
     ASSERT_TRUE(result);
     result.value().flush_on_exit = false;
 
@@ -937,7 +1260,7 @@ TEST(kvs_set_value, set_value_failure){
 TEST(kvs_remove_key, remove_key_success){
     
     prepare_environment();
-    auto result = Kvs::open(std::string(process_name), instance_id, OpenNeedDefaults::Required, OpenNeedKvs::Required);
+    auto result = Kvs::open(instance_id, OpenNeedDefaults::Required, OpenNeedKvs::Required, std::string(data_dir));
     ASSERT_TRUE(result);
     result.value().flush_on_exit = false;
 
@@ -956,7 +1279,7 @@ TEST(kvs_remove_key, remove_key_failure){
 
     prepare_environment();
 
-    auto result = Kvs::open(std::string(process_name), instance_id, OpenNeedDefaults::Required, OpenNeedKvs::Required);
+    auto result = Kvs::open(instance_id, OpenNeedDefaults::Required, OpenNeedKvs::Required, std::string(data_dir));
     ASSERT_TRUE(result);
     result.value().flush_on_exit = false;
 
@@ -966,7 +1289,7 @@ TEST(kvs_remove_key, remove_key_failure){
     EXPECT_EQ(remove_key_result.error(), MyErrorCode::KeyNotFound);
 
     /* Mutex locked */
-    result = Kvs::open(std::string(process_name), instance_id, OpenNeedDefaults::Required, OpenNeedKvs::Required);
+    result = Kvs::open(instance_id, OpenNeedDefaults::Required, OpenNeedKvs::Required, std::string(data_dir));
     ASSERT_TRUE(result);
     result.value().flush_on_exit = false;
     std::unique_lock<std::mutex> lock(result.value().kvs_mutex);
@@ -981,16 +1304,16 @@ TEST(kvs_write_json_data, write_json_data_success){
     
     prepare_environment();
     /* Test writing valid JSON data, also checks get_hash_bytes_adler32 and get_hash_bytes*/
-    constexpr const char* json_data = R"({
-        "key1": "value1",
-        "key2": 42,
-        "key3": true,
-        "key4": null
+    const char* json_test_data = R"({
+        "booltest": {
+            "type": "Boolean",
+            "value": 1
+        },
     })";
     system(("rm -rf " + kvs_prefix + ".json").c_str());
     system(("rm -rf " + kvs_prefix + ".hash").c_str());
 
-    auto result = write_json_data(filename_prefix, json_data);
+    auto result = write_json_data(filename_prefix, json_test_data);
     EXPECT_TRUE(result);
     EXPECT_TRUE(std::filesystem::exists(kvs_prefix + ".json"));
     EXPECT_TRUE(std::filesystem::exists(kvs_prefix + ".hash"));
@@ -999,11 +1322,11 @@ TEST(kvs_write_json_data, write_json_data_success){
     std::ifstream in_content(kvs_prefix + ".json", std::ios::binary);
     std::string file_content((std::istreambuf_iterator<char>(in_content)), std::istreambuf_iterator<char>());
     in_content.close();
-    EXPECT_EQ(file_content, json_data);
+    EXPECT_EQ(file_content, json_test_data);
     std::ifstream in_hash(kvs_prefix + ".hash", std::ios::binary);
     std::string hash_content((std::istreambuf_iterator<char>(in_hash)), std::istreambuf_iterator<char>());
     in_hash.close();
-    uint32_t hash = adler32(json_data);
+    uint32_t hash = adler32(json_test_data);
     std::array<uint8_t, 4> hash_bytes = {
         uint8_t((hash >> 24) & 0xFF),
         uint8_t((hash >> 16) & 0xFF),
@@ -1022,8 +1345,8 @@ TEST(kvs_write_json_data, write_json_data_failure){
     /* Test writing to a non-writable directory */
     system(("rm -rf " + kvs_prefix + ".json").c_str());
     system(("rm -rf " + kvs_prefix + ".hash").c_str());
-    std::string unwritable_dir = "/root/unwritable_dir";
-    auto result = write_json_data(unwritable_dir + "/" + process_name + "/kvs_"+std::to_string(instance), kvs_json);
+    std::string unwritable_dir = "/root/unwritable_dir/";
+    auto result = write_json_data(unwritable_dir + "/kvs_" + std::to_string(instance), kvs_json);
     EXPECT_FALSE(result);
     EXPECT_EQ(result.error(), MyErrorCode::PhysicalStorageFailure);
 
@@ -1058,7 +1381,7 @@ TEST(kvs_snapshot_rotate, snapshot_rotate_success){
     
     prepare_environment();
 
-    auto result = Kvs::open(std::string(process_name), instance_id, OpenNeedDefaults::Optional, OpenNeedKvs::Optional);
+    auto result = Kvs::open(instance_id, OpenNeedDefaults::Optional, OpenNeedKvs::Optional, std::string(data_dir));
     ASSERT_TRUE(result);
     result.value().flush_on_exit = false;
     
@@ -1088,7 +1411,7 @@ TEST(kvs_snapshot_rotate, snapshot_rotate_max_snapshots){
 
     prepare_environment();
 
-    auto result = Kvs::open(std::string(process_name), instance_id, OpenNeedDefaults::Optional, OpenNeedKvs::Optional);
+    auto result = Kvs::open(instance_id, OpenNeedDefaults::Optional, OpenNeedKvs::Optional, std::string(data_dir));
     ASSERT_TRUE(result);
     result.value().flush_on_exit = false;
     
@@ -1114,7 +1437,7 @@ TEST(kvs_snapshot_rotate, snapshot_rotate_failure_renaming_json){
 
     prepare_environment();
 
-    auto result = Kvs::open(std::string(process_name), instance_id, OpenNeedDefaults::Optional, OpenNeedKvs::Optional);
+    auto result = Kvs::open(instance_id, OpenNeedDefaults::Optional, OpenNeedKvs::Optional, std::string(data_dir));
     ASSERT_TRUE(result);
     result.value().flush_on_exit = false;
 
@@ -1138,7 +1461,7 @@ TEST(kvs_snapshot_rotate, snapshot_rotate_failure_renaming_hash){
 
     prepare_environment();
 
-    auto result = Kvs::open(std::string(process_name), instance_id, OpenNeedDefaults::Optional, OpenNeedKvs::Optional);
+    auto result = Kvs::open(instance_id, OpenNeedDefaults::Optional, OpenNeedKvs::Optional, std::string(data_dir));
     ASSERT_TRUE(result);
     result.value().flush_on_exit = false;
 
@@ -1162,7 +1485,7 @@ TEST(kvs_snapshot_rotate, snapshot_rotate_failure_mutex){
     
     prepare_environment();
 
-    auto result = Kvs::open(std::string(process_name), instance_id, OpenNeedDefaults::Optional, OpenNeedKvs::Optional);
+    auto result = Kvs::open(instance_id, OpenNeedDefaults::Optional, OpenNeedKvs::Optional, std::string(data_dir));
     ASSERT_TRUE(result);
     result.value().flush_on_exit = false;
 
@@ -1182,7 +1505,7 @@ TEST(kvs_flush, flush_success_data){
     system(("rm -rf " + kvs_prefix + ".json").c_str());
     system(("rm -rf " + kvs_prefix + ".hash").c_str());
 
-    auto result = Kvs::open(std::string(process_name), instance_id, OpenNeedDefaults::Optional, OpenNeedKvs::Optional);
+    auto result = Kvs::open(instance_id, OpenNeedDefaults::Optional, OpenNeedKvs::Optional, std::string(data_dir));
     ASSERT_TRUE(result);
     result.value().flush_on_exit = false;
 
@@ -1195,10 +1518,6 @@ TEST(kvs_flush, flush_success_data){
     /* Check if write_json_data was triggered and files were created and data is correct*/
     const auto search = score::json::g_JsonWriterReceivedValue.find("key1");
     EXPECT_NE(search, score::json::g_JsonWriterReceivedValue.end());
-    const auto& any_val = search->second;
-    auto str_result = any_val.As<std::string>();
-    EXPECT_TRUE(str_result);
-    EXPECT_EQ(str_result.value().get(), "value1");
 
     EXPECT_TRUE(std::filesystem::exists(kvs_prefix + ".json"));
     EXPECT_TRUE(std::filesystem::exists(kvs_prefix + ".hash"));
@@ -1216,7 +1535,7 @@ TEST(kvs_flush, flush_success_snapshot_rotate){
     system(("rm -rf " + kvs_prefix + ".json").c_str());
     system(("rm -rf " + kvs_prefix + ".hash").c_str());
 
-    auto result = Kvs::open(std::string(process_name), instance_id, OpenNeedDefaults::Optional, OpenNeedKvs::Optional);
+    auto result = Kvs::open(instance_id, OpenNeedDefaults::Optional, OpenNeedKvs::Optional, std::string(data_dir));
     ASSERT_TRUE(result);
     result.value().flush_on_exit = false;
     EXPECT_FALSE(std::filesystem::exists(filename_prefix + "_1.json"));
@@ -1237,7 +1556,7 @@ TEST(kvs_flush, flush_failure_mutex){
 
     prepare_environment();
 
-    auto result = Kvs::open(std::string(process_name), instance_id, OpenNeedDefaults::Optional, OpenNeedKvs::Optional);
+    auto result = Kvs::open(instance_id, OpenNeedDefaults::Optional, OpenNeedKvs::Optional, std::string(data_dir));
     ASSERT_TRUE(result);
     result.value().flush_on_exit = false;
 
@@ -1252,12 +1571,14 @@ TEST(kvs_flush, flush_failure_mutex){
 TEST(kvs_flush, flush_failure_rotate_snapshots){
 
     prepare_environment();
-
-    auto result = Kvs::open(std::string(process_name), instance_id, OpenNeedDefaults::Optional, OpenNeedKvs::Optional);
+    /* Test Folder for permission handling */
+    std::string permissions_dir = data_dir + "permissions/";
+    std::filesystem::create_directories(permissions_dir);
+    auto result = Kvs::open(instance_id, OpenNeedDefaults::Optional, OpenNeedKvs::Optional, std::string(permissions_dir));
     ASSERT_TRUE(result);
     result.value().flush_on_exit = false;
 
-    std::filesystem::permissions(data_dir, std::filesystem::perms::owner_read, std::filesystem::perm_options::replace);
+    std::filesystem::permissions(permissions_dir, std::filesystem::perms::owner_read, std::filesystem::perm_options::replace);
     auto flush_result = result.value().flush();
 
     EXPECT_FALSE(flush_result);
@@ -1270,7 +1591,7 @@ TEST(kvs_flush, flush_failure_kvsvalue_invalid){
 
     prepare_environment();
 
-    auto result = Kvs::open(std::string(process_name), instance_id, OpenNeedDefaults::Optional, OpenNeedKvs::Optional);
+    auto result = Kvs::open(instance_id, OpenNeedDefaults::Optional, OpenNeedKvs::Optional, std::string(data_dir));
     ASSERT_TRUE(result);
     result.value().flush_on_exit = false;
 
@@ -1288,7 +1609,7 @@ TEST(kvs_flush, flush_failure_json_writer){
 
     prepare_environment();
 
-    auto result = Kvs::open(std::string(process_name), instance_id, OpenNeedDefaults::Optional, OpenNeedKvs::Optional);
+    auto result = Kvs::open(instance_id, OpenNeedDefaults::Optional, OpenNeedKvs::Optional, std::string(data_dir));
     ASSERT_TRUE(result);
     result.value().flush_on_exit = false;
     score::json::g_JsonWriterShouldFail = true; /* Force error in writer.ToBuffer */
@@ -1304,7 +1625,7 @@ TEST(kvs_snapshot_count, snapshot_count){
     
     prepare_environment();
 
-    auto result = Kvs::open(std::string(process_name), instance_id, OpenNeedDefaults::Optional, OpenNeedKvs::Optional);
+    auto result = Kvs::open(instance_id, OpenNeedDefaults::Optional, OpenNeedKvs::Optional, std::string(data_dir));
     ASSERT_TRUE(result);
     result.value().flush_on_exit = false;
 
@@ -1324,21 +1645,22 @@ TEST(kvs_snapshot_restore, snapshot_restore_success){
 
     prepare_environment();
 
-    auto result = Kvs::open(std::string(process_name), instance_id, OpenNeedDefaults::Optional, OpenNeedKvs::Optional);
+    auto result = Kvs::open(instance_id, OpenNeedDefaults::Optional, OpenNeedKvs::Optional, std::string(data_dir));
     ASSERT_TRUE(result);
     result.value().flush_on_exit = false;
 
     /* Create empty Test-Snapshot Files -> Data received by the JsonParser should be the data listed below */
     ASSERT_FALSE(result.value().kvs.empty());
-    const std::string json_data = R"({
-        "key1": "value1",
-        "key2": 42,
-        "key3": true,
-        "key4": null
-    })";
     ASSERT_FALSE(result.value().kvs.count("key1"));
     ASSERT_TRUE(result.value().kvs.count("kvs"));
 
+    /* Create dummy data */
+    const std::string json_data = R"({
+        "booltest": {
+            "type": "Boolean",
+            "value": 1
+        },
+    })";
     /* Create Hash Data for json_data*/
     std::ofstream out(filename_prefix + "_1.json", std::ios::binary);
     out.write(json_data.data(), json_data.size());
@@ -1366,7 +1688,7 @@ TEST(kvs_snapshot_restore, snapshot_restore_failure_invalid_snapshot_id){
 
     prepare_environment();
 
-    auto result = Kvs::open(std::string(process_name), instance_id, OpenNeedDefaults::Optional, OpenNeedKvs::Optional);
+    auto result = Kvs::open(instance_id, OpenNeedDefaults::Optional, OpenNeedKvs::Optional, std::string(data_dir));
     ASSERT_TRUE(result);
     result.value().flush_on_exit = false;
 
@@ -1387,7 +1709,7 @@ TEST(kvs_snapshot_restore, snapshot_restore_failure_open_json){
 
     prepare_environment();
 
-    auto result = Kvs::open(std::string(process_name), instance_id, OpenNeedDefaults::Optional, OpenNeedKvs::Optional);
+    auto result = Kvs::open(instance_id, OpenNeedDefaults::Optional, OpenNeedKvs::Optional, std::string(data_dir));
     ASSERT_TRUE(result);
     result.value().flush_on_exit = false;
 
@@ -1406,7 +1728,7 @@ TEST(kvs_snapshot_restore, snapshot_restore_failure_mutex){
 
     prepare_environment();
 
-    auto result = Kvs::open(std::string(process_name), instance_id, OpenNeedDefaults::Optional, OpenNeedKvs::Optional);
+    auto result = Kvs::open(instance_id, OpenNeedDefaults::Optional, OpenNeedKvs::Optional, std::string(data_dir));
     ASSERT_TRUE(result);
     result.value().flush_on_exit = false;
 
@@ -1422,7 +1744,7 @@ TEST(kvs_snapshot_max_count, snapshot_max_count){
     
     prepare_environment();
 
-    auto result = Kvs::open(std::string(process_name), instance_id, OpenNeedDefaults::Optional, OpenNeedKvs::Optional);
+    auto result = Kvs::open(instance_id, OpenNeedDefaults::Optional, OpenNeedKvs::Optional, std::string(data_dir));
     ASSERT_TRUE(result);
     EXPECT_EQ(result.value().snapshot_max_count(), KVS_MAX_SNAPSHOTS);
     result.value().flush_on_exit = false;
@@ -1434,7 +1756,7 @@ TEST(kvs_get_filename, get_kvs_filename){
     
     prepare_environment();
 
-    auto result = Kvs::open(std::string(process_name), instance_id, OpenNeedDefaults::Optional, OpenNeedKvs::Optional);
+    auto result = Kvs::open(instance_id, OpenNeedDefaults::Optional, OpenNeedKvs::Optional, std::string(data_dir));
     ASSERT_TRUE(result);
     result.value().flush_on_exit = false;
 
@@ -1449,7 +1771,7 @@ TEST(kvs_get_filename, get_kvs_hash_filename){
     
     prepare_environment();
 
-    auto result = Kvs::open(std::string(process_name), instance_id, OpenNeedDefaults::Optional, OpenNeedKvs::Optional);
+    auto result = Kvs::open(instance_id, OpenNeedDefaults::Optional, OpenNeedKvs::Optional, std::string(data_dir));
     ASSERT_TRUE(result);
     result.value().flush_on_exit = false;
 
@@ -1465,7 +1787,7 @@ TEST(kvs_destructor, destructor) {
     prepare_environment();
 
     {
-    auto result = Kvs::open(std::string(process_name), instance_id, OpenNeedDefaults::Optional, OpenNeedKvs::Optional);
+    auto result = Kvs::open(instance_id, OpenNeedDefaults::Optional, OpenNeedKvs::Optional, std::string(data_dir));
     ASSERT_TRUE(result);
     result.value().flush_on_exit = true;
     }

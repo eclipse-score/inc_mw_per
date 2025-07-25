@@ -45,12 +45,12 @@ alias(
 
 test_suite(
     name = "test_kvs_cpp",
-    tests = ["//tests/cpp:test_kvs_cpp"],
+    tests = ["//src/cpp/tests:test_kvs_cpp"],
     visibility = ["//visibility:public"],
 )
 
 test_suite(
     name = "bm_kvs_cpp",
-    tests = ["//tests/cpp:bm_kvs_cpp"],
+    tests = ["//src/cpp/tests:bm_kvs_cpp"],
     visibility = ["//visibility:public"],
 )

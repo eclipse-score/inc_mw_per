@@ -615,7 +615,6 @@ impl<J: KvsBackend> Drop for GenericKvs<J> {
 mod tests {
 
     use super::*;
-    use crate::kvs_builder::KvsBuilder;
     use crate::Kvs;
     use tempfile::tempdir;
 
@@ -960,22 +959,23 @@ mod tests {
     #[cfg_attr(miri, ignore)]
     #[test]
     fn test_kvs_reset_single() {
-
         let dir = tempdir().unwrap();
         let dir_path = dir.path().to_string_lossy().to_string();
-      
+
         std::fs::copy(
             "tests/kvs_0_default.json",
             format!("{}/kvs_0_default.json", dir_path.clone()),
         )
         .unwrap();
         let instance_id = InstanceId::new(0);
-      
-        let kvs = KvsBuilder::<Kvs>::new(instance_id.clone())
-            .dir(dir_path.clone())
-            .need_defaults(true)
-            .build()
-            .unwrap();
+
+        let kvs = Kvs::open(
+            instance_id.clone(),
+            OpenNeedDefaults::Optional,
+            OpenNeedKvs::Optional,
+            Some(dir_path.clone()),
+        )
+        .unwrap();
 
         let _ = kvs.set_value("number1", KvsValue::Number(987f64));
         let _ = kvs.reset_key("number1");
@@ -998,7 +998,8 @@ mod tests {
             kvs.reset_key("fail"),
             Err(ErrorCode::KeyDefaultNotFound)
         ));
-      
+    }
+
     #[test]
     fn test_drop() {
         let dir = tempdir().unwrap();

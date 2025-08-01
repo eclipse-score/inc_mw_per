@@ -45,7 +45,7 @@ use_format_targets()
 
 alias(
     name = "kvs_cpp",
-    actual = "//src/cpp:kvs_cpp",
+    actual = "//src/cpp/src:kvs_cpp",
     visibility = ["//visibility:public"],
 )
 

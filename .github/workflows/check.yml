@@ -80,10 +80,13 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y lcov
 
-      - name: Extract Coverage for kvs.cpp
+      - name: Extract Coverage for CPP Files
         run: |
           REPORT=$(find "$(bazel info output_path)" -name _coverage_report.dat | head -n1)
           lcov \
             --rc branch_coverage=1 \
-            --extract "$REPORT" "src/cpp/src/kvs.cpp" \
+            --extract "$REPORT" '*.cpp' -o "${REPORT}.cpp" \
             --output-file kvs_coverage.info
+
+      - name: Bazel Benchmark
+        run: bazel run -c opt //:bm_kvs_cpp

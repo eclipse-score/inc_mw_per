@@ -10,13 +10,11 @@
 *
 * SPDX-License-Identifier: Apache-2.0
 ********************************************************************************/
-
 #include <fstream>
 #include <iostream>
 #include <sstream>
-#include "kvs.hpp"
 #include "internal/kvs_helper.hpp"
-
+#include "kvs.hpp"
 
 //TODO Default Value Handling TBD
 //TODO Add Score Logging
@@ -25,433 +23,7 @@
 
 using namespace std;
 
-/*********************** Hash Functions *********************/
-/*Adler 32 checksum algorithm*/ 
-// Optimized version: processes data in blocks to reduce modulo operations
-uint32_t calculate_hash_adler32(const string& data) {
-    constexpr size_t ADLER32_NMAX = 5552;
-    constexpr uint32_t ADLER32_BASE = 65521;
-    uint32_t a = 1, b = 0;
-    size_t len = data.size();
-    size_t i = 0;
-
-    // Process in blocks of 5552 bytes (as recommended for Adler-32)
-    while (len > 0) {
-        size_t tlen = len > ADLER32_NMAX ? ADLER32_NMAX : len;
-        len -= tlen;
-        for (size_t j = 0; j < tlen; ++j, ++i) {
-            a += static_cast<unsigned char>(data[i]);
-            b += a;
-        }
-        a %= ADLER32_BASE;
-        b %= ADLER32_BASE;
-    }
-    return (b << 16) | a;
-}
-
-/*Parse Adler32 checksum Byte-Array to uint32 */ 
-uint32_t parse_hash_adler32(std::istream& in)
-{
-    std::array<uint8_t,4> buf{};
-    in.read(reinterpret_cast<char*>(buf.data()), buf.size());
-
-    uint32_t value = (uint32_t(buf[0]) << 24)
-                   | (uint32_t(buf[1]) << 16)
-                   | (uint32_t(buf[2]) <<  8)
-                   |  uint32_t(buf[3]);
-    return value;
-}
-
-/* Split uint32 checksum in bytes for writing*/ 
-std::array<uint8_t,4> get_hash_bytes_adler32(uint32_t hash)
-{
-    std::array<uint8_t, 4> value = {
-        uint8_t((hash >> 24) & 0xFF),
-        uint8_t((hash >> 16) & 0xFF),
-        uint8_t((hash >>  8) & 0xFF),
-        uint8_t((hash      ) & 0xFF)
-    };
-    return value;
-}
-
-/***** Wrapper Functions for Hash *****/
-/* Wrapper Functions should isolate the Hash Algorithm, so that the algorithm can be easier replaced*/
-
-/* Wrapper Function to get checksum in bytes*/
-std::array<uint8_t,4> get_hash_bytes(const string& data)
-{
-    uint32_t hash = calculate_hash_adler32(data);
-    std::array<uint8_t, 4> value = get_hash_bytes_adler32(hash);
-    return value;
-}
-
-/* Wrapper Function to check, if Hash is valid*/
-bool check_hash(const string& data_calculate, std::istream& data_parse){
-    bool result;
-    uint32_t calculated_hash = calculate_hash_adler32(data_calculate);
-    uint32_t parsed_hash = parse_hash_adler32(data_parse);
-    if(calculated_hash == parsed_hash){
-        result = true;
-    }else{
-        result = false;
-    }
-
-    return result; 
-}
-
-/*********************** Standalone Helper Functions *********************/
-
-/* Helper Function for Any -> KVSValue conversion */
-score::Result<KvsValue> any_to_kvsvalue(const score::json::Any& any){
-    score::Result<KvsValue> result = score::MakeUnexpected(MyErrorCode::UnmappedError);
-    if (auto o = any.As<score::json::Object>(); o.has_value()) {
-        const auto& objAny = o.value().get();
-        auto type  = objAny.find("t");
-        auto value = objAny.find("v");
-        if (type != objAny.end() && value != objAny.end()) {
-            if (auto typeStr = type->second.As<std::string>(); typeStr.has_value()) {
-                const std::string_view typeStrV = typeStr.value().get();
-                const score::json::Any& valueAny = value->second;
-
-                if (typeStrV == "i32") {
-                    if (auto n = valueAny.As<int32_t>(); n.has_value()){
-                        result = KvsValue(static_cast<int32_t>(n.value()));
-                    }
-                    else {
-                        result = score::MakeUnexpected(MyErrorCode::InvalidValueType);
-                    }
-                }
-                else if (typeStrV == "u32") {
-                    if (auto n = valueAny.As<uint32_t>(); n.has_value()) {
-                        result = KvsValue(static_cast<uint32_t>(n.value()));
-                    }
-                    else {
-                        result = score::MakeUnexpected(MyErrorCode::InvalidValueType);
-                    }
-                }
-                else if (typeStrV == "i64") {
-                    if (auto n = valueAny.As<int64_t>(); n.has_value()) {
-                        result = KvsValue(static_cast<int64_t>(n.value()));
-                    }
-                    else {
-                        result = score::MakeUnexpected(MyErrorCode::InvalidValueType);
-                    }
-                }
-                else if (typeStrV == "u64") {
-                    if (auto n = valueAny.As<uint64_t>(); n.has_value()) {
-                        result = KvsValue(static_cast<uint64_t>(n.value()));
-                    }
-                    else {
-                        result = score::MakeUnexpected(MyErrorCode::InvalidValueType);
-                    }
-                }
-                else if (typeStrV == "f64") {
-                    if (auto n = valueAny.As<double>(); n.has_value()) {
-                        result = KvsValue(n.value());
-                    }
-                    else {
-                        result = score::MakeUnexpected(MyErrorCode::InvalidValueType);
-                    }
-                }
-                else if (typeStrV == "bool") {
-                    if (auto b = valueAny.As<bool>(); b.has_value()) {
-                        result = KvsValue(b.value());
-                    }
-                    else {
-                        result = score::MakeUnexpected(MyErrorCode::InvalidValueType);
-                    }
-                }
-                else if (typeStrV == "str") {
-                    if (auto s = valueAny.As<std::string>(); s.has_value()) {
-                        result = KvsValue(s.value().get());
-                    }
-                    else {
-                        result = score::MakeUnexpected(MyErrorCode::InvalidValueType);
-                    }
-                }
-                else if (typeStrV == "null") {
-                    if (valueAny.As<score::json::Null>().has_value()) {
-                        result = KvsValue(nullptr);
-                    }
-                    else {
-                        result = score::MakeUnexpected(MyErrorCode::InvalidValueType);
-                    }
-                }
-                else if (typeStrV == "arr") {
-                    if (auto l = valueAny.As<score::json::List>(); l.has_value()) {
-                        KvsValue::Array arr;
-                        bool error = false;
-                        for (auto const& elem : l.value().get()) {
-                            auto conv = any_to_kvsvalue(elem);
-                            if (!conv) {
-                                error = true;
-                                result = score::MakeUnexpected(MyErrorCode::InvalidValueType);
-                                break;
-                            }
-                            arr.emplace_back(std::move(conv.value()));
-                        }
-                        if (!error){
-                            result = KvsValue(std::move(arr));
-                        }
-                    } else {
-                        result = score::MakeUnexpected(MyErrorCode::InvalidValueType);
-                    }
-                }
-                else if (typeStrV == "obj") {
-                    if (auto obj = valueAny.As<score::json::Object>(); obj.has_value()) {
-                        KvsValue::Object map;
-                        bool error = false;
-                        for (auto const& [key, valAny] : obj.value().get()) {
-                            auto conv = any_to_kvsvalue(valAny);
-                            if (!conv) {
-                                error = true;
-                                result = score::MakeUnexpected(MyErrorCode::InvalidValueType);
-                                break;
-                            }
-                            map.emplace(key.GetAsStringView().to_string(), std::move(conv.value()));
-                        }
-                        if (!error) {
-                            result = KvsValue(std::move(map));
-                        }
-                    } else {
-                        result = score::MakeUnexpected(MyErrorCode::InvalidValueType);
-                    }
-                } else {
-                    result = score::MakeUnexpected(MyErrorCode::InvalidValueType);
-                }
-            } else {
-                result = score::MakeUnexpected(MyErrorCode::InvalidValueType);
-            }
-        } else {
-            result = score::MakeUnexpected(MyErrorCode::InvalidValueType);
-        }
-    } else {
-        result = score::MakeUnexpected(MyErrorCode::InvalidValueType);
-    }
-
-    return result;
-}
-
-/* Helper Function for KVSValue -> Any conversion */
-score::Result<score::json::Any> kvsvalue_to_any(const KvsValue& kv) {
-    score::Result<score::json::Any> result = score::MakeUnexpected(MyErrorCode::UnmappedError);
-    bool error = false;
-    score::json::Object obj;
-    switch (kv.getType()) {
-        case KvsValue::Type::i32: {
-            obj.emplace("t", score::json::Any(std::string("i32")));
-            obj.emplace("v", score::json::Any(static_cast<int32_t>(std::get<int32_t>(kv.getValue()))));
-            break;
-        }
-        case KvsValue::Type::u32: {
-            obj.emplace("t", score::json::Any(std::string("u32")));
-            obj.emplace("v", score::json::Any(static_cast<uint32_t>(std::get<uint32_t>(kv.getValue()))));
-            break;
-        }
-        case KvsValue::Type::i64: {
-            obj.emplace("t", score::json::Any(std::string("i64")));
-            obj.emplace("v", score::json::Any(static_cast<int64_t>(std::get<int64_t>(kv.getValue()))));
-            break;
-        }
-        case KvsValue::Type::u64: {
-            obj.emplace("t", score::json::Any(std::string("u64")));
-            obj.emplace("v", score::json::Any(static_cast<uint64_t>(std::get<uint64_t>(kv.getValue()))));
-            break;
-        }
-        case KvsValue::Type::f64: {
-            obj.emplace("t", score::json::Any(std::string("f64")));
-            obj.emplace("v", score::json::Any(std::get<double>(kv.getValue())));
-            break;
-        }
-        case KvsValue::Type::Boolean: {
-            obj.emplace("t", score::json::Any(std::string("bool")));
-            obj.emplace("v", score::json::Any(std::get<bool>(kv.getValue())));
-            break;
-        }
-        case KvsValue::Type::String: {
-            obj.emplace("t", score::json::Any(std::string("str")));
-            obj.emplace("v", score::json::Any(std::get<std::string>(kv.getValue())));
-            break;
-        }
-        case KvsValue::Type::Null: {
-            obj.emplace("t", score::json::Any(std::string("null")));
-            obj.emplace("v", score::json::Any(score::json::Null{}));
-            break;
-        }
-        case KvsValue::Type::Array: {
-            obj.emplace("t", score::json::Any(std::string("arr")));
-            score::json::List list;
-            for (auto& elem : std::get<KvsValue::Array>(kv.getValue())) {
-                auto conv = kvsvalue_to_any(elem);
-                if (!conv) {
-                    result = score::MakeUnexpected(MyErrorCode::InvalidValueType);
-                    error = true;
-                    break;
-                }
-                list.push_back(std::move(conv.value()));
-            }
-            if (!error) {
-                obj.emplace("v", score::json::Any(std::move(list)));
-            }
-            break;
-        }
-        case KvsValue::Type::Object: {
-            obj.emplace("t", score::json::Any(std::string("obj")));
-            score::json::Object inner_obj;
-            for (auto& [key, value] : std::get<KvsValue::Object>(kv.getValue())) {
-                auto conv = kvsvalue_to_any(value);
-                if (!conv) {
-                    result = score::MakeUnexpected(MyErrorCode::InvalidValueType);
-                    error = true;
-                    break;
-                }
-                inner_obj.emplace(key, std::move(conv.value()));
-            }
-            if (!error) {
-                obj.emplace("v", score::json::Any(std::move(inner_obj)));
-            }
-            break;
-        }
-        default: {
-            result = score::MakeUnexpected(MyErrorCode::InvalidValueType);
-            error = true;
-            break;
-        }
-    }
-
-    if (!error) {
-        result = score::json::Any(std::move(obj));
-    }
-
-    return result;
-}
-
-
-/*********************** Error Implementation *********************/
-std::string_view MyErrorDomain::MessageFor(score::result::ErrorCode const& code) const noexcept
-{
-    std::string_view msg;
-    switch (static_cast<MyErrorCode>(code))
-    {
-        case MyErrorCode::UnmappedError:
-            msg = "Error that was not yet mapped";
-            break;
-        case MyErrorCode::FileNotFound:
-            msg = "File not found";
-            break;
-        case MyErrorCode::KvsFileReadError:
-            msg = "KVS file read error";
-            break;
-        case MyErrorCode::KvsHashFileReadError:
-            msg = "KVS hash file read error";
-            break;
-        case MyErrorCode::JsonParserError:
-            msg = "JSON parser error";
-            break;
-        case MyErrorCode::JsonGeneratorError:
-            msg = "JSON generator error";
-            break;
-        case MyErrorCode::PhysicalStorageFailure:
-            msg = "Physical storage failure";
-            break;
-        case MyErrorCode::IntegrityCorrupted:
-            msg = "Integrity corrupted";
-            break;
-        case MyErrorCode::ValidationFailed:
-            msg = "Validation failed";
-            break;
-        case MyErrorCode::EncryptionFailed:
-            msg = "Encryption failed";
-            break;
-        case MyErrorCode::ResourceBusy:
-            msg = "Resource is busy";
-            break;
-        case MyErrorCode::OutOfStorageSpace:
-            msg = "Out of storage space";
-            break;
-        case MyErrorCode::QuotaExceeded:
-            msg = "Quota exceeded";
-            break;
-        case MyErrorCode::AuthenticationFailed:
-            msg = "Authentication failed";
-            break;
-        case MyErrorCode::KeyNotFound:
-            msg = "Key not found";
-            break;
-        case MyErrorCode::KeyDefaultNotFound:
-            msg = "Key default value not found";
-            break;
-        case MyErrorCode::SerializationFailed:
-            msg = "Serialization failed";
-            break;
-        case MyErrorCode::InvalidSnapshotId:
-            msg = "Invalid snapshot ID";
-            break;
-        case MyErrorCode::ConversionFailed:
-            msg = "Conversion failed";
-            break;
-        case MyErrorCode::MutexLockFailed:
-            msg = "Mutex failed";
-            break;
-        case MyErrorCode::InvalidValueType:
-            msg = "Invalid value type";
-            break;
-        default:
-            msg = "Unknown Error!";
-            break;
-    }
-
-    return msg;
-}
-
-score::result::Error MakeError(MyErrorCode code, std::string_view user_message) noexcept
-{
-    return {static_cast<score::result::ErrorCode>(code), my_error_domain, user_message};
-}
-
-
-/*********************** KVS Builder Implementation *********************/
-KvsBuilder::KvsBuilder(const InstanceId& instance_id)
-    : instance_id(instance_id)
-    , need_defaults(false)
-    , need_kvs(false)
-    , directory("./data_folder/") /* Default Directory */
-{}
-
-KvsBuilder& KvsBuilder::need_defaults_flag(bool flag) {
-    need_defaults = flag;
-    return *this;
-}
-
-KvsBuilder& KvsBuilder::need_kvs_flag(bool flag) {
-    need_kvs = flag;
-    return *this;
-}
-
-KvsBuilder& KvsBuilder::dir(std::string&& dir_path) {
-    this->directory = std::move(dir_path);
-    return *this;
-}
-
-
-score::Result<Kvs> KvsBuilder::build() {
-    score::Result<Kvs> result = score::MakeUnexpected(MyErrorCode::UnmappedError);
-
-    /* Use current directory if empty */
-    if ("" == directory) {
-        directory = "./";
-    }
-    
-    result = Kvs::open(
-        instance_id,
-        need_defaults ? OpenNeedDefaults::Required : OpenNeedDefaults::Optional,
-        need_kvs      ? OpenNeedKvs::Required      : OpenNeedKvs::Optional,
-        std::move(directory)
-    );
-    
-    return result;
-}
-
+namespace score::mw::pers::kvs {
 
 /*********************** KVS Implementation *********************/
 Kvs::~Kvs(){
@@ -520,11 +92,11 @@ Kvs& Kvs::operator=(Kvs&& other) noexcept
 /* Helper Function to parse JSON data for open_json*/
 score::Result<std::unordered_map<std::string, KvsValue>> Kvs::parse_json_data(const std::string& data) {
     
-    score::Result<unordered_map<std::string, KvsValue>> result = score::MakeUnexpected(MyErrorCode::UnmappedError);
+    score::Result<unordered_map<std::string, KvsValue>> result = score::MakeUnexpected(ErrorCode::UnmappedError);
     auto any_res = parser->FromBuffer(data);
 
     if (!any_res) {
-        result = score::MakeUnexpected(MyErrorCode::JsonParserError);
+        result = score::MakeUnexpected(ErrorCode::JsonParserError);
     }else{
         score::json::Any root = std::move(any_res).value();
         std::unordered_map<std::string, KvsValue> result_value;
@@ -537,7 +109,7 @@ score::Result<std::unordered_map<std::string, KvsValue>> Kvs::parse_json_data(co
 
                 auto conv = any_to_kvsvalue(element.second);
                 if (!conv) {
-                    result = score::MakeUnexpected(static_cast<MyErrorCode>(*conv.error()));
+                    result = score::MakeUnexpected(static_cast<ErrorCode>(*conv.error()));
                     error = true;
                     break;
                 }else{
@@ -548,7 +120,7 @@ score::Result<std::unordered_map<std::string, KvsValue>> Kvs::parse_json_data(co
                 result = std::move(result_value);
             }
         } else {
-            result = score::MakeUnexpected(MyErrorCode::JsonParserError);
+            result = score::MakeUnexpected(ErrorCode::JsonParserError);
         }
     }
 
@@ -560,10 +132,10 @@ score::Result<std::unordered_map<string, KvsValue>> Kvs::open_json(const score::
 {   
     score::filesystem::Path json_file = prefix.Native() + ".json";
     score::filesystem::Path hash_file = prefix.Native() + ".hash";
-    string data;
+    std::string data;
     bool error = false; /* Error flag */
     bool new_kvs = false; /* Flag to check if new KVS file is created*/
-    score::Result<std::unordered_map<string, KvsValue>> result = score::MakeUnexpected(MyErrorCode::UnmappedError);
+    score::Result<std::unordered_map<string, KvsValue>> result = score::MakeUnexpected(ErrorCode::UnmappedError);
     
     /* Read JSON file */
     ifstream in(json_file.CStr());
@@ -571,7 +143,7 @@ score::Result<std::unordered_map<string, KvsValue>> Kvs::open_json(const score::
         if (need_file == OpenJsonNeedFile::Required) {
             cerr << "error: file " << json_file << " could not be read" << endl;
             error = true;
-            result = score::MakeUnexpected(MyErrorCode::KvsFileReadError);
+            result = score::MakeUnexpected(ErrorCode::KvsFileReadError);
         }else{
             cout << "file " << json_file << " not found, using empty data" << endl;
             new_kvs = true;
@@ -589,14 +161,14 @@ score::Result<std::unordered_map<string, KvsValue>> Kvs::open_json(const score::
         if (!hin) {
             cerr << "error: hash file " << hash_file << " could not be read" << endl;
             error = true;
-            result = score::MakeUnexpected(MyErrorCode::KvsHashFileReadError);
+            result = score::MakeUnexpected(ErrorCode::KvsHashFileReadError);
             
         }else{
             bool valid_hash = check_hash(data, hin);
             if(!valid_hash){
                 cerr << "error: KVS data corrupted (" << json_file << ", " << hash_file << ")" << endl;
                 error = true;
-                result = score::MakeUnexpected(MyErrorCode::ValidationFailed);
+                result = score::MakeUnexpected(ErrorCode::ValidationFailed);
             }else{
                 cout << "JSON data has valid hash" << endl;
             }
@@ -609,7 +181,7 @@ score::Result<std::unordered_map<string, KvsValue>> Kvs::open_json(const score::
         if (!parse_res) {
             cerr << "error: parsing JSON data failed" << endl;
             error = true;
-            result = score::MakeUnexpected(static_cast<MyErrorCode>(*parse_res.error()));
+            result = score::MakeUnexpected(static_cast<ErrorCode>(*parse_res.error()));
         }else{
             result = std::move(parse_res.value());
         }
@@ -621,7 +193,7 @@ score::Result<std::unordered_map<string, KvsValue>> Kvs::open_json(const score::
 /* Open KVS Instance */
 score::Result<Kvs> Kvs::open(const InstanceId& instance_id, OpenNeedDefaults need_defaults, OpenNeedKvs need_kvs, const std::string&& dir)
 {
-    score::Result<Kvs> result = score::MakeUnexpected(MyErrorCode::UnmappedError); /* Redundant initialization needed, since Resul<KVS> would call the implicitly-deleted default constructor of KVS */
+    score::Result<Kvs> result = score::MakeUnexpected(ErrorCode::UnmappedError); /* Redundant initialization needed, since Resul<KVS> would call the implicitly-deleted default constructor of KVS */
 
     score::filesystem::Path base_path(dir);
     score::filesystem::Path filename_prefix = base_path / ("kvs_" + std::to_string(instance_id.id));
@@ -633,14 +205,14 @@ score::Result<Kvs> Kvs::open(const InstanceId& instance_id, OpenNeedDefaults nee
         filename_default,
         need_defaults == OpenNeedDefaults::Required ? OpenJsonNeedFile::Required : OpenJsonNeedFile::Optional);
     if (!default_res){
-        result = score::MakeUnexpected(static_cast<MyErrorCode>(*default_res.error())); /* Dereferences the Error class to its underlying code -> error.h*/
+        result = score::MakeUnexpected(static_cast<ErrorCode>(*default_res.error())); /* Dereferences the Error class to its underlying code -> error.h*/
     }
     else{
         auto kvs_res = kvs.open_json(
             filename_kvs,
             need_kvs == OpenNeedKvs::Required ? OpenJsonNeedFile::Required : OpenJsonNeedFile::Optional);
         if (!kvs_res){
-            result = score::MakeUnexpected(static_cast<MyErrorCode>(*kvs_res.error()));
+            result = score::MakeUnexpected(static_cast<ErrorCode>(*kvs_res.error()));
         }else{ 
             cout << "opened KVS: instance '" << instance_id.id << "'" << endl;
             cout << "max snapshot count: " << KVS_MAX_SNAPSHOTS << endl;
@@ -664,13 +236,13 @@ void Kvs::set_flush_on_exit(bool flush) {
 
 /* Reset KVS to initial state*/
 score::ResultBlank Kvs::reset() {
-    score::ResultBlank result = score::MakeUnexpected(MyErrorCode::UnmappedError);
+    score::ResultBlank result = score::MakeUnexpected(ErrorCode::UnmappedError);
     std::unique_lock<std::mutex> lock(kvs_mutex, std::try_to_lock);
     if (lock.owns_lock()) {
         kvs.clear();
         result = score::ResultBlank{};
     }else{
-        result = score::MakeUnexpected(MyErrorCode::MutexLockFailed);
+        result = score::MakeUnexpected(ErrorCode::MutexLockFailed);
     }
 
     return result;
@@ -678,7 +250,7 @@ score::ResultBlank Kvs::reset() {
 
 /* Retrieve all keys in the KVS*/
 score::Result<std::vector<std::string_view>> Kvs::get_all_keys() {
-    score::Result<std::vector<std::string_view>> result = score::MakeUnexpected(MyErrorCode::UnmappedError);
+    score::Result<std::vector<std::string_view>> result = score::MakeUnexpected(ErrorCode::UnmappedError);
     std::unique_lock<std::mutex> lock(kvs_mutex, std::try_to_lock);
     if (lock.owns_lock()) {
         std::vector<std::string_view> keys;
@@ -688,15 +260,15 @@ score::Result<std::vector<std::string_view>> Kvs::get_all_keys() {
         }
         result = std::move(keys);
     }else{
-        result = score::MakeUnexpected(MyErrorCode::MutexLockFailed);
+        result = score::MakeUnexpected(ErrorCode::MutexLockFailed);
     }
 
     return result;
 }
 
 /* Check if a key exists*/
-score::Result<bool> Kvs::key_exists(const string_view key) {
-    score::Result<bool> result = score::MakeUnexpected(MyErrorCode::UnmappedError);
+score::Result<bool> Kvs::key_exists(const std::string_view key) {
+    score::Result<bool> result = score::MakeUnexpected(ErrorCode::UnmappedError);
     std::unique_lock<std::mutex> lock(kvs_mutex, std::try_to_lock);
     if (lock.owns_lock()) {
         auto search = kvs.find(std::string(key)); /* unordered_map find() needs string and doesnt work with string_view, workaround for c++20: heterogeneous lookup (applies to more functions) */
@@ -706,7 +278,7 @@ score::Result<bool> Kvs::key_exists(const string_view key) {
             result = false;
         }
     }else{
-        result = score::MakeUnexpected(MyErrorCode::MutexLockFailed);
+        result = score::MakeUnexpected(ErrorCode::MutexLockFailed);
     }
 
     return result;
@@ -714,7 +286,7 @@ score::Result<bool> Kvs::key_exists(const string_view key) {
 
 /* Retrieve the value associated with a key*/
 score::Result<KvsValue> Kvs::get_value(const std::string_view key) {
-    score::Result<KvsValue> result = score::MakeUnexpected(MyErrorCode::UnmappedError);
+    score::Result<KvsValue> result = score::MakeUnexpected(ErrorCode::UnmappedError);
     std::unique_lock<std::mutex> lock_kvs(kvs_mutex, std::try_to_lock);
     if (lock_kvs.owns_lock()){
         auto search_kvs = kvs.find(std::string(key));
@@ -725,12 +297,12 @@ score::Result<KvsValue> Kvs::get_value(const std::string_view key) {
             if (search_default != default_values.end()) {
                 result = search_default->second;
             } else {
-                result = score::MakeUnexpected(MyErrorCode::KeyNotFound);
+                result = score::MakeUnexpected(ErrorCode::KeyNotFound);
             }
         }
     }
     else{
-        result = score::MakeUnexpected(MyErrorCode::MutexLockFailed);
+        result = score::MakeUnexpected(ErrorCode::MutexLockFailed);
     }
 
     return result;
@@ -738,13 +310,13 @@ score::Result<KvsValue> Kvs::get_value(const std::string_view key) {
 
 /*Retrieve the default value associated with a key*/
 score::Result<KvsValue> Kvs::get_default_value(const std::string_view key) {
-    score::Result<KvsValue> result = score::MakeUnexpected(MyErrorCode::UnmappedError);
+    score::Result<KvsValue> result = score::MakeUnexpected(ErrorCode::UnmappedError);
 
     auto search = default_values.find(std::string(key));
     if (search != default_values.end()) {
         result = search->second;
     } else {
-        result = score::MakeUnexpected(MyErrorCode::KeyNotFound);
+        result = score::MakeUnexpected(ErrorCode::KeyNotFound);
     }
 
     return result;
@@ -753,15 +325,15 @@ score::Result<KvsValue> Kvs::get_default_value(const std::string_view key) {
 /* Resets a Key to its default value (Deletes written key if default is available) */
 score::ResultBlank Kvs::reset_key(const std::string_view key)
 {
-    score::ResultBlank result = score::MakeUnexpected(MyErrorCode::UnmappedError);
+    score::ResultBlank result = score::MakeUnexpected(ErrorCode::UnmappedError);
     std::unique_lock<std::mutex> lock_kvs(kvs_mutex, std::try_to_lock);
     if (!lock_kvs.owns_lock()) {
-        result = score::MakeUnexpected(MyErrorCode::MutexLockFailed);
+        result = score::MakeUnexpected(ErrorCode::MutexLockFailed);
     }
     else {
         auto search_default = default_values.find(std::string(key));
         if (search_default == default_values.end()) {
-            result = score::MakeUnexpected(MyErrorCode::KeyDefaultNotFound);
+            result = score::MakeUnexpected(ErrorCode::KeyDefaultNotFound);
         }
         else {
             auto search_kvs = kvs.find(std::string(key));
@@ -779,7 +351,7 @@ score::ResultBlank Kvs::reset_key(const std::string_view key)
 
 /* Check if a key has a default value*/
 score::Result<bool> Kvs::has_default_value(const std::string_view key) {
-    score::Result<bool> result = score::MakeUnexpected(MyErrorCode::UnmappedError);
+    score::Result<bool> result = score::MakeUnexpected(ErrorCode::UnmappedError);
 
     auto search = default_values.find(std::string(key)); /* unordered_map find() needs string and doesnt work with string_view, workaround for c++20: heterogeneous lookup (applies to more functions) */
     if (search != default_values.end()) {
@@ -793,31 +365,31 @@ score::Result<bool> Kvs::has_default_value(const std::string_view key) {
 
 /* Set the value for a key*/
 score::ResultBlank Kvs::set_value(const std::string_view key, const KvsValue& value) {
-    score::ResultBlank result = score::MakeUnexpected(MyErrorCode::UnmappedError);
+    score::ResultBlank result = score::MakeUnexpected(ErrorCode::UnmappedError);
     std::unique_lock<std::mutex> lock(kvs_mutex, std::try_to_lock);
     if (lock.owns_lock()) {
         kvs.insert_or_assign(std::string(key), value);
         result = score::ResultBlank{};
     }else{
-        result = score::MakeUnexpected(MyErrorCode::MutexLockFailed);
+        result = score::MakeUnexpected(ErrorCode::MutexLockFailed);
     }
     
     return result;
 }
 
 /* Remove a key-value pair*/
-score::ResultBlank Kvs::remove_key(const string_view key) {
-    score::ResultBlank result = score::MakeUnexpected(MyErrorCode::UnmappedError);
+score::ResultBlank Kvs::remove_key(const std::string_view key) {
+    score::ResultBlank result = score::MakeUnexpected(ErrorCode::UnmappedError);
     std::unique_lock<std::mutex> lock(kvs_mutex, std::try_to_lock);
     if (lock.owns_lock()) {
         const auto erased = kvs.erase(std::string(key));
         if (erased > 0U) {
             result = score::ResultBlank{};
         } else {
-            result = score::MakeUnexpected(MyErrorCode::KeyNotFound);
+            result = score::MakeUnexpected(ErrorCode::KeyNotFound);
         }
     }else{
-        result = score::MakeUnexpected(MyErrorCode::MutexLockFailed);
+        result = score::MakeUnexpected(ErrorCode::MutexLockFailed);
     }
 
     return result;
@@ -826,24 +398,24 @@ score::ResultBlank Kvs::remove_key(const string_view key) {
 /* Helper Function to write JSON data to a file for flush process (also adds Hash file)*/
 score::ResultBlank Kvs::write_json_data(const std::string& buf)
 {
-    score::ResultBlank result = score::MakeUnexpected(MyErrorCode::UnmappedError);
+    score::ResultBlank result = score::MakeUnexpected(ErrorCode::UnmappedError);
     score::filesystem::Path json_path{filename_prefix.Native() + "_0.json"};
     score::filesystem::Path dir = json_path.ParentPath();
     if  (!dir.Empty()) {
         const auto create_path_res = filesystem->standard->CreateDirectories(dir);
         if(!create_path_res.has_value()) {
-            result = score::MakeUnexpected(MyErrorCode::PhysicalStorageFailure);
+            result = score::MakeUnexpected(ErrorCode::PhysicalStorageFailure);
         } else {
             std::ofstream out(json_path.CStr(), std::ios::binary);
             if (!out.write(buf.data(), buf.size())) {
-                result = score::MakeUnexpected(MyErrorCode::PhysicalStorageFailure);
+                result = score::MakeUnexpected(ErrorCode::PhysicalStorageFailure);
             } else {
                 /* Write Hash File */
                 std::array<uint8_t, 4> hash_bytes = get_hash_bytes(buf);
                 score::filesystem::Path fn_hash = filename_prefix.Native() + "_0.hash";
                 std::ofstream hout(fn_hash.CStr(), std::ios::binary);
                 if (!hout.write(reinterpret_cast<const char*>(hash_bytes.data()), hash_bytes.size())) {
-                    result = score::MakeUnexpected(MyErrorCode::PhysicalStorageFailure);
+                    result = score::MakeUnexpected(ErrorCode::PhysicalStorageFailure);
                 } else {
                     result = score::ResultBlank{};
                 }
@@ -851,7 +423,7 @@ score::ResultBlank Kvs::write_json_data(const std::string& buf)
         }
     } else {
         std::cerr << "Failed to create directory for KVS file '" << json_path.CStr() << "'\n";
-        result = score::MakeUnexpected(MyErrorCode::PhysicalStorageFailure);
+        result = score::MakeUnexpected(ErrorCode::PhysicalStorageFailure);
     }
 
     return result;
@@ -859,7 +431,7 @@ score::ResultBlank Kvs::write_json_data(const std::string& buf)
 
 /* Flush the key-value store*/
 score::ResultBlank Kvs::flush() {
-    score::ResultBlank result = score::MakeUnexpected(MyErrorCode::UnmappedError);
+    score::ResultBlank result = score::MakeUnexpected(ErrorCode::UnmappedError);
     /* Create JSON Object */
     score::json::Object root_obj;
     bool error = false;
@@ -869,7 +441,7 @@ score::ResultBlank Kvs::flush() {
             for (auto const& [key, value] : kvs) {
                 auto conv = kvsvalue_to_any(value);
                 if (!conv) {
-                    result = score::MakeUnexpected(static_cast<MyErrorCode>(*conv.error()));
+                    result = score::MakeUnexpected(static_cast<ErrorCode>(*conv.error()));
                     error = true;
                     break;
                 }else{
@@ -880,7 +452,7 @@ score::ResultBlank Kvs::flush() {
                 }
             }
         } else {
-            result = score::MakeUnexpected(MyErrorCode::MutexLockFailed);
+            result = score::MakeUnexpected(ErrorCode::MutexLockFailed);
             error = true;
         }
     }
@@ -889,7 +461,7 @@ score::ResultBlank Kvs::flush() {
         /* Serialize Buffer */
         auto buf_res = writer->ToBuffer(root_obj);
         if (!buf_res) {
-            result = score::MakeUnexpected(MyErrorCode::JsonGeneratorError);
+            result = score::MakeUnexpected(ErrorCode::JsonGeneratorError);
         }else{
             /* Rotate Snapshots */
             auto rotate_result = snapshot_rotate();
@@ -908,7 +480,7 @@ score::ResultBlank Kvs::flush() {
 
 /* Retrieve the snapshot count*/
 score::Result<size_t> Kvs::snapshot_count() const {
-    score::Result<size_t> result = score::MakeUnexpected(MyErrorCode::UnmappedError);
+    score::Result<size_t> result = score::MakeUnexpected(ErrorCode::UnmappedError);
     size_t count = 0;
     bool error = false;
     for (size_t idx = 1; idx <= KVS_MAX_SNAPSHOTS; ++idx) {
@@ -925,7 +497,7 @@ score::Result<size_t> Kvs::snapshot_count() const {
         count = idx;
     }
     if (error) {
-        result = score::MakeUnexpected(MyErrorCode::PhysicalStorageFailure);
+        result = score::MakeUnexpected(ErrorCode::PhysicalStorageFailure);
     } else {
         result = count;
     }
@@ -940,7 +512,7 @@ size_t Kvs::snapshot_max_count() const {
 
 /* Rotate Snapshots */
 score::ResultBlank Kvs::snapshot_rotate() {
-    score::ResultBlank result = score::MakeUnexpected(MyErrorCode::UnmappedError);
+    score::ResultBlank result = score::MakeUnexpected(ErrorCode::UnmappedError);
     std::unique_lock<std::mutex> lock(kvs_mutex, std::try_to_lock);
     if (lock.owns_lock()) {
         bool error = false;
@@ -957,7 +529,7 @@ score::ResultBlank Kvs::snapshot_rotate() {
                 if (errno != ENOENT) {
                     error = true;
                     cout << "error: could not rename hash file " << snap_old << ". Rename Errorcode " << errno << endl;
-                    result = score::MakeUnexpected(MyErrorCode::PhysicalStorageFailure);
+                    result = score::MakeUnexpected(ErrorCode::PhysicalStorageFailure);
                 }
             }
             if(!error){
@@ -967,7 +539,7 @@ score::ResultBlank Kvs::snapshot_rotate() {
                     if (errno != ENOENT) {
                         error = true;
                         cout << "error: could not rename snapshot file " << snap_old << ". Rename Errorcode " << errno << endl;
-                        result = score::MakeUnexpected(MyErrorCode::PhysicalStorageFailure);
+                        result = score::MakeUnexpected(ErrorCode::PhysicalStorageFailure);
                     }
                 }
             }
@@ -979,7 +551,7 @@ score::ResultBlank Kvs::snapshot_rotate() {
             result = score::ResultBlank{};
         }
     } else {
-        result = score::MakeUnexpected(MyErrorCode::MutexLockFailed);
+        result = score::MakeUnexpected(ErrorCode::MutexLockFailed);
     }
 
     return result;
@@ -987,25 +559,25 @@ score::ResultBlank Kvs::snapshot_rotate() {
 
 /* Restore the key-value store from a snapshot*/
 score::ResultBlank Kvs::snapshot_restore(const SnapshotId& snapshot_id) {
-    score::ResultBlank result = score::MakeUnexpected(MyErrorCode::UnmappedError);
+    score::ResultBlank result = score::MakeUnexpected(ErrorCode::UnmappedError);
     std::unique_lock<std::mutex> lock(kvs_mutex, std::try_to_lock);
     if (lock.owns_lock()) {
         auto snapshot_count_res = snapshot_count();
         if (!snapshot_count_res) {
-            result = score::MakeUnexpected(static_cast<MyErrorCode>(*snapshot_count_res.error()));
+            result = score::MakeUnexpected(static_cast<ErrorCode>(*snapshot_count_res.error()));
         }else{
             /* Fail if the snapshot ID is the current KVS */
             if (0 == snapshot_id.id) {
-                result = score::MakeUnexpected(MyErrorCode::InvalidSnapshotId);
+                result = score::MakeUnexpected(ErrorCode::InvalidSnapshotId);
             }else if (snapshot_count_res.value() < snapshot_id.id) {
-                result = score::MakeUnexpected(MyErrorCode::InvalidSnapshotId);
+                result = score::MakeUnexpected(ErrorCode::InvalidSnapshotId);
             }else{
                 score::filesystem::Path restore_path = filename_prefix.Native() + "_" + to_string(snapshot_id.id);
                 auto data_res = open_json(
                     restore_path,
                     OpenJsonNeedFile::Required);
                 if (!data_res) {
-                    result = score::MakeUnexpected(static_cast<MyErrorCode>(*data_res.error()));
+                    result = score::MakeUnexpected(static_cast<ErrorCode>(*data_res.error()));
                 }else{
                     kvs = std::move(data_res.value());
                     result = score::ResultBlank{};
@@ -1013,7 +585,7 @@ score::ResultBlank Kvs::snapshot_restore(const SnapshotId& snapshot_id) {
             }
         }
     } else {
-        result = score::MakeUnexpected(MyErrorCode::MutexLockFailed);
+        result = score::MakeUnexpected(ErrorCode::MutexLockFailed);
     }
     
     return result;
@@ -1022,17 +594,17 @@ score::ResultBlank Kvs::snapshot_restore(const SnapshotId& snapshot_id) {
 /* Get the filename for a snapshot*/
 score::Result<score::filesystem::Path> Kvs::get_kvs_filename(const SnapshotId& snapshot_id) const {
     score::filesystem::Path filename = filename_prefix.Native() + "_" + std::to_string(snapshot_id.id) + ".json";
-    score::Result<score::filesystem::Path> result = score::MakeUnexpected(MyErrorCode::UnmappedError);
+    score::Result<score::filesystem::Path> result = score::MakeUnexpected(ErrorCode::UnmappedError);
 
     const auto fname_exists_res = filesystem->standard->Exists(filename);
     if (fname_exists_res) {
         if (false == fname_exists_res.value()) {
-            result = score::MakeUnexpected(MyErrorCode::FileNotFound);
+            result = score::MakeUnexpected(ErrorCode::FileNotFound);
         } else {
             result = filename;
         }
     } else {
-        result = score::MakeUnexpected(static_cast<MyErrorCode>(*fname_exists_res.error()));
+        result = score::MakeUnexpected(static_cast<ErrorCode>(*fname_exists_res.error()));
     }
     return result;
 }
@@ -1040,17 +612,19 @@ score::Result<score::filesystem::Path> Kvs::get_kvs_filename(const SnapshotId& s
 /* Get the hash filename for a snapshot*/
 score::Result<score::filesystem::Path> Kvs::get_hash_filename(const SnapshotId& snapshot_id) const {
     score::filesystem::Path filename = filename_prefix.Native() + "_" + std::to_string(snapshot_id.id) + ".hash";
-    score::Result<score::filesystem::Path> result = score::MakeUnexpected(MyErrorCode::UnmappedError);
+    score::Result<score::filesystem::Path> result = score::MakeUnexpected(ErrorCode::UnmappedError);
 
     const auto fname_exists_res = filesystem->standard->Exists(filename);
     if (fname_exists_res) {
         if (false == fname_exists_res.value()) {
-            result = score::MakeUnexpected(MyErrorCode::FileNotFound);
+            result = score::MakeUnexpected(ErrorCode::FileNotFound);
         } else {
             result = filename;
         }
     } else {
-        result = score::MakeUnexpected(static_cast<MyErrorCode>(*fname_exists_res.error()));
+        result = score::MakeUnexpected(static_cast<ErrorCode>(*fname_exists_res.error()));
     }
     return result;
 }
+
+} /* namespace score::mw::pers::kvs */

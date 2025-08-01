@@ -11,24 +11,21 @@
 # SPDX-License-Identifier: Apache-2.0
 # *******************************************************************************
 
-cc_library(
-    name = "json_stubs",
-    hdrs = glob(["stubs/score/json/**/*.h"]),
-    includes = ["stubs"],
-    visibility = [
-        "//tests/cpp:__pkg__",
-    ],
-)
-
 cc_test(
     name = "test_kvs_cpp",
     size = "small",
     srcs = [
         "test_kvs.cpp",
+        "test_kvs_builder.cpp",
+        "test_kvs_error.cpp",
+        "test_kvs_general.cpp",
+        "test_kvs_general.hpp",
+        "test_kvs_helper.cpp",
     ],
     visibility = ["//:__pkg__"],
     deps = [
         "//:kvs_cpp",
+        "//src/cpp/src/internal:kvs_helper",
         "@googletest//:gtest_main",
         "@score-baselibs//score/filesystem:filesystem",
         "@score-baselibs//score/filesystem:mock",
@@ -46,6 +43,7 @@ cc_test(
     visibility = ["//:__pkg__"],
     deps = [
         "//:kvs_cpp",
+        "//src/cpp/src/internal:kvs_helper",
         "@google_benchmark//:benchmark",
         "@score-baselibs//score/filesystem:filesystem",
         "@score-baselibs//score/json",

@@ -50,6 +50,18 @@ impl KvsApi for MockKvs {
         self.map.lock().unwrap().clear();
         Ok(())
     }
+    fn reset_key(&self, key: &str) -> Result<(), ErrorCode> {
+        if self.fail {
+            return Err(ErrorCode::UnmappedError);
+        }
+        let mut map = self.map.lock().unwrap();
+        if map.contains_key(key) {
+            map.remove(key);
+            Ok(())
+        } else {
+            Err(ErrorCode::KeyDefaultNotFound)
+        }
+    }
     fn get_all_keys(&self) -> Result<Vec<String>, ErrorCode> {
         if self.fail {
             return Err(ErrorCode::UnmappedError);
@@ -183,6 +195,7 @@ mod tests {
         assert_eq!(kvs_fail.snapshot_count(), 9999);
         assert!(kvs_fail.flush().is_err());
         assert!(kvs_fail.reset().is_err());
+        assert!(kvs_fail.reset_key("a").is_err());
         assert!(kvs_fail.get_default_value("a").is_err());
         assert!(kvs_fail.is_value_default("a").is_err());
         assert!(kvs_fail.get_kvs_filename(SnapshotId::new(0)).is_err());

@@ -18,7 +18,7 @@ use tempfile::tempdir;
 fn cit_persistency_flush_on_exit_enabled() -> Result<(), ErrorCode> {
     // Temp directory.
     let dir = tempdir()?;
-    let dir_path = dir.path().to_string_lossy().to_string();
+    let dir_string = dir.path().to_string_lossy().to_string();
 
     // Values of each type.
     let mut kv_values: HashMap<String, KvsValue> = HashMap::new();
@@ -44,7 +44,7 @@ fn cit_persistency_flush_on_exit_enabled() -> Result<(), ErrorCode> {
             InstanceId::new(0),
             OpenNeedDefaults::Optional,
             OpenNeedKvs::Optional,
-            Some(dir_path.clone()),
+            Some(dir_string.clone()),
         )?;
 
         // Set values.
@@ -61,7 +61,7 @@ fn cit_persistency_flush_on_exit_enabled() -> Result<(), ErrorCode> {
             InstanceId::new(0),
             OpenNeedDefaults::Optional,
             OpenNeedKvs::Required,
-            Some(dir_path),
+            Some(dir_string),
         )?;
 
         // Compare values.
@@ -78,7 +78,7 @@ fn cit_persistency_flush_on_exit_enabled() -> Result<(), ErrorCode> {
 fn cit_persistency_flush_on_exit_disabled_drop_data() -> Result<(), ErrorCode> {
     // Temp directory.
     let dir = tempdir()?;
-    let dir_path = dir.path().to_string_lossy().to_string();
+    let dir_string = dir.path().to_string_lossy().to_string();
 
     // Values of each type.
     let mut kv_values: HashMap<String, KvsValue> = HashMap::new();
@@ -104,7 +104,7 @@ fn cit_persistency_flush_on_exit_disabled_drop_data() -> Result<(), ErrorCode> {
             InstanceId::new(0),
             OpenNeedDefaults::Optional,
             OpenNeedKvs::Optional,
-            Some(dir_path.clone()),
+            Some(dir_string.clone()),
         )?;
         kvs.flush_on_exit(false);
 
@@ -122,7 +122,7 @@ fn cit_persistency_flush_on_exit_disabled_drop_data() -> Result<(), ErrorCode> {
             InstanceId::new(0),
             OpenNeedDefaults::Optional,
             OpenNeedKvs::Optional,
-            Some(dir_path),
+            Some(dir_string),
         )?;
 
         // Make sure no keys are defined.
@@ -136,7 +136,7 @@ fn cit_persistency_flush_on_exit_disabled_drop_data() -> Result<(), ErrorCode> {
 fn cit_persistency_flush_on_exit_disabled_manual_flush() -> Result<(), ErrorCode> {
     // Temp directory.
     let dir = tempdir()?;
-    let dir_path = dir.path().to_string_lossy().to_string();
+    let dir_string = dir.path().to_string_lossy().to_string();
 
     // Values of each type.
     let mut kv_values: HashMap<String, KvsValue> = HashMap::new();
@@ -162,7 +162,7 @@ fn cit_persistency_flush_on_exit_disabled_manual_flush() -> Result<(), ErrorCode
             InstanceId::new(0),
             OpenNeedDefaults::Optional,
             OpenNeedKvs::Optional,
-            Some(dir_path.clone()),
+            Some(dir_string.clone()),
         )?;
         kvs.flush_on_exit(false);
 
@@ -183,7 +183,7 @@ fn cit_persistency_flush_on_exit_disabled_manual_flush() -> Result<(), ErrorCode
             InstanceId::new(0),
             OpenNeedDefaults::Optional,
             OpenNeedKvs::Required,
-            Some(dir_path),
+            Some(dir_string),
         )?;
 
         // Compare values.

@@ -1,8 +1,9 @@
 [workspace]
 resolver = "2"
-members=[
+members = [
     "src/rust/rust_kvs",
-    "src/rust/rust_kvs_tool"
+    "src/rust/rust_kvs_tool",
+    "tests/rust_test_scenarios",
 ]
 
 [workspace.package]

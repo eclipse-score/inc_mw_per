@@ -19,7 +19,7 @@ use crate::kvs_value::KvsValue;
 
 /// Instance ID
 #[derive(Clone, Debug, PartialEq)]
-pub struct InstanceId(usize);
+pub struct InstanceId(pub usize);
 
 /// Snapshot ID
 #[derive(Clone, Debug, PartialEq)]

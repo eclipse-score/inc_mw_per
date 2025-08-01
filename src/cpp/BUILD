@@ -21,7 +21,10 @@ cc_library(
     ],
     hdrs = ["inc/kvs.hpp"],
     includes = ["inc"],
-    visibility = ["//:__pkg__"],
+    visibility = [
+        "//:__pkg__",
+        "//tests/cpp_test_scenarios:__pkg__",
+    ],
     deps = [
         "@score-baselibs//score/filesystem:filesystem",
         "@score-baselibs//score/json",

@@ -116,6 +116,8 @@ impl<T: KvsApi> KvsBuilder<T> {
 mod tests {
     use super::*;
     use crate::kvs_mock::MockKvs;
+    use crate::Kvs;
+    use tempfile::tempdir;
 
     #[test]
     fn test_builder_new_sets_instance_id() {
@@ -126,17 +128,45 @@ mod tests {
     }
 
     #[test]
-    fn test_builder_need_defaults() {
+    fn test_builder_need_defaults_ok() {
         let builder = KvsBuilder::<MockKvs>::new(InstanceId::new(1)).need_defaults(true);
         let kvs = builder.build();
         assert!(kvs.is_ok());
     }
 
     #[test]
-    fn test_builder_need_kvs() {
+    fn test_builder_need_defaults_fail() {
+        let dir = tempdir().unwrap();
+        let dir_string = dir.path().to_string_lossy().to_string();
+
+        let kvs = KvsBuilder::<Kvs>::new(InstanceId::new(0))
+            .need_defaults(true)
+            .need_kvs(false)
+            .dir(dir_string)
+            .build();
+
+        assert_eq!(kvs.err(), Some(ErrorCode::KvsFileReadError));
+    }
+
+    #[test]
+    fn test_builder_need_kvs_ok() {
         let builder = KvsBuilder::<MockKvs>::new(InstanceId::new(1)).need_kvs(true);
         let kvs = builder.build();
         assert!(kvs.is_ok());
+    }
+
+    #[test]
+    fn test_builder_need_kvs_fail() {
+        let dir = tempdir().unwrap();
+        let dir_string = dir.path().to_string_lossy().to_string();
+
+        let kvs = KvsBuilder::<Kvs>::new(InstanceId::new(0))
+            .need_defaults(false)
+            .need_kvs(true)
+            .dir(dir_string)
+            .build();
+
+        assert_eq!(kvs.err(), Some(ErrorCode::KvsFileReadError));
     }
 
     #[test]

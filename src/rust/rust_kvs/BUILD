@@ -10,7 +10,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 # *******************************************************************************
-load("@crates//:defs.bzl", "all_crate_deps")
+load("@score_persistency_crates//:defs.bzl", "all_crate_deps")
 load("@rules_rust//rust:defs.bzl", "rust_library", "rust_test")
 
 rust_library(
@@ -52,7 +52,7 @@ rust_test(
     name = "cit_persistency",
     srcs = [
         "tests/cit_persistency.rs",
-        "tests/common.rs",
+        "tests/common/mod.rs",
     ],
     tags = __cit_tags,
     deps = __cit_deps,
@@ -69,7 +69,7 @@ rust_test(
     name = "cit_supported_datatypes",
     srcs = [
         "tests/cit_supported_datatypes.rs",
-        "tests/common.rs",
+        "tests/common/mod.rs",
     ],
     tags = __cit_tags,
     deps = __cit_deps,

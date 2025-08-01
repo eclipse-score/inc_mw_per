@@ -22,6 +22,19 @@ rust_library(
     ),
 )
 
+rust_test(
+    name = "tests",
+    crate = "rust_kvs",
+    tags = [
+        "unit_tests",
+        "ut",
+    ],
+    deps = all_crate_deps(
+        normal = True,
+        normal_dev = True,
+    ),
+)
+
 __cit_deps = [
     ":rust_kvs",
 ] + all_crate_deps(
@@ -52,7 +65,7 @@ rust_test(
     name = "cit_persistency",
     srcs = [
         "tests/cit_persistency.rs",
-        "tests/common.rs",
+        "tests/common/mod.rs",
     ],
     tags = __cit_tags,
     deps = __cit_deps,
@@ -69,7 +82,7 @@ rust_test(
     name = "cit_supported_datatypes",
     srcs = [
         "tests/cit_supported_datatypes.rs",
-        "tests/common.rs",
+        "tests/common/mod.rs",
     ],
     tags = __cit_tags,
     deps = __cit_deps,

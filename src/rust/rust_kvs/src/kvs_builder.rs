@@ -115,44 +115,187 @@ impl<T: KvsApi> KvsBuilder<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::kvs_mock::MockKvs;
+    use crate::kvs_api::{OpenNeedDefaults, OpenNeedKvs, SnapshotId};
+    use crate::kvs_value::KvsValue;
+    use std::path::PathBuf;
+
+    /// Empty KVS stub with exposed builder parameters.
+    struct StubKvs {
+        instance_id: InstanceId,
+        need_defaults: OpenNeedDefaults,
+        need_kvs: OpenNeedKvs,
+        dir: Option<String>,
+    }
+
+    impl StubKvs {
+        fn instance_id(&self) -> &InstanceId {
+            &self.instance_id
+        }
+
+        fn need_defaults(&self) -> &OpenNeedDefaults {
+            &self.need_defaults
+        }
+
+        fn need_kvs(&self) -> &OpenNeedKvs {
+            &self.need_kvs
+        }
+
+        fn dir(&self) -> &Option<String> {
+            &self.dir
+        }
+    }
+
+    impl KvsApi for StubKvs {
+        fn open(
+            instance_id: InstanceId,
+            need_defaults: OpenNeedDefaults,
+            need_kvs: OpenNeedKvs,
+            dir: Option<String>,
+        ) -> Result<Self, ErrorCode>
+        where
+            Self: Sized,
+        {
+            Ok(Self {
+                instance_id,
+                need_defaults,
+                need_kvs,
+                dir,
+            })
+        }
+
+        fn reset(&self) -> Result<(), ErrorCode> {
+            unimplemented!()
+        }
+
+        fn get_all_keys(&self) -> Result<Vec<String>, ErrorCode> {
+            unimplemented!()
+        }
+
+        fn key_exists(&self, _key: &str) -> Result<bool, ErrorCode> {
+            unimplemented!()
+        }
+
+        fn get_value(&self, _key: &str) -> Result<crate::prelude::KvsValue, ErrorCode> {
+            unimplemented!()
+        }
+
+        fn get_value_as<T>(&self, _key: &str) -> Result<T, ErrorCode>
+        where
+            for<'a> T: TryFrom<&'a KvsValue> + Clone,
+            for<'a> <T as TryFrom<&'a KvsValue>>::Error: std::fmt::Debug,
+        {
+            unimplemented!()
+        }
+
+        fn get_default_value(&self, _key: &str) -> Result<crate::prelude::KvsValue, ErrorCode> {
+            unimplemented!()
+        }
+
+        fn is_value_default(&self, _key: &str) -> Result<bool, ErrorCode> {
+            unimplemented!()
+        }
+
+        fn set_value<S: Into<String>, J: Into<crate::prelude::KvsValue>>(
+            &self,
+            _key: S,
+            _value: J,
+        ) -> Result<(), ErrorCode> {
+            unimplemented!()
+        }
+
+        fn remove_key(&self, _key: &str) -> Result<(), ErrorCode> {
+            unimplemented!()
+        }
+
+        fn flush_on_exit(&self, _flush_on_exit: bool) {
+            unimplemented!()
+        }
+
+        fn flush(&self) -> Result<(), ErrorCode> {
+            unimplemented!()
+        }
+
+        fn snapshot_count(&self) -> usize {
+            unimplemented!()
+        }
+
+        fn snapshot_max_count() -> usize
+        where
+            Self: Sized,
+        {
+            unimplemented!()
+        }
+
+        fn snapshot_restore(&self, _id: SnapshotId) -> Result<(), ErrorCode> {
+            unimplemented!()
+        }
+
+        fn get_kvs_filename(&self, _id: SnapshotId) -> Result<PathBuf, ErrorCode> {
+            unimplemented!()
+        }
+
+        fn get_hash_filename(&self, _id: SnapshotId) -> Result<PathBuf, ErrorCode> {
+            unimplemented!()
+        }
+    }
 
     #[test]
-    fn test_builder_new_sets_instance_id() {
-        let instance_id = InstanceId::new(42);
-        let builder = KvsBuilder::<MockKvs>::new(instance_id.clone());
-        let kvs = builder.build();
-        assert!(kvs.is_ok());
+    fn test_builder_only_instance_id() {
+        let instance_id = InstanceId(42);
+        let builder = KvsBuilder::<StubKvs>::new(instance_id.clone());
+        let kvs = builder.build().unwrap();
+        assert_eq!(kvs.instance_id().clone(), instance_id);
+        assert_eq!(kvs.need_defaults().clone(), OpenNeedDefaults::Optional);
+        assert_eq!(kvs.need_kvs().clone(), OpenNeedKvs::Optional);
+        assert!(kvs.dir().is_none());
     }
 
     #[test]
     fn test_builder_need_defaults() {
-        let builder = KvsBuilder::<MockKvs>::new(InstanceId::new(1)).need_defaults(true);
-        let kvs = builder.build();
-        assert!(kvs.is_ok());
+        let instance_id = InstanceId(1);
+        let builder = KvsBuilder::<StubKvs>::new(instance_id.clone()).need_defaults(true);
+        let kvs = builder.build().unwrap();
+        assert_eq!(kvs.instance_id().clone(), instance_id);
+        assert_eq!(kvs.need_defaults().clone(), OpenNeedDefaults::Required);
+        assert_eq!(kvs.need_kvs().clone(), OpenNeedKvs::Optional);
+        assert!(kvs.dir().is_none());
     }
 
     #[test]
     fn test_builder_need_kvs() {
-        let builder = KvsBuilder::<MockKvs>::new(InstanceId::new(1)).need_kvs(true);
-        let kvs = builder.build();
-        assert!(kvs.is_ok());
+        let instance_id = InstanceId(1);
+        let builder = KvsBuilder::<StubKvs>::new(instance_id.clone()).need_kvs(true);
+        let kvs = builder.build().unwrap();
+        assert_eq!(kvs.instance_id().clone(), instance_id);
+        assert_eq!(kvs.need_defaults().clone(), OpenNeedDefaults::Optional);
+        assert_eq!(kvs.need_kvs().clone(), OpenNeedKvs::Required);
+        assert!(kvs.dir().is_none());
     }
 
     #[test]
     fn test_builder_dir() {
-        let builder = KvsBuilder::<MockKvs>::new(InstanceId::new(1)).dir("/tmp/test_kvs");
-        let kvs = builder.build();
-        assert!(kvs.is_ok());
+        let instance_id = InstanceId(1);
+        let dir = "/tmp/test_kvs".to_string();
+        let builder = KvsBuilder::<StubKvs>::new(instance_id.clone()).dir(dir.clone());
+        let kvs = builder.build().unwrap();
+        assert_eq!(kvs.instance_id().clone(), instance_id);
+        assert_eq!(kvs.need_defaults().clone(), OpenNeedDefaults::Optional);
+        assert_eq!(kvs.need_kvs().clone(), OpenNeedKvs::Optional);
+        assert!(kvs.dir().clone().is_some_and(|p| p == dir));
     }
 
     #[test]
     fn test_builder_chained() {
-        let builder = KvsBuilder::<MockKvs>::new(InstanceId::new(1))
+        let instance_id = InstanceId(1);
+        let dir = "/tmp/test_kvs".to_string();
+        let builder = KvsBuilder::<StubKvs>::new(instance_id.clone())
             .need_defaults(true)
             .need_kvs(true)
-            .dir("/tmp/test_kvs2");
-        let kvs = builder.build();
-        assert!(kvs.is_ok());
+            .dir(dir.clone());
+        let kvs = builder.build().unwrap();
+        assert_eq!(kvs.instance_id().clone(), instance_id);
+        assert_eq!(kvs.need_defaults().clone(), OpenNeedDefaults::Required);
+        assert_eq!(kvs.need_kvs().clone(), OpenNeedKvs::Required);
+        assert!(kvs.dir().clone().is_some_and(|p| p == dir));
     }
 }

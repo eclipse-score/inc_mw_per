@@ -592,10 +592,10 @@ impl<J: KvsBackend> Drop for GenericKvs<J> {
 
 #[cfg(test)]
 mod tests {
-
     use super::*;
     use crate::Kvs;
     use tempfile::tempdir;
+    use tinyjson::{JsonGenerator, JsonValue};
 
     mod mock_backend {
         use super::*;
@@ -956,5 +956,480 @@ mod tests {
             !kvs.flush_on_exit.load(std::sync::atomic::Ordering::Relaxed),
             "Expected flush_on_exit to be false"
         );
+    }
+
+    /// Create a KVS, close it, modify checksum and try to reopen it.
+    #[test]
+    fn test_checksum_wrong() {
+        let dir = tempdir().unwrap();
+        let dir_string = dir.path().to_string_lossy().to_string();
+
+        let kvs = Kvs::open(
+            InstanceId::new(0),
+            OpenNeedDefaults::Optional,
+            OpenNeedKvs::Optional,
+            Some(dir_string.clone()),
+        )
+        .unwrap();
+
+        kvs.set_value("number", 123.0).unwrap();
+        kvs.set_value("bool", true).unwrap();
+        kvs.set_value("string", "Hello".to_string()).unwrap();
+        kvs.set_value("null", ()).unwrap();
+        kvs.set_value(
+            "array",
+            vec![
+                KvsValue::from(456.0),
+                false.into(),
+                "Bye".to_string().into(),
+            ],
+        )
+        .unwrap();
+
+        kvs.flush().unwrap();
+
+        // remember hash filename
+        let hash_filename = kvs.get_hash_filename(SnapshotId::new(0)).unwrap();
+
+        // modify the checksum
+        std::fs::write(hash_filename, vec![0x12, 0x34, 0x56, 0x78]).unwrap();
+
+        // opening must fail because of the missing checksum file
+        let kvs = Kvs::open(
+            InstanceId::new(0),
+            OpenNeedDefaults::Optional,
+            OpenNeedKvs::Required,
+            Some(dir_string.clone()),
+        );
+
+        assert_eq!(kvs.err(), Some(ErrorCode::ValidationFailed));
+    }
+
+    /// Create a KVS, close it, delete checksum and try to reopen it.
+    #[test]
+    fn test_checksum_missing() {
+        let dir = tempdir().unwrap();
+        let dir_string = dir.path().to_string_lossy().to_string();
+
+        let kvs = Kvs::open(
+            InstanceId::new(0),
+            OpenNeedDefaults::Optional,
+            OpenNeedKvs::Optional,
+            Some(dir_string.clone()),
+        )
+        .unwrap();
+
+        kvs.set_value("number", 123.0).unwrap();
+        kvs.set_value("bool", true).unwrap();
+        kvs.set_value("string", "Hello".to_string()).unwrap();
+        kvs.set_value("null", ()).unwrap();
+        kvs.set_value(
+            "array",
+            vec![
+                KvsValue::from(456.0),
+                false.into(),
+                "Bye".to_string().into(),
+            ],
+        )
+        .unwrap();
+
+        kvs.flush().unwrap();
+
+        // remember hash filename
+        let hash_filename = kvs.get_hash_filename(SnapshotId::new(0)).unwrap();
+
+        // delete the checksum
+        std::fs::remove_file(hash_filename).unwrap();
+
+        // opening must fail because of the missing checksum file
+        let kvs = Kvs::open(
+            InstanceId::new(0),
+            OpenNeedDefaults::Optional,
+            OpenNeedKvs::Required,
+            Some(dir_string.clone()),
+        );
+
+        assert_eq!(kvs.err(), Some(ErrorCode::KvsHashFileReadError));
+    }
+
+    /// Test default values
+    ///   * Default file must exist
+    ///   * Default value must be returned when key isn't set
+    ///   * Key must report that default is used
+    ///   * Key must be returned when it was written and report it
+    ///   * Change in default must be returned when key isn't set
+    ///   * Change in default must be ignored when key was once set
+    #[test]
+    fn kvs_with_defaults() {
+        let dir = tempdir().unwrap();
+        let dir_string = dir.path().to_string_lossy().to_string();
+
+        // create defaults file
+        let defaults: HashMap<String, JsonValue> = HashMap::from([
+            (
+                "number1".to_string(),
+                JsonValue::Object(HashMap::from([
+                    ("t".to_string(), JsonValue::String("f64".to_string())),
+                    ("v".to_string(), JsonValue::Number(123.0)),
+                ])),
+            ),
+            (
+                "bool1".to_string(),
+                JsonValue::Object(HashMap::from([
+                    ("t".to_string(), JsonValue::String("bool".to_string())),
+                    ("v".to_string(), JsonValue::Boolean(true)),
+                ])),
+            ),
+            (
+                "string1".to_string(),
+                JsonValue::Object(HashMap::from([
+                    ("t".to_string(), JsonValue::String("str".to_string())),
+                    ("v".to_string(), JsonValue::String("Hello".to_string())),
+                ])),
+            ),
+        ]);
+
+        let json_value = JsonValue::Object(defaults);
+        let mut buf = Vec::new();
+        let mut gen = JsonGenerator::new(&mut buf).indent("  ");
+        gen.generate(&json_value).unwrap();
+
+        let data = String::from_utf8(buf).unwrap();
+        let filepath = &dir.path().join(format!("kvs_{}_default.json", 0));
+        std::fs::write(filepath, &data).unwrap();
+
+        // create KVS
+        let kvs = Kvs::open(
+            InstanceId::new(0),
+            OpenNeedDefaults::Required,
+            OpenNeedKvs::Optional,
+            Some(dir_string.clone()),
+        )
+        .unwrap();
+
+        kvs.set_value("number2", 345.0).unwrap();
+        kvs.set_value("bool2", false).unwrap();
+        kvs.set_value("string2", "Ola".to_string()).unwrap();
+
+        assert_eq!(kvs.get_value_as::<f64>("number1").unwrap(), 123.0);
+        assert_eq!(kvs.get_value_as::<f64>("number2").unwrap(), 345.0);
+
+        assert!(kvs.get_value_as::<bool>("bool1").unwrap());
+        assert!(!kvs.get_value_as::<bool>("bool2").unwrap());
+
+        assert_eq!(
+            kvs.get_value_as::<String>("string1").unwrap(),
+            "Hello".to_string()
+        );
+        assert_eq!(
+            kvs.get_value_as::<String>("string2").unwrap(),
+            "Ola".to_string()
+        );
+
+        assert!(kvs.is_value_default("number1").unwrap());
+        assert!(!kvs.is_value_default("number2").unwrap());
+
+        assert!(kvs.is_value_default("bool1").unwrap());
+        assert!(!kvs.is_value_default("bool2").unwrap());
+
+        assert!(kvs.is_value_default("string1").unwrap());
+        assert!(!kvs.is_value_default("string2").unwrap());
+
+        // write same-as-default-value into `bool1`
+        kvs.set_value("bool1", true).unwrap();
+
+        // write not-same-as-default into `string1`
+        kvs.set_value("string1", "Bonjour".to_string()).unwrap();
+
+        // drop the current instance with flush-on-exit enabled and reopen storage
+        drop(kvs);
+
+        let kvs = Kvs::open(
+            InstanceId::new(0),
+            OpenNeedDefaults::Optional,
+            OpenNeedKvs::Required,
+            Some(dir_string.clone()),
+        )
+        .unwrap();
+
+        assert!(kvs.get_value_as::<bool>("bool1").unwrap());
+        assert!(!kvs.is_value_default("bool1").unwrap());
+
+        assert_eq!(
+            kvs.get_value_as::<String>("string1").unwrap(),
+            "Bonjour".to_string()
+        );
+        assert!(!kvs.is_value_default("string1").unwrap());
+
+        // drop the current instance with flush-on-exit enabled and reopen storage
+        drop(kvs);
+
+        // create defaults file in t-tagged format
+        let defaults: HashMap<String, JsonValue> = HashMap::from([
+            (
+                "number1".to_string(),
+                JsonValue::Object(HashMap::from([
+                    ("t".to_string(), JsonValue::String("f64".to_string())),
+                    ("v".to_string(), JsonValue::Number(987.0)),
+                ])),
+            ),
+            (
+                "bool1".to_string(),
+                JsonValue::Object(HashMap::from([
+                    ("t".to_string(), JsonValue::String("bool".to_string())),
+                    ("v".to_string(), JsonValue::Boolean(false)),
+                ])),
+            ),
+            (
+                "string1".to_string(),
+                JsonValue::Object(HashMap::from([
+                    ("t".to_string(), JsonValue::String("str".to_string())),
+                    ("v".to_string(), JsonValue::String("Hello".to_string())),
+                ])),
+            ),
+        ]);
+
+        let json_value = JsonValue::from(defaults);
+        let mut buf = Vec::new();
+        let mut gen = JsonGenerator::new(&mut buf).indent("  ");
+        gen.generate(&json_value).unwrap();
+
+        let data = String::from_utf8(buf).unwrap();
+        std::fs::write(filepath, &data).unwrap();
+
+        let kvs = Kvs::open(
+            InstanceId::new(0),
+            OpenNeedDefaults::Optional,
+            OpenNeedKvs::Required,
+            Some(dir_string.clone()),
+        )
+        .unwrap();
+
+        assert_eq!(kvs.get_value_as::<f64>("number1").unwrap(), 987.0);
+        assert!(kvs.is_value_default("number1").unwrap());
+
+        assert!(kvs.get_value_as::<bool>("bool1").unwrap());
+        assert!(!kvs.is_value_default("bool1").unwrap());
+    }
+
+    /// Create a key-value-storage without defaults
+    #[test]
+    fn kvs_without_defaults() {
+        let dir = tempdir().unwrap();
+        let dir_string = dir.path().to_string_lossy().to_string();
+
+        let kvs = Kvs::open(
+            InstanceId::new(0),
+            OpenNeedDefaults::Optional,
+            OpenNeedKvs::Optional,
+            Some(dir_string.clone()),
+        )
+        .unwrap();
+
+        kvs.set_value("number", 123.0).unwrap();
+        kvs.set_value("bool", true).unwrap();
+        kvs.set_value("string", "Hello".to_string()).unwrap();
+        kvs.set_value("null", ()).unwrap();
+        kvs.set_value(
+            "array",
+            vec![
+                KvsValue::from(456.0),
+                false.into(),
+                "Bye".to_string().into(),
+            ],
+        )
+        .unwrap();
+        kvs.set_value(
+            "object",
+            HashMap::from([
+                (String::from("sub-number"), KvsValue::from(789.0)),
+                ("sub-bool".into(), true.into()),
+                ("sub-string".into(), "Hi".to_string().into()),
+                ("sub-null".into(), ().into()),
+                (
+                    "sub-array".into(),
+                    KvsValue::from(vec![
+                        KvsValue::from(1246.0),
+                        false.into(),
+                        "Moin".to_string().into(),
+                    ]),
+                ),
+            ]),
+        )
+        .unwrap();
+
+        // drop the current instance with flush-on-exit enabled and reopen storage
+        drop(kvs);
+
+        let kvs = Kvs::open(
+            InstanceId::new(0),
+            OpenNeedDefaults::Optional,
+            OpenNeedKvs::Required,
+            Some(dir_string.clone()),
+        )
+        .unwrap();
+        assert_eq!(kvs.get_value_as::<f64>("number").unwrap(), 123.0);
+        assert!(kvs.get_value_as::<bool>("bool").unwrap());
+        assert_eq!(kvs.get_value_as::<String>("string").unwrap(), "Hello");
+        assert_eq!(kvs.get_value_as::<()>("null"), Ok(()));
+
+        let json_array = kvs.get_value_as::<Vec<KvsValue>>("array").unwrap();
+        assert_eq!(json_array[0].get(), Some(&456.0));
+        assert_eq!(json_array[1].get(), Some(&false));
+        assert_eq!(json_array[2].get(), Some(&"Bye".to_string()));
+
+        let json_map = kvs
+            .get_value_as::<HashMap<String, KvsValue>>("object")
+            .unwrap();
+        assert_eq!(json_map["sub-number"].get(), Some(&789.0));
+        assert_eq!(json_map["sub-bool"].get(), Some(&true));
+        assert_eq!(json_map["sub-string"].get(), Some(&"Hi".to_string()));
+        assert_eq!(json_map["sub-null"].get(), Some(&()));
+
+        let json_sub_array = &json_map["sub-array"];
+        assert!(
+            matches!(json_sub_array, KvsValue::Array(_)),
+            "Expected sub-array to be an Array"
+        );
+        if let KvsValue::Array(arr) = json_sub_array {
+            assert_eq!(arr[0].get(), Some(&1246.0));
+            assert_eq!(arr[1].get(), Some(&false));
+            assert_eq!(arr[2].get(), Some(&"Moin".to_string()));
+        }
+
+        // test for non-existent values
+        assert_eq!(
+            kvs.get_value_as::<String>("non-existent").err(),
+            Some(ErrorCode::KeyNotFound)
+        );
+    }
+
+    /// Create an example KVS
+    fn create_kvs(dir_string: String) -> Result<Kvs, ErrorCode> {
+        let kvs = Kvs::open(
+            InstanceId::new(0),
+            OpenNeedDefaults::Optional,
+            OpenNeedKvs::Optional,
+            Some(dir_string.clone()),
+        )?;
+
+        kvs.set_value("number", 123.0)?;
+        kvs.set_value("bool", true)?;
+        kvs.set_value("string", "Hello".to_string())?;
+        kvs.set_value("null", ())?;
+        kvs.set_value(
+            "array",
+            vec![
+                KvsValue::from(456.0),
+                false.into(),
+                "Bye".to_string().into(),
+            ],
+        )?;
+        kvs.set_value(
+            "object",
+            HashMap::from([
+                (String::from("sub-number"), KvsValue::from(789.0)),
+                ("sub-bool".into(), true.into()),
+                ("sub-string".into(), "Hi".to_string().into()),
+                ("sub-null".into(), ().into()),
+                (
+                    "sub-array".into(),
+                    KvsValue::from(vec![
+                        KvsValue::from(1246.0),
+                        false.into(),
+                        "Moin".to_string().into(),
+                    ]),
+                ),
+            ]),
+        )?;
+
+        Ok(kvs)
+    }
+
+    /// Test snapshot rotation
+    #[test]
+    fn kvs_snapshot_rotation() -> Result<(), ErrorCode> {
+        let dir = tempdir()?;
+        let dir_string = dir.path().to_string_lossy().to_string();
+
+        let max_count = Kvs::snapshot_max_count();
+        let mut kvs = create_kvs(dir_string.clone())?;
+
+        // max count is added twice to make sure we rotate once
+        let mut cnts: Vec<usize> = (0..=max_count).collect();
+        let mut cnts_post: Vec<usize> = vec![max_count];
+        cnts.append(&mut cnts_post);
+
+        // make sure the snapshot count is 0, 0, .., max_count, max_count (rotation)
+        for cnt in cnts {
+            assert_eq!(kvs.snapshot_count(), cnt);
+
+            // drop the current instance with flush-on-exit enabled and re-open it
+            drop(kvs);
+            kvs = Kvs::open(
+                InstanceId::new(0),
+                OpenNeedDefaults::Optional,
+                OpenNeedKvs::Required,
+                Some(dir_string.clone()),
+            )
+            .unwrap();
+        }
+
+        // restore the oldest snapshot
+        assert!(kvs.snapshot_restore(SnapshotId::new(max_count)).is_ok());
+
+        // try to restore a snapshot behind the last one
+        assert_eq!(
+            kvs.snapshot_restore(SnapshotId::new(max_count + 1)).err(),
+            Some(ErrorCode::InvalidSnapshotId)
+        );
+
+        Ok(())
+    }
+
+    /// Test snapshot recovery
+    #[test]
+    fn kvs_snapshot_restore() -> Result<(), ErrorCode> {
+        let dir = tempdir()?;
+        let dir_string = dir.path().to_string_lossy().to_string();
+
+        let max_count = Kvs::snapshot_max_count();
+        let mut kvs = Kvs::open(
+            InstanceId::new(0),
+            OpenNeedDefaults::Optional,
+            OpenNeedKvs::Optional,
+            Some(dir_string.clone()),
+        )?;
+
+        // we need a double zero here because after the first flush no snapshot is created
+        // and the max count is also added twice to make sure we rotate once
+        let mut cnts: Vec<usize> = vec![0];
+        let mut cnts_mid: Vec<usize> = (0..=max_count).collect();
+        let mut cnts_post: Vec<usize> = vec![max_count];
+        cnts.append(&mut cnts_mid);
+        cnts.append(&mut cnts_post);
+
+        let mut counter = 0;
+        for (idx, _) in cnts.into_iter().enumerate() {
+            counter = idx;
+            kvs.set_value("counter", counter as f64)?;
+
+            // drop the current instance with flush-on-exit enabled and re-open it
+            drop(kvs);
+            kvs = Kvs::open(
+                InstanceId::new(0),
+                OpenNeedDefaults::Optional,
+                OpenNeedKvs::Required,
+                Some(dir_string.clone()),
+            )?;
+        }
+
+        // restore snapshots and check `counter` value
+        for idx in 1..=max_count {
+            kvs.snapshot_restore(SnapshotId::new(idx))?;
+            assert_eq!(kvs.get_value_as::<f64>("counter")?, (counter - idx) as f64);
+        }
+
+        Ok(())
     }
 }

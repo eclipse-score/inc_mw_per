@@ -19,7 +19,7 @@ use crate::kvs_value::KvsValue;
 
 /// Instance ID
 #[derive(Clone, Debug, PartialEq)]
-pub struct InstanceId(usize);
+pub struct InstanceId(pub usize);
 
 /// Snapshot ID
 #[derive(Clone, Debug, PartialEq)]
@@ -52,6 +52,7 @@ impl SnapshotId {
 }
 
 /// Need-Defaults flag
+#[derive(Clone, Debug, PartialEq)]
 pub enum OpenNeedDefaults {
     /// Optional: Open defaults only if available
     Optional,
@@ -61,6 +62,7 @@ pub enum OpenNeedDefaults {
 }
 
 /// Need-KVS flag
+#[derive(Clone, Debug, PartialEq)]
 pub enum OpenNeedKvs {
     /// Optional: Use an empty KVS if no KVS is available
     Optional,

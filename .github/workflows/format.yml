@@ -22,6 +22,4 @@ on:
 
 jobs:
   formatting-check:
-    uses: qorix-group/cicd-workflows/.github/workflows/format.yml@dcalavrezo_local_cache
-    with:
-      bazel-target: "test //:format.check" # optional, this is the default
+    uses: eclipse-score/cicd-workflows/.github/workflows/format.yml@main

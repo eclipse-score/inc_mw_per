@@ -28,14 +28,14 @@ python.toolchain(
 use_repo(python)
 
 # Add GoogleTest dependency
-bazel_dep(name = "googletest", version = "1.14.0")
+bazel_dep(name = "googletest", version = "1.15.0")
 bazel_dep(name = "google_benchmark", version = "1.9.4")
 
 # Rust rules for Bazel
 bazel_dep(name = "rules_rust", version = "0.56.0")
 
 # Checker rule for CopyRight checks/fixs
-bazel_dep(name = "score_cr_checker", version = "0.2.2")
+bazel_dep(name = "score_cr_checker", version = "0.3.1")
 
 # C/C++ rules for Bazel
 bazel_dep(name = "rules_cc", version = "0.1.1")
@@ -59,7 +59,7 @@ bazel_dep(name = "score_dash_license_checker", version = "0.1.2")
 
 # Format checker
 bazel_dep(name = "score_format_checker", version = "0.1.1")
-bazel_dep(name = "aspect_rules_lint", version = "1.0.3")
+bazel_dep(name = "aspect_rules_lint", version = "1.4.4")
 bazel_dep(name = "buildifier_prebuilt", version = "8.2.0.2")
 
 #docs-as-code
@@ -95,6 +95,6 @@ archive_override(
 bazel_dep(name = "score-baselibs", version = "0.0.0")
 git_override(
     module_name = "score-baselibs",
-    commit = "ae349b99cafc1e79d98c0391a851fc5664c04ebc",
+    commit = "46923f5c4f302bd9feae0261588687aaf32e3c5c",
     remote = "https://github.com/eclipse-score/baselibs.git",
 )

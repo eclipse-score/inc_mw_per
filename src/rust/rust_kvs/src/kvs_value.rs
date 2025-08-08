@@ -115,7 +115,7 @@ impl TryFrom<&KvsValue> for () {
     fn try_from(value: &KvsValue) -> Result<Self, Self::Error> {
         match value {
             KvsValue::Null => Ok(()),
-            _ => Err("KvsValue is not Null (unit type)"),
+            _ => Err("KvsValue is not a Null (unit type)"),
         }
     }
 }
@@ -163,80 +163,282 @@ impl KvsValueGet for () {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
+mod kvs_value_tests {
+    use crate::kvs_value::{KvsMap, KvsValue};
 
     #[test]
-    fn test_from_f64() {
-        let v = KvsValue::from(1.23f64);
-        assert!(matches!(v, KvsValue::F64(x) if x == 1.23));
-    }
-
-    #[test]
-    fn test_from_i32() {
+    fn test_i32_from_ok() {
         let v = KvsValue::from(-42i32);
         assert!(matches!(v, KvsValue::I32(x) if x == -42));
     }
 
     #[test]
-    fn test_from_u32() {
+    fn test_i32_tryfrom_ok() {
+        let v = KvsValue::from(123i32);
+        assert_eq!(i32::try_from(&v).unwrap(), 123);
+    }
+
+    #[test]
+    fn test_i32_tryfrom_invalid_type() {
+        let v = KvsValue::from("abc");
+        let err = i32::try_from(&v).unwrap_err();
+        assert_eq!(err, "KvsValue is not a i32");
+    }
+
+    #[test]
+    fn test_i32_get_ok() {
+        let v = KvsValue::from(123i32);
+        assert_eq!(v.get::<i32>().unwrap().clone(), 123);
+    }
+
+    #[test]
+    fn test_i32_get_invalid_type() {
+        let v = KvsValue::from("abc");
+        assert!(v.get::<i32>().is_none());
+    }
+
+    #[test]
+    fn test_u32_from_ok() {
         let v = KvsValue::from(42u32);
         assert!(matches!(v, KvsValue::U32(x) if x == 42));
     }
 
     #[test]
-    fn test_from_i64() {
+    fn test_u32_tryfrom_ok() {
+        let v = KvsValue::from(456u32);
+        assert_eq!(u32::try_from(&v).unwrap(), 456);
+    }
+
+    #[test]
+    fn test_u32_tryfrom_invalid_type() {
+        let v = KvsValue::from(123i32);
+        let err = u32::try_from(&v).unwrap_err();
+        assert_eq!(err, "KvsValue is not a u32");
+    }
+
+    #[test]
+    fn test_u32_get_ok() {
+        let v = KvsValue::from(456u32);
+        assert_eq!(v.get::<u32>().unwrap().clone(), 456);
+    }
+
+    #[test]
+    fn test_u32_get_invalid_type() {
+        let v = KvsValue::from(123i32);
+        assert!(v.get::<u32>().is_none());
+    }
+
+    #[test]
+    fn test_i64_from_ok() {
         let v = KvsValue::from(-123456789i64);
         assert!(matches!(v, KvsValue::I64(x) if x == -123456789));
     }
 
     #[test]
-    fn test_from_u64() {
+    fn test_i64_tryfrom_ok() {
+        let v = KvsValue::from(789i64);
+        assert_eq!(i64::try_from(&v).unwrap(), 789);
+    }
+
+    #[test]
+    fn test_i64_tryfrom_invalid_type() {
+        let v = KvsValue::from("abc");
+        let err = i64::try_from(&v).unwrap_err();
+        assert_eq!(err, "KvsValue is not a i64");
+    }
+
+    #[test]
+    fn test_i64_get_ok() {
+        let v = KvsValue::from(789i64);
+        assert_eq!(v.get::<i64>().unwrap().clone(), 789);
+    }
+
+    #[test]
+    fn test_i64_get_invalid_type() {
+        let v = KvsValue::from("abc");
+        assert!(v.get::<i64>().is_none());
+    }
+
+    #[test]
+    fn test_u64_from_ok() {
         let v = KvsValue::from(123456789u64);
         assert!(matches!(v, KvsValue::U64(x) if x == 123456789));
     }
 
     #[test]
-    fn test_from_bool() {
+    fn test_u64_tryfrom_ok() {
+        let v = KvsValue::from(101112u64);
+        assert_eq!(u64::try_from(&v).unwrap(), 101112);
+    }
+
+    #[test]
+    fn test_u64_tryfrom_invalid_type() {
+        let v = KvsValue::from(123i32);
+        let err = u64::try_from(&v).unwrap_err();
+        assert_eq!(err, "KvsValue is not a u64");
+    }
+
+    #[test]
+    fn test_f64_from_ok() {
+        let v = KvsValue::from(1.23f64);
+        assert!(matches!(v, KvsValue::F64(x) if x == 1.23));
+    }
+
+    #[test]
+    fn test_f64_tryfrom_ok() {
+        let v = KvsValue::from(456.78f64);
+        assert_eq!(f64::try_from(&v).unwrap(), 456.78f64);
+    }
+
+    #[test]
+    fn test_f64_tryfrom_invalid_type() {
+        let v = KvsValue::from(true);
+        let err = f64::try_from(&v).unwrap_err();
+        assert_eq!(err, "KvsValue is not a f64");
+    }
+
+    #[test]
+    fn test_f64_get_ok() {
+        let v = KvsValue::from(456.78f64);
+        assert_eq!(v.get::<f64>().unwrap().clone(), 456.78f64);
+    }
+
+    #[test]
+    fn test_f64_get_invalid_type() {
+        let v = KvsValue::from(true);
+        assert!(v.get::<f64>().is_none());
+    }
+
+    #[test]
+    fn test_bool_from_ok() {
         let v = KvsValue::from(true);
         assert!(matches!(v, KvsValue::Boolean(true)));
     }
 
     #[test]
-    fn test_from_string() {
+    fn test_bool_tryfrom_ok() {
+        let v = KvsValue::from(true);
+        assert!(bool::try_from(&v).unwrap());
+    }
+
+    #[test]
+    fn test_bool_tryfrom_invalid_type() {
+        let v = KvsValue::from(vec![KvsValue::from(1i32)]);
+        let err = bool::try_from(&v).unwrap_err();
+        assert_eq!(err, "KvsValue is not a bool");
+    }
+
+    #[test]
+    fn test_bool_get_ok() {
+        let v = KvsValue::from(true);
+        assert!(*v.get::<bool>().unwrap());
+    }
+
+    #[test]
+    fn test_bool_get_invalid_type() {
+        let v = KvsValue::from(vec![KvsValue::from(1i32)]);
+        assert!(v.get::<bool>().is_none());
+    }
+
+    #[test]
+    fn test_string_from_ok() {
         let v = KvsValue::from(String::from("hello"));
         assert!(matches!(v, KvsValue::String(ref s) if s == "hello"));
     }
 
     #[test]
-    fn test_from_str() {
+    fn test_string_tryfrom_ok() {
+        let v = KvsValue::from("abc");
+        assert_eq!(String::try_from(&v).unwrap(), "abc");
+    }
+
+    #[test]
+    fn test_string_tryfrom_invalid_type() {
+        let v = KvsValue::from(345.6f64);
+        let err = String::try_from(&v).unwrap_err();
+        assert_eq!(err, "KvsValue is not a String");
+    }
+
+    #[test]
+    fn test_string_get_ok() {
+        let v = KvsValue::from("abc");
+        assert_eq!(v.get::<String>().unwrap().clone(), "abc");
+    }
+
+    #[test]
+    fn test_string_get_invalid_type() {
+        let v = KvsValue::from(345.6f64);
+        assert!(v.get::<String>().is_none());
+    }
+
+    #[test]
+    fn test_str_from_ok() {
         let v = KvsValue::from("world");
         assert!(matches!(v, KvsValue::String(ref s) if s == "world"));
     }
 
     #[test]
-    fn test_from_unit() {
+    fn test_unit_from_ok() {
         let v = KvsValue::from(());
         assert!(matches!(v, KvsValue::Null));
     }
 
     #[test]
-    fn test_from_vec() {
+    fn test_unit_tryfrom_ok() {
+        let v = KvsValue::from(());
+        <()>::try_from(&v).unwrap();
+    }
+
+    #[test]
+    fn test_unit_tryfrom_invalid_type() {
+        let v = KvsValue::from("");
+        let err = <()>::try_from(&v).unwrap_err();
+        assert_eq!(err, "KvsValue is not a Null (unit type)");
+    }
+
+    #[test]
+    fn test_unit_get_ok() {
+        let v = KvsValue::from(());
+        v.get::<()>().unwrap();
+    }
+
+    #[test]
+    fn test_unit_get_invalid_type() {
+        let v = KvsValue::from("");
+        assert!(v.get::<()>().is_none());
+    }
+
+    #[test]
+    fn test_vec_from_ok() {
         let v = KvsValue::from(vec![KvsValue::from(1i32), KvsValue::from(2i32)]);
         assert!(matches!(v, KvsValue::Array(ref arr) if arr.len() == 2));
     }
 
     #[test]
-    fn test_from_kvsmap() {
-        let mut map = KvsMap::new();
-        map.insert("a".to_string(), KvsValue::from(1i32));
-        let v = KvsValue::from(map.clone());
-        if let KvsValue::Object(ref obj) = v {
-            assert!(obj.contains_key("a"));
-            assert!(matches!(obj.get("a"), Some(KvsValue::I32(1))));
-        } else {
-            panic!("Expected KvsValue::Object");
-        }
+    fn test_vec_tryfrom_ok() {
+        let arr = vec![KvsValue::from(1i32), KvsValue::from(2i32)];
+        let v = KvsValue::from(arr.clone());
+        assert_eq!(Vec::<KvsValue>::try_from(&v).unwrap(), arr);
+    }
+
+    #[test]
+    fn test_vec_tryfrom_invalid_type() {
+        let v = KvsValue::from("");
+        let err = Vec::<KvsValue>::try_from(&v).unwrap_err();
+        assert_eq!(err, "KvsValue is not a Vec<KvsValue>");
+    }
+
+    #[test]
+    fn test_vec_get_ok() {
+        let arr = vec![KvsValue::from(1i32), KvsValue::from(2i32)];
+        let v = KvsValue::from(arr.clone());
+        assert_eq!(v.get::<Vec<KvsValue>>().unwrap().clone(), arr);
+    }
+
+    #[test]
+    fn test_vec_get_invalid_type() {
+        let v = KvsValue::from("");
+        assert!(v.get::<Vec<KvsValue>>().is_none());
     }
 
     #[test]
@@ -252,55 +454,47 @@ mod tests {
     }
 
     #[test]
-    fn test_non_array_access_returns_none() {
-        let v = KvsValue::from(42i32);
-        assert!(!matches!(v, KvsValue::Array(_)), "Should not be Array");
+    fn test_kvsmap_from_ok() {
+        let mut map = KvsMap::new();
+        map.insert("a".to_string(), KvsValue::from(1i32));
+        let v = KvsValue::from(map.clone());
+        if let KvsValue::Object(ref obj) = v {
+            assert!(obj.contains_key("a"));
+            assert!(matches!(obj.get("a"), Some(KvsValue::I32(1))));
+        } else {
+            panic!("Expected KvsValue::Object");
+        }
     }
 
     #[test]
-    fn test_tryfrom_supported_types() {
-        use std::f64::consts::PI;
-        let v = KvsValue::from(123i32);
-        assert_eq!(i32::try_from(&v).unwrap(), 123);
-        let v = KvsValue::from(456u32);
-        assert_eq!(u32::try_from(&v).unwrap(), 456);
-        let v = KvsValue::from(789i64);
-        assert_eq!(i64::try_from(&v).unwrap(), 789);
-        let v = KvsValue::from(101112u64);
-        assert_eq!(u64::try_from(&v).unwrap(), 101112);
-        let v = KvsValue::from(PI);
-        assert_eq!(f64::try_from(&v).unwrap(), PI);
-        let v = KvsValue::from(true);
-        assert!(bool::try_from(&v).unwrap());
-        let v = KvsValue::from("abc");
-        assert_eq!(String::try_from(&v).unwrap(), "abc");
-        let arr = vec![KvsValue::from(1i32), KvsValue::from(2i32)];
-        let v = KvsValue::from(arr.clone());
-        assert_eq!(Vec::<KvsValue>::try_from(&v).unwrap(), arr);
+    fn test_kvsmap_tryfrom_ok() {
         let mut map = KvsMap::new();
         map.insert("x".to_string(), KvsValue::from(1i32));
         let v = KvsValue::from(map.clone());
         assert_eq!(KvsMap::try_from(&v).unwrap(), map);
-        // Removed test for TryFrom<&KvsValue> for KvsValue, as that impl is no longer present.
     }
 
     #[test]
-    fn test_tryfrom_error_cases() {
-        use std::f64::consts::PI;
-        let v = KvsValue::from(123i32);
-        let err = u32::try_from(&v).unwrap_err();
-        assert_eq!(err, "KvsValue is not a u32");
-        let v = KvsValue::from("abc");
-        let err = i32::try_from(&v).unwrap_err();
-        assert_eq!(err, "KvsValue is not a i32");
-        let v = KvsValue::from(vec![KvsValue::from(1i32)]);
-        let err = bool::try_from(&v).unwrap_err();
-        assert_eq!(err, "KvsValue is not a bool");
-        let v = KvsValue::from(PI);
-        let err = String::try_from(&v).unwrap_err();
-        assert_eq!(err, "KvsValue is not a String");
-        let v = KvsValue::from(());
-        let err = i32::try_from(&v).unwrap_err();
-        assert_eq!(err, "KvsValue is not a i32");
+    fn test_kvsmap_tryfrom_invalid_type() {
+        let v = KvsValue::from("");
+        let err = KvsMap::try_from(&v).unwrap_err();
+        assert_eq!(
+            err,
+            "KvsValue is not a std::collections::HashMap<String, KvsValue>"
+        );
+    }
+
+    #[test]
+    fn test_kvsmap_get_ok() {
+        let mut map = KvsMap::new();
+        map.insert("x".to_string(), KvsValue::from(1i32));
+        let v = KvsValue::from(map.clone());
+        assert_eq!(v.get::<KvsMap>().unwrap().clone(), map);
+    }
+
+    #[test]
+    fn test_kvsmap_get_invalid_type() {
+        let v = KvsValue::from("");
+        assert!(v.get::<KvsMap>().is_none());
     }
 }

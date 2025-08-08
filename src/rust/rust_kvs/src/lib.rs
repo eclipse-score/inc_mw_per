@@ -60,7 +60,7 @@
 //! use std::collections::HashMap;
 //!
 //! fn main() -> Result<(), ErrorCode> {
-//!     let kvs: Kvs = KvsBuilder::new(InstanceId::new(0)).dir("").build()?;
+//!     let kvs: Kvs = KvsBuilder::new(InstanceId(0)).dir("").build()?;
 //!
 //!     kvs.set_value("number", 123.0)?;
 //!     kvs.set_value("bool", true)?;
@@ -149,12 +149,8 @@ pub type Kvs = kvs::GenericKvs<json_backend::JsonBackend>;
 pub mod prelude {
     pub use crate::error_code::ErrorCode;
     pub use crate::kvs::GenericKvs;
-    pub use crate::kvs_api::InstanceId;
-    pub use crate::kvs_api::KvsApi;
-    pub use crate::kvs_api::OpenNeedDefaults;
-    pub use crate::kvs_api::OpenNeedKvs;
-    pub use crate::kvs_api::SnapshotId;
+    pub use crate::kvs_api::{InstanceId, KvsApi, OpenNeedDefaults, OpenNeedKvs, SnapshotId};
     pub use crate::kvs_builder::KvsBuilder;
-    pub use crate::kvs_value::KvsValue;
+    pub use crate::kvs_value::{KvsMap, KvsValue};
     pub use crate::Kvs;
 }

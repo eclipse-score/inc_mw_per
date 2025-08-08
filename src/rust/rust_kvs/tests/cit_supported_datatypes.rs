@@ -19,9 +19,7 @@ fn cit_supported_datatypes_keys() -> Result<(), ErrorCode> {
     let dir = tempdir()?;
     let dir_string = dir.path().to_string_lossy().to_string();
 
-    let kvs: Kvs = KvsBuilder::new(InstanceId::new(0))
-        .dir(dir_string)
-        .build()?;
+    let kvs: Kvs = KvsBuilder::new(InstanceId(0)).dir(dir_string).build()?;
     // `str` and `String` are guaranteed to be valid UTF-8.
     kvs.set_value("k1", ())?;
     kvs.set_value(String::from("k2"), ())?;
@@ -38,9 +36,7 @@ fn supported_datatypes_common_impl(data: HashMap<&str, KvsValue>) -> Result<(), 
     let dir_string = dir.path().to_string_lossy().to_string();
 
     // Initialize KVS and load data.
-    let kvs: Kvs = KvsBuilder::new(InstanceId::new(0))
-        .dir(dir_string)
-        .build()?;
+    let kvs: Kvs = KvsBuilder::new(InstanceId(0)).dir(dir_string).build()?;
     for (k, v) in data.iter() {
         kvs.set_value(k.to_string(), v.clone())?;
     }

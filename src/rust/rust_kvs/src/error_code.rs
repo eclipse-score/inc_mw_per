@@ -124,19 +124,28 @@ impl From<PoisonError<MutexGuard<'_, HashMap<std::string::String, KvsValue>>>> f
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
+mod error_code_tests {
+    use crate::error_code::ErrorCode;
+    use crate::kvs_value::KvsValue;
+    use std::collections::HashMap;
+    use std::io::{Error, ErrorKind};
     use std::sync::{Arc, Mutex};
     use std::thread;
 
     #[test]
-    fn test_unknown_error_code_from_io_error() {
+    fn test_from_io_error_to_file_not_found() {
+        let error = Error::new(ErrorKind::NotFound, "File not found");
+        assert_eq!(ErrorCode::from(error), ErrorCode::FileNotFound);
+    }
+
+    #[test]
+    fn test_from_io_error_to_unmapped_error() {
         let error = std::io::Error::new(std::io::ErrorKind::InvalidInput, "Invalid input provided");
         assert_eq!(ErrorCode::from(error), ErrorCode::UnmappedError);
     }
 
     #[test]
-    fn test_conversion_failed_from_utf8_error() {
+    fn test_from_utf8_error_to_conversion_failed() {
         // test from: https://doc.rust-lang.org/std/string/struct.FromUtf8Error.html
         let bytes = vec![0, 159];
         let error = String::from_utf8(bytes).unwrap_err();
@@ -144,7 +153,7 @@ mod tests {
     }
 
     #[test]
-    fn test_conversion_failed_from_slice_error() {
+    fn test_from_try_from_slice_error_to_conversion_failed() {
         let bytes = [0x12, 0x34, 0x56, 0x78, 0xab];
         let bytes_ptr: &[u8] = &bytes;
         let error = TryInto::<[u8; 8]>::try_into(bytes_ptr).unwrap_err();
@@ -152,13 +161,13 @@ mod tests {
     }
 
     #[test]
-    fn test_conversion_failed_from_vec_u8() {
+    fn test_from_vec8_to_conversion_failed() {
         let bytes: Vec<u8> = vec![];
         assert_eq!(ErrorCode::from(bytes), ErrorCode::ConversionFailed);
     }
 
     #[test]
-    fn test_mutex_lock_failed_from_poison_error() {
+    fn test_from_poison_error_mutex_lock_failed() {
         let mutex: Arc<Mutex<HashMap<String, KvsValue>>> = Arc::default();
 
         // test from: https://doc.rust-lang.org/std/sync/struct.PoisonError.html

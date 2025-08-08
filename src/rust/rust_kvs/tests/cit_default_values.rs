@@ -59,8 +59,8 @@ fn cit_persistency_default_values() -> Result<(), ErrorCode> {
     let non_default_value = 333.3;
 
     // Create defaults file for instance 0.
-    let default_id = InstanceId::new(0);
-    let non_default_id = InstanceId::new(1);
+    let default_id = InstanceId(0);
+    let non_default_id = InstanceId(1);
     write_defaults_file(
         dir.path(),
         HashMap::from([(keyname.clone(), JsonValue::from(default_value))]),
@@ -163,7 +163,7 @@ fn cit_persistency_default_values_optional() -> Result<(), ErrorCode> {
     let default_value = 111.1;
 
     // Create defaults file for instance 0.
-    let default_id = InstanceId::new(0);
+    let default_id = InstanceId(0);
     write_defaults_file(
         dir.path(),
         HashMap::from([(keyname.clone(), JsonValue::from(default_value))]),
@@ -209,7 +209,7 @@ fn cit_persistency_defaults_enabled_values_removal() -> Result<(), ErrorCode> {
     let non_default_value = 333.3;
 
     // Create defaults file for instance 0.
-    let default_id = InstanceId::new(0);
+    let default_id = InstanceId(0);
     write_defaults_file(
         dir.path(),
         HashMap::from([(keyname.clone(), JsonValue::from(default_value))]),
@@ -270,7 +270,7 @@ fn cit_persistency_defaults_disabled_values_removal() -> Result<(), ErrorCode> {
     {
         // KVS instance with defaults.
         let kvs_without_defaults = Kvs::open(
-            InstanceId::new(0),
+            InstanceId(0),
             OpenNeedDefaults::Optional,
             OpenNeedKvs::Optional,
             Some(dir_string.clone()),
@@ -303,7 +303,7 @@ fn cit_persistency_invalid_default_values() -> Result<(), ErrorCode> {
 
     // Write invalid JSON directly
     let keyname = "test_bool";
-    let default_id = InstanceId::new(0);
+    let default_id = InstanceId(0);
     let filename = dir.path().join(format!("kvs_{default_id}_default.json"));
     let invalid_json = format!(r#"{{"{keyname}": True}}"#);
     std::fs::write(&filename, invalid_json)?;
@@ -336,7 +336,7 @@ fn cit_persistency_reset_all_default_values() -> Result<(), ErrorCode> {
     let non_default_value = 333.3;
 
     // Create defaults file for instance 0.
-    let default_id = InstanceId::new(0);
+    let default_id = InstanceId(0);
     write_defaults_file(
         dir.path(),
         HashMap::from([

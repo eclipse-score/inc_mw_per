@@ -412,7 +412,7 @@ fn _snapshotrestore(kvs: Kvs, mut args: Arguments) -> Result<(), ErrorCode> {
         },
     };
     println!("Restore Snapshot {}", &snapshot_id);
-    let snapshot_id = SnapshotId::new(snapshot_id as usize);
+    let snapshot_id = SnapshotId(snapshot_id as usize);
     kvs.snapshot_restore(snapshot_id).map_err(|e| {
         eprintln!("KVS restore failed: {e:?}");
         e
@@ -435,7 +435,7 @@ fn _getkvsfilename(kvs: Kvs, mut args: Arguments) -> Result<(), ErrorCode> {
             }
         },
     };
-    let snapshot_id = SnapshotId::new(snapshot_id as usize);
+    let snapshot_id = SnapshotId(snapshot_id as usize);
     let filename = kvs.get_kvs_filename(snapshot_id)?;
     println!("KVS Filename: {}", filename.display());
     println!("----------------------");
@@ -457,7 +457,7 @@ fn _gethashfilename(kvs: Kvs, mut args: Arguments) -> Result<(), ErrorCode> {
             }
         },
     };
-    let snapshot_id = SnapshotId::new(snapshot_id as usize);
+    let snapshot_id = SnapshotId(snapshot_id as usize);
     let filename = kvs.get_hash_filename(snapshot_id);
     println!("Hash Filename: {}", filename?.display());
     println!("----------------------");
@@ -527,7 +527,7 @@ fn _createtestdata(kvs: Kvs) -> Result<(), ErrorCode> {
 fn main() -> Result<(), ErrorCode> {
     let mut args = Arguments::from_env();
 
-    let builder = KvsBuilder::new(InstanceId::new(0))
+    let builder = KvsBuilder::new(InstanceId(0))
         .need_defaults(false)
         .need_kvs(false);
 

@@ -21,15 +21,21 @@ use crate::kvs_value::KvsValue;
 #[derive(Clone, Debug, PartialEq)]
 pub struct InstanceId(pub usize);
 
-/// Snapshot ID
-#[derive(Clone, Debug, PartialEq)]
-pub struct SnapshotId(pub usize);
-
 impl fmt::Display for InstanceId {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.0)
     }
 }
+
+impl From<InstanceId> for usize {
+    fn from(value: InstanceId) -> Self {
+        value.0
+    }
+}
+
+/// Snapshot ID
+#[derive(Clone, Debug, PartialEq)]
+pub struct SnapshotId(pub usize);
 
 impl fmt::Display for SnapshotId {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -37,17 +43,9 @@ impl fmt::Display for SnapshotId {
     }
 }
 
-impl InstanceId {
-    /// Create a new instance ID
-    pub fn new(id: usize) -> Self {
-        Self(id)
-    }
-}
-
-impl SnapshotId {
-    /// Create a new Snapshot ID
-    pub fn new(id: usize) -> Self {
-        SnapshotId(id)
+impl From<SnapshotId> for usize {
+    fn from(value: SnapshotId) -> Self {
+        value.0
     }
 }
 
@@ -127,4 +125,33 @@ pub trait KvsApi {
     fn snapshot_restore(&self, id: SnapshotId) -> Result<(), ErrorCode>;
     fn get_kvs_filename(&self, id: SnapshotId) -> Result<PathBuf, ErrorCode>;
     fn get_hash_filename(&self, id: SnapshotId) -> Result<PathBuf, ErrorCode>;
+}
+
+#[cfg(test)]
+mod kvs_api_tests {
+    use crate::kvs_api::{InstanceId, SnapshotId};
+
+    #[test]
+    fn test_instance_id_to_string() {
+        let id = InstanceId(123);
+        assert_eq!(id.to_string(), "123");
+    }
+
+    #[test]
+    fn test_instance_id_to_usize() {
+        let id = InstanceId(999);
+        assert_eq!(usize::from(id), 999);
+    }
+
+    #[test]
+    fn test_snapshot_id_fmt() {
+        let id = SnapshotId(4321);
+        assert_eq!(id.to_string(), "4321");
+    }
+
+    #[test]
+    fn test_snapshot_id_to_usize() {
+        let id = SnapshotId(0);
+        assert_eq!(usize::from(id), 0);
+    }
 }

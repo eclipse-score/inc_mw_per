@@ -114,47 +114,46 @@ This crate addresses or is influenced by the following specification requirement
 General Capabilities
 --------------------
 
-- :need:`SCORE_feat_req__kvs__cpp_rust_interoperability`
-- :need:`SCORE_feat_req__kvs__multiple_kvs`
-- :need:`SCORE_feat_req__kvs__tooling`
-- :need:`SCORE_feat_req__kvs__stable_api`
-- :need:`SCORE_feat_req__kvs__variant_management`
-- :need:`SCORE_feat_req__kvs__dev_mode`
-- :need:`SCORE_feat_req__kvs__async_api`
-- :need:`SCORE_feat_req__kvs__access_control`
-- :need:`SCORE_feat_req__kvs__events`
-- :need:`SCORE_feat_req__kvs__fast_access`
-- :need:`SCORE_feat_req__kvs__intra_process_comm`
+- :need:`S-CORE_feat_req__persistency__cpp_rust_interop`
+- :need:`S-CORE_feat_req__persistency__multiple_kvs`
+- :need:`S-CORE_feat_req__persistency__tooling`
+- :need:`S-CORE_feat_req__persistency__variant_management`
+- :need:`S-CORE_feat_req__persistency__eng_mode`
+- :need:`S-CORE_feat_req__persistency__async_api`
+- :need:`S-CORE_feat_req__persistency__access_control`
+- :need:`S-CORE_feat_req__persistency__events`
+- :need:`S-CORE_feat_req__persistency__fast_access`
+- :need:`S-CORE_feat_req__persistency__intra_process_comm`
 
 Data Storage and Persistency
 ----------------------------
 
-- :need:`SCORE_feat_req__kvs__default_values`
-- :need:`SCORE_feat_req__kvs__default_value_retrieval`
-- :need:`SCORE_feat_req__kvs__default_value_reset`
-- :need:`SCORE_feat_req__kvs__persistency`
-- :need:`SCORE_feat_req__kvs__integrity_check`
-- :need:`SCORE_feat_req__kvs__versioning`
-- :need:`SCORE_feat_req__kvs__update_mechanism`
-- :need:`SCORE_feat_req__kvs__snapshots`
-- :need:`SCORE_feat_req__kvs__persist_data`
+- :need:`S-CORE_feat_req__persistency__default_values`
+- :need:`S-CORE_feat_req__persistency__default_value_get`
+- :need:`S-CORE_feat_req__persistency__default_value_reset`
+- :need:`S-CORE_feat_req__persistency__persistency`
+- :need:`S-CORE_feat_req__persistency__integrity_check`
+- :need:`S-CORE_feat_req__persistency__versioning`
+- :need:`S-CORE_feat_req__persistency__update_mechanism`
+- :need:`S-CORE_feat_req__persistency__snapshots`
+- :need:`S-CORE_feat_req__persistency__persist_data`
 
 Datatypes and Interfaces
 ------------------------
 
-- :need:`SCORE_feat_req__kvs__supported_datatypes_keys`
-- :need:`SCORE_feat_req__kvs__supported_datatypes_values`
+- :need:`S-CORE_feat_req__persistency__support_datatype_keys`
+- :need:`S-CORE_feat_req__persistency__support_datatype_value`
 
 Configuration Support
 ---------------------
 
-- :need:`SCORE_feat_req__kvs__default_value_file`
-- :need:`SCORE_feat_req__kvs__config_file`
+- :need:`S-CORE_feat_req__persistency__default_value_file`
+- :need:`S-CORE_feat_req__persistency__config_file`
 
 Limitations and Future Work
 ---------------------------
 
-- :need:`SCORE_feat_req__kvs__maximum_size` *(currently unsupported)*
+- :need:`S-CORE_feat_req__persistency__maximum_size` *(currently unsupported)*
 
 
 

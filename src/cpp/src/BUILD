@@ -40,7 +40,10 @@ cc_library(
         "//src/cpp/src/internal:kvs_helper",
     ],
     includes = ["."],
-    visibility = ["//:__pkg__"],
+    visibility = [
+        "//:__pkg__",
+        "//tests/cpp_test_scenarios:__pkg__",
+    ],
     deps = [
         ":kvsvalue",
         "//src/cpp/src/internal:error",

@@ -10,8 +10,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 # *******************************************************************************
-load("@crates//:defs.bzl", "all_crate_deps")
 load("@rules_rust//rust:defs.bzl", "rust_library", "rust_test")
+load("@score_persistency_crates//:defs.bzl", "all_crate_deps")
 
 rust_library(
     name = "rust_kvs",

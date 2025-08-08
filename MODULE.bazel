@@ -73,6 +73,15 @@ git_override(
 bazel_dep(name = "score_platform", version = "0.3.0")
 bazel_dep(name = "score_process", version = "1.1.0")
 
+# Testing utils dependency.
+# TODO: replace commit id with tag.
+bazel_dep(name = "testing-utils")
+git_override(
+    module_name = "testing-utils",
+    commit = "2c58adab6118d0c768492a68aabdba93d5cbeda8",
+    remote = "https://github.com/qorix-group/testing_tools.git",
+)
+
 # Module deps
 
 rust = use_extension("@rules_rust//rust:extensions.bzl", "rust")
@@ -83,15 +92,16 @@ rust.toolchain(
 
 crate = use_extension("@rules_rust//crate_universe:extensions.bzl", "crate")
 crate.from_cargo(
-    name = "crates",
+    name = "score_persistency_crates",
     cargo_lockfile = "//:Cargo.lock",
     manifests = [
         "//:Cargo.toml",
         "//src/rust/rust_kvs:Cargo.toml",
         "//src/rust/rust_kvs_tool:Cargo.toml",
+        "//tests/rust_test_scenarios:Cargo.toml",
     ],
 )
-use_repo(crate, "crates")
+use_repo(crate, "score_persistency_crates")
 
 #bazel_dep on module 'rules_boost' has no version -> override needed
 archive_override(

@@ -271,7 +271,7 @@ impl<J: KvsBackend> KvsApi for GenericKvs<J> {
     fn reset_key(&self, key: &str) -> Result<(), ErrorCode> {
         let mut kvs = self.kvs.lock()?;
 
-        if self.default.get(key).is_none() {
+        if !self.default.contains_key(key) {
             eprintln!("error: resetting key without a default value");
             return Err(ErrorCode::KeyDefaultNotFound);
         }

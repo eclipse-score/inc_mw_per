@@ -14,7 +14,7 @@
 
 
 TEST(kvs_calculate_hash_adler32, calculate_hash_adler32) {
-    /* Test the adler32 hash calculation 
+    /* Test the adler32 hash calculation
     Parsing test is done automatically by the open tests */
 
     std::string test_data = "Hello, World!";
@@ -44,7 +44,7 @@ TEST(kvs_calculate_hash_adler32, calculate_hash_adler32_large_data) {
 }
 
 TEST(kvs_check_hash, check_hash_valid) {
-    
+
     std::string test_data = "Hello, World!";
     uint32_t hash = adler32(test_data);
     std::array<uint8_t, 4> hash_bytes = {
@@ -60,7 +60,7 @@ TEST(kvs_check_hash, check_hash_valid) {
 }
 
 TEST(kvs_check_hash, check_hash_invalid) {
-    
+
     std::string test_data = "Hello, World!";
     uint32_t hash = adler32(test_data);
     std::array<uint8_t, 4> hash_bytes = {
@@ -481,9 +481,9 @@ TEST(kvs_kvsvalue_to_any, kvsvalue_to_any_string) {
 
 TEST(kvs_kvsvalue_to_any, kvsvalue_to_any_array) {
     KvsValue::Array array;
-    array.push_back(KvsValue(true));
-    array.push_back(KvsValue(1.1));
-    array.push_back(KvsValue(std::string("test")));
+    array.push_back(std::make_shared<KvsValue>(true));
+    array.push_back(std::make_shared<KvsValue>(1.1));
+    array.push_back(std::make_shared<KvsValue>(std::string("test")));
     KvsValue array_val(array);
     auto result = kvsvalue_to_any(array_val);
     ASSERT_TRUE(result);
@@ -507,8 +507,8 @@ TEST(kvs_kvsvalue_to_any, kvsvalue_to_any_array) {
 
 TEST(kvs_kvsvalue_to_any, kvsvalue_to_any_object) {
     KvsValue::Object obj;
-    obj.emplace("flag", KvsValue(true)); // Boolean
-    obj.emplace("count", KvsValue(42.0)); // F64
+    obj.emplace("flag", std::make_shared<KvsValue>(true)); // Boolean
+    obj.emplace("count", std::make_shared<KvsValue>(42.0)); // F64
     KvsValue obj_val(obj);
 
     auto result = kvsvalue_to_any(obj_val);
@@ -537,16 +537,16 @@ TEST(kvs_kvsvalue_to_any, kvsvalue_to_any_invalid) {
 
     /* Invalid values in array and object */
     KvsValue::Array array;
-    array.push_back(KvsValue(42.0));
-    array.push_back(invalid);
+    array.push_back(std::make_shared<KvsValue>(42.0));
+    array.push_back(std::make_shared<KvsValue>(invalid));
     KvsValue array_invalid(array);
     result = kvsvalue_to_any(array_invalid);
     EXPECT_FALSE(result.has_value());
     EXPECT_EQ(result.error(), ErrorCode::InvalidValueType);
 
     KvsValue::Object obj;
-    obj.emplace("valid", KvsValue(42.0));
-    obj.emplace("invalid", invalid);
+    obj.emplace("valid", std::make_shared<KvsValue>(42.0));
+    obj.emplace("invalid", std::make_shared<KvsValue>(invalid));
     KvsValue obj_invalid(obj);
     result = kvsvalue_to_any(obj_invalid);
     EXPECT_FALSE(result.has_value());

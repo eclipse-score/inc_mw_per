@@ -24,13 +24,13 @@ namespace score::mw::per::kvs {
 /* Define the KvsValue class*/
 /**
  * @class KvsValue
- * @brief Represents a flexible value type that can hold various data types, 
+ * @brief Represents a flexible value type that can hold various data types,
  *        including numbers, booleans, strings, null, arrays, and objects.
- * 
- * The KvsValue class provides a type-safe way to store and retrieve values of 
- * different types. It uses a std::variant to hold the underlying value and an 
+ *
+ * The KvsValue class provides a type-safe way to store and retrieve values of
+ * different types. It uses a std::variant to hold the underlying value and an
  * enum to track the type of the value.
- * 
+ *
  * ## Supported Types:
  * - Number (double)
  * - Boolean (bool)
@@ -38,7 +38,7 @@ namespace score::mw::per::kvs {
  * - Null (std::nullptr_t)
  * - Array (std::vector<KvsValue>)
  * - Object (std::unordered_map<std::string, KvsValue>)
- * 
+ *
  * ## Public Methods:
  * - `KvsValue(double number)`: Constructs a KvsValue holding a number.
  * - `KvsValue(bool boolean)`:
@@ -56,11 +56,11 @@ namespace score::mw::per::kvs {
  * @endcode
  */
 
-class KvsValue final{
+class KvsValue final {
 public:
     /* Define the possible types for KvsValue*/
-    using Array = std::vector<KvsValue>;
-    using Object = std::unordered_map<std::string, KvsValue>;
+    using Array = std::vector<std::shared_ptr<KvsValue>>;
+    using Object = std::unordered_map<std::string, std::shared_ptr<KvsValue>>;
 
     /* Enum to represent the type of the value*/
     enum class Type {
@@ -85,8 +85,22 @@ public:
     explicit KvsValue(bool boolean) : value(boolean), type(Type::Boolean) {}
     explicit KvsValue(const std::string& str) : value(str), type(Type::String) {}
     explicit KvsValue(std::nullptr_t) : value(nullptr), type(Type::Null) {}
-    explicit KvsValue(const Array& array) : value(array), type(Type::Array) {}
-    explicit KvsValue(const Object& object) : value(object), type(Type::Object) {}
+    explicit KvsValue(const Array& array) ;
+    explicit KvsValue(const Object& object);
+    explicit KvsValue(const std::vector<KvsValue>& array);
+    explicit KvsValue(const std::unordered_map<std::string, KvsValue>& object);
+
+    /* Copy constructor */
+    KvsValue(const KvsValue& other);
+
+    /* copy assignment operator */
+    KvsValue& operator=(const KvsValue& other);
+
+    /* Move constructor */
+    KvsValue(KvsValue&& other) noexcept : value(std::move(other.value)), type(other.type) {}
+
+    /* move assignment operator */
+    KvsValue& operator=(KvsValue&& other) noexcept;
 
     /* Get the type of the value*/
     Type getType() const { return type; }

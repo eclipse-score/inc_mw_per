@@ -15,7 +15,7 @@
 namespace score::mw::per::kvs {
 
 /*********************** Hash Functions *********************/
-/*Adler 32 checksum algorithm*/ 
+/*Adler 32 checksum algorithm*/
 // Optimized version: processes data in blocks to reduce modulo operations
 uint32_t calculate_hash_adler32(const std::string& data) {
     constexpr size_t ADLER32_NMAX = 5552;
@@ -38,7 +38,7 @@ uint32_t calculate_hash_adler32(const std::string& data) {
     return (b << 16) | a;
 }
 
-/*Parse Adler32 checksum Byte-Array to uint32 */ 
+/*Parse Adler32 checksum Byte-Array to uint32 */
 uint32_t parse_hash_adler32(std::istream& in)
 {
     std::array<uint8_t,4> buf{};
@@ -51,7 +51,7 @@ uint32_t parse_hash_adler32(std::istream& in)
     return value;
 }
 
-/* Split uint32 checksum in bytes for writing*/ 
+/* Split uint32 checksum in bytes for writing*/
 std::array<uint8_t,4> get_hash_bytes_adler32(uint32_t hash)
 {
     std::array<uint8_t, 4> value = {
@@ -85,7 +85,7 @@ bool check_hash(const std::string& data_calculate, std::istream& data_parse){
         result = false;
     }
 
-    return result; 
+    return result;
 }
 
 /*********************** Standalone Helper Functions *********************/
@@ -177,7 +177,7 @@ score::Result<KvsValue> any_to_kvsvalue(const score::json::Any& any){
                                 result = score::MakeUnexpected(ErrorCode::InvalidValueType);
                                 break;
                             }
-                            arr.emplace_back(std::move(conv.value()));
+                            arr.emplace_back(std::make_shared<KvsValue>(std::move(conv.value())));
                         }
                         if (!error){
                             result = KvsValue(std::move(arr));
@@ -197,7 +197,7 @@ score::Result<KvsValue> any_to_kvsvalue(const score::json::Any& any){
                                 result = score::MakeUnexpected(ErrorCode::InvalidValueType);
                                 break;
                             }
-                            map.emplace(key.GetAsStringView().to_string(), std::move(conv.value()));
+                            map.emplace(key.GetAsStringView().to_string(), std::make_shared<KvsValue>(std::move(conv.value())));
                         }
                         if (!error) {
                             result = KvsValue(std::move(map));
@@ -271,7 +271,7 @@ score::Result<score::json::Any> kvsvalue_to_any(const KvsValue& kv) {
             obj.emplace("t", score::json::Any(std::string("arr")));
             score::json::List list;
             for (auto& elem : std::get<KvsValue::Array>(kv.getValue())) {
-                auto conv = kvsvalue_to_any(elem);
+                auto conv = kvsvalue_to_any(*elem);
                 if (!conv) {
                     result = score::MakeUnexpected(ErrorCode::InvalidValueType);
                     error = true;
@@ -288,7 +288,7 @@ score::Result<score::json::Any> kvsvalue_to_any(const KvsValue& kv) {
             obj.emplace("t", score::json::Any(std::string("obj")));
             score::json::Object inner_obj;
             for (auto& [key, value] : std::get<KvsValue::Object>(kv.getValue())) {
-                auto conv = kvsvalue_to_any(value);
+                auto conv = kvsvalue_to_any(*value);
                 if (!conv) {
                     result = score::MakeUnexpected(ErrorCode::InvalidValueType);
                     error = true;

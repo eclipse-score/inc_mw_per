@@ -1,10 +1,13 @@
-//! Persistency tests.
-//!
-//! Requirements verified:
-//! - Persistency (feat_req__persistency__persistency)
-//!   The KVS system shall persist stored data and provide an API to explicitly trigger persistence.
-//! - Store persistent data (feat_req__persistency__persist_data)
-//!   The KVS shall support storing and loading its data to and from persistent storage.
+// Copyright (c) 2025 Contributors to the Eclipse Foundation
+//
+// See the NOTICE file(s) distributed with this work for additional
+// information regarding copyright ownership.
+//
+// This program and the accompanying materials are made available under the
+// terms of the Apache License Version 2.0 which is available at
+// <https://www.apache.org/licenses/LICENSE-2.0>
+//
+// SPDX-License-Identifier: Apache-2.0
 
 mod common;
 use common::compare_kvs_values;
@@ -15,6 +18,11 @@ use tempfile::tempdir;
 /// Flush on exit is enabled by default.
 /// Data will be flushed on `kvs` being dropped.
 #[test]
+// #[record_property("PartiallyVerifies", [])]
+// #[record_property("FullyVerifies", ["comp_req__persistency__persist_data_store_com"])]
+// #[record_property("Description", "Verifies that data is automatically flushed and persisted when the KVS instance is dropped, with flush on exit enabled.")]
+// #[record_property("TestType", "requirements-based")]
+// #[record_property("DerivationTechnique", "requirements-based")]
 fn cit_persistency_flush_on_exit_enabled() -> Result<(), ErrorCode> {
     // Temp directory.
     let dir = tempdir()?;
@@ -75,6 +83,11 @@ fn cit_persistency_flush_on_exit_enabled() -> Result<(), ErrorCode> {
 }
 
 #[test]
+// #[record_property("PartiallyVerifies", [])]
+// #[record_property("FullyVerifies", ["comp_req__persistency__persist_data_store_com"])]
+// #[record_property("Description", "Checks that disabling flush on exit causes data to be dropped and not persisted after the KVS instance is dropped.")]
+// #[record_property("TestType", "requirements-based")]
+// #[record_property("DerivationTechnique", "requirements-based")]
 fn cit_persistency_flush_on_exit_disabled_drop_data() -> Result<(), ErrorCode> {
     // Temp directory.
     let dir = tempdir()?;
@@ -133,6 +146,11 @@ fn cit_persistency_flush_on_exit_disabled_drop_data() -> Result<(), ErrorCode> {
 }
 
 #[test]
+// #[record_property("PartiallyVerifies", [])]
+// #[record_property("FullyVerifies", ["comp_req__persistency__persist_data_store_com"])]
+// #[record_property("Description", "Verifies that disabling flush on exit but manually flushing ensures data is persisted correctly.")]
+// #[record_property("TestType", "requirements-based")]
+// #[record_property("DerivationTechnique", "requirements-based")]
 fn cit_persistency_flush_on_exit_disabled_manual_flush() -> Result<(), ErrorCode> {
     // Temp directory.
     let dir = tempdir()?;

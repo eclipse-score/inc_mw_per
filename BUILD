@@ -87,19 +87,19 @@ use_format_targets()
 
 alias(
     name = "kvs_cpp",
-    actual = "//src/cpp/src:kvs_cpp",
+    actual = "//kvs_cpp:kvs_cpp",
     tags = ["cli_help=Build KVS CPP [build]"],
     visibility = ["//visibility:public"],
 )
 
 test_suite(
     name = "test_kvs_cpp",
-    tests = ["//src/cpp/tests:test_kvs_cpp"],
+    tests = ["//kvs_cpp:test_kvs_cpp"],
     visibility = ["//visibility:public"],
 )
 
 test_suite(
     name = "bm_kvs_cpp",
-    tests = ["//src/cpp/tests:bm_kvs_cpp"],
+    tests = ["//kvs_cpp:bm_kvs_cpp"],
     visibility = ["//visibility:public"],
 )

@@ -1,6 +1,6 @@
 //! KVS parameters test helpers.
 
-use rust_kvs::prelude::{FlushOnExit, InstanceId, OpenNeedDefaults, OpenNeedKvs};
+use rust_kvs::prelude::{Defaults, FlushOnExit, InstanceId, KvsLoad};
 use serde::{de, Deserialize, Deserializer};
 use serde_json::Value;
 use std::path::PathBuf;
@@ -10,10 +10,10 @@ use std::path::PathBuf;
 pub struct KvsParameters {
     #[serde(deserialize_with = "deserialize_instance_id")]
     pub instance_id: InstanceId,
-    #[serde(default, deserialize_with = "deserialize_need_defaults")]
-    pub need_defaults: Option<OpenNeedDefaults>,
-    #[serde(default, deserialize_with = "deserialize_need_kvs")]
-    pub need_kvs: Option<OpenNeedKvs>,
+    #[serde(default, deserialize_with = "deserialize_defaults")]
+    pub defaults: Option<Defaults>,
+    #[serde(default, deserialize_with = "deserialize_kvs_load")]
+    pub kvs_load: Option<KvsLoad>,
     pub dir: Option<PathBuf>,
     #[serde(default, deserialize_with = "deserialize_flush_on_exit")]
     pub flush_on_exit: Option<FlushOnExit>,
@@ -36,16 +36,17 @@ where
     Ok(InstanceId(value))
 }
 
-fn deserialize_need_defaults<'de, D>(deserializer: D) -> Result<Option<OpenNeedDefaults>, D::Error>
+fn deserialize_defaults<'de, D>(deserializer: D) -> Result<Option<Defaults>, D::Error>
 where
     D: Deserializer<'de>,
 {
     let value_opt: Option<String> = Option::deserialize(deserializer)?;
     if let Some(value_str) = value_opt {
         let value = match value_str.as_str() {
-            "optional" => OpenNeedDefaults::Optional,
-            "required" => OpenNeedDefaults::Required,
-            _ => return Err(de::Error::custom("Invalid \"need_defaults\" mode")),
+            "ignored" => Defaults::Ignored,
+            "optional" => Defaults::Optional,
+            "required" => Defaults::Required,
+            _ => return Err(de::Error::custom("Invalid \"defaults\" mode")),
         };
         return Ok(Some(value));
     }
@@ -53,16 +54,17 @@ where
     Ok(None)
 }
 
-fn deserialize_need_kvs<'de, D>(deserializer: D) -> Result<Option<OpenNeedKvs>, D::Error>
+fn deserialize_kvs_load<'de, D>(deserializer: D) -> Result<Option<KvsLoad>, D::Error>
 where
     D: Deserializer<'de>,
 {
     let value_opt: Option<String> = Option::deserialize(deserializer)?;
     if let Some(value_str) = value_opt {
         let value = match value_str.as_str() {
-            "optional" => OpenNeedKvs::Optional,
-            "required" => OpenNeedKvs::Required,
-            _ => return Err(de::Error::custom("Invalid \"need_kvs\" mode")),
+            "ignored" => KvsLoad::Ignored,
+            "optional" => KvsLoad::Optional,
+            "required" => KvsLoad::Required,
+            _ => return Err(de::Error::custom("Invalid \"kvs_load\" mode")),
         };
         return Ok(Some(value));
     }

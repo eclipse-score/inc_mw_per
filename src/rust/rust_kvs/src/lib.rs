@@ -149,9 +149,7 @@ pub type Kvs = kvs::GenericKvs<json_backend::JsonBackend>;
 pub mod prelude {
     pub use crate::error_code::ErrorCode;
     pub use crate::kvs::GenericKvs;
-    pub use crate::kvs_api::{
-        FlushOnExit, InstanceId, KvsApi, OpenNeedDefaults, OpenNeedKvs, SnapshotId,
-    };
+    pub use crate::kvs_api::{Defaults, FlushOnExit, InstanceId, KvsApi, KvsLoad, SnapshotId};
     pub use crate::kvs_builder::KvsBuilder;
     pub use crate::kvs_value::{KvsMap, KvsValue};
     pub use crate::Kvs;

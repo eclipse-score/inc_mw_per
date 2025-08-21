@@ -10,18 +10,18 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::error_code::ErrorCode;
-use crate::kvs_api::{InstanceId, KvsApi};
+use crate::kvs_api::{Defaults, InstanceId, KvsApi, KvsLoad};
 
 /// Key-value-storage builder
 pub struct KvsBuilder<T: KvsApi> {
     /// Instance ID
     instance_id: InstanceId,
 
-    /// Need-defaults flag
-    need_defaults: bool,
+    /// Defaults handling mode.
+    defaults: Defaults,
 
-    /// Need-KVS flag
-    need_kvs: bool,
+    /// KVS load mode.
+    kvs_load: KvsLoad,
 
     /// Working directory
     dir: Option<String>,
@@ -44,34 +44,34 @@ impl<T: KvsApi> KvsBuilder<T> {
     pub fn new(instance_id: InstanceId) -> Self {
         Self {
             instance_id,
-            need_defaults: false,
-            need_kvs: false,
+            defaults: Defaults::Optional,
+            kvs_load: KvsLoad::Optional,
             dir: None,
             _phantom: std::marker::PhantomData,
         }
     }
 
-    /// Configure if defaults must exist when opening the KVS
+    /// Configure defaults handling mode.
     ///
     /// # Parameters
-    ///   * `flag`: Yes = `true`, no = `false` (default)
+    ///   * `mode`: defaults handling mode (default: [`Defaults::Optional`](Defaults::Optional))
     ///
     /// # Return Values
     ///   * KvsBuilder instance
-    pub fn need_defaults(mut self, flag: bool) -> Self {
-        self.need_defaults = flag;
+    pub fn defaults(mut self, mode: Defaults) -> Self {
+        self.defaults = mode;
         self
     }
 
-    /// Configure if KVS must exist when opening the KVS
+    /// Configure KVS load mode.
     ///
     /// # Parameters
-    ///   * `flag`: Yes = `true`, no = `false` (default)
+    ///   * `mode`: KVS load mode (default: [`KvsLoad::Optional`](KvsLoad::Optional))
     ///
     /// # Return Values
     ///   * KvsBuilder instance
-    pub fn need_kvs(mut self, flag: bool) -> Self {
-        self.need_kvs = flag;
+    pub fn kvs_load(mut self, mode: KvsLoad) -> Self {
+        self.kvs_load = mode;
         self
     }
 
@@ -103,27 +103,22 @@ impl<T: KvsApi> KvsBuilder<T> {
     ///   * `ErrorCode::KvsHashFileReadError`: KVS hash file read error
     ///   * `ErrorCode::UnmappedError`: Generic error
     pub fn build(self) -> Result<T, ErrorCode> {
-        T::open(
-            self.instance_id,
-            self.need_defaults.into(),
-            self.need_kvs.into(),
-            self.dir,
-        )
+        T::open(self.instance_id, self.defaults, self.kvs_load, self.dir)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::kvs_api::{FlushOnExit, OpenNeedDefaults, OpenNeedKvs, SnapshotId};
+    use crate::kvs_api::{Defaults, FlushOnExit, KvsLoad, SnapshotId};
     use crate::kvs_value::KvsValue;
     use std::path::PathBuf;
 
     /// Empty KVS stub with exposed builder parameters.
     struct StubKvs {
         instance_id: InstanceId,
-        need_defaults: OpenNeedDefaults,
-        need_kvs: OpenNeedKvs,
+        defaults: Defaults,
+        kvs_load: KvsLoad,
         dir: Option<String>,
     }
 
@@ -132,12 +127,12 @@ mod tests {
             &self.instance_id
         }
 
-        fn need_defaults(&self) -> &OpenNeedDefaults {
-            &self.need_defaults
+        fn defaults(&self) -> &Defaults {
+            &self.defaults
         }
 
-        fn need_kvs(&self) -> &OpenNeedKvs {
-            &self.need_kvs
+        fn kvs_load(&self) -> &KvsLoad {
+            &self.kvs_load
         }
 
         fn dir(&self) -> &Option<String> {
@@ -148,8 +143,8 @@ mod tests {
     impl KvsApi for StubKvs {
         fn open(
             instance_id: InstanceId,
-            need_defaults: OpenNeedDefaults,
-            need_kvs: OpenNeedKvs,
+            defaults: Defaults,
+            kvs_load: KvsLoad,
             dir: Option<String>,
         ) -> Result<Self, ErrorCode>
         where
@@ -157,8 +152,8 @@ mod tests {
         {
             Ok(Self {
                 instance_id,
-                need_defaults,
-                need_kvs,
+                defaults,
+                kvs_load,
                 dir,
             })
         }
@@ -253,30 +248,30 @@ mod tests {
         let builder = KvsBuilder::<StubKvs>::new(instance_id);
         let kvs = builder.build().unwrap();
         assert_eq!(kvs.instance_id().clone(), instance_id);
-        assert_eq!(kvs.need_defaults().clone(), OpenNeedDefaults::Optional);
-        assert_eq!(kvs.need_kvs().clone(), OpenNeedKvs::Optional);
+        assert_eq!(kvs.defaults().clone(), Defaults::Optional);
+        assert_eq!(kvs.kvs_load().clone(), KvsLoad::Optional);
         assert!(kvs.dir().is_none());
     }
 
     #[test]
-    fn test_builder_need_defaults() {
+    fn test_builder_defaults() {
         let instance_id = InstanceId(1);
-        let builder = KvsBuilder::<StubKvs>::new(instance_id).need_defaults(true);
+        let builder = KvsBuilder::<StubKvs>::new(instance_id).defaults(Defaults::Required);
         let kvs = builder.build().unwrap();
         assert_eq!(kvs.instance_id().clone(), instance_id);
-        assert_eq!(kvs.need_defaults().clone(), OpenNeedDefaults::Required);
-        assert_eq!(kvs.need_kvs().clone(), OpenNeedKvs::Optional);
+        assert_eq!(kvs.defaults().clone(), Defaults::Required);
+        assert_eq!(kvs.kvs_load().clone(), KvsLoad::Optional);
         assert!(kvs.dir().is_none());
     }
 
     #[test]
-    fn test_builder_need_kvs() {
+    fn test_builder_kvs_load() {
         let instance_id = InstanceId(1);
-        let builder = KvsBuilder::<StubKvs>::new(instance_id).need_kvs(true);
+        let builder = KvsBuilder::<StubKvs>::new(instance_id).kvs_load(KvsLoad::Required);
         let kvs = builder.build().unwrap();
         assert_eq!(kvs.instance_id().clone(), instance_id);
-        assert_eq!(kvs.need_defaults().clone(), OpenNeedDefaults::Optional);
-        assert_eq!(kvs.need_kvs().clone(), OpenNeedKvs::Required);
+        assert_eq!(kvs.defaults().clone(), Defaults::Optional);
+        assert_eq!(kvs.kvs_load().clone(), KvsLoad::Required);
         assert!(kvs.dir().is_none());
     }
 
@@ -287,8 +282,8 @@ mod tests {
         let builder = KvsBuilder::<StubKvs>::new(instance_id).dir(dir.clone());
         let kvs = builder.build().unwrap();
         assert_eq!(kvs.instance_id().clone(), instance_id);
-        assert_eq!(kvs.need_defaults().clone(), OpenNeedDefaults::Optional);
-        assert_eq!(kvs.need_kvs().clone(), OpenNeedKvs::Optional);
+        assert_eq!(kvs.defaults().clone(), Defaults::Optional);
+        assert_eq!(kvs.kvs_load().clone(), KvsLoad::Optional);
         assert!(kvs.dir().clone().is_some_and(|p| p == dir));
     }
 
@@ -297,13 +292,13 @@ mod tests {
         let instance_id = InstanceId(1);
         let dir = "/tmp/test_kvs".to_string();
         let builder = KvsBuilder::<StubKvs>::new(instance_id)
-            .need_defaults(true)
-            .need_kvs(true)
+            .defaults(Defaults::Required)
+            .kvs_load(KvsLoad::Required)
             .dir(dir.clone());
         let kvs = builder.build().unwrap();
         assert_eq!(kvs.instance_id().clone(), instance_id);
-        assert_eq!(kvs.need_defaults().clone(), OpenNeedDefaults::Required);
-        assert_eq!(kvs.need_kvs().clone(), OpenNeedKvs::Required);
+        assert_eq!(kvs.defaults().clone(), Defaults::Required);
+        assert_eq!(kvs.kvs_load().clone(), KvsLoad::Required);
         assert!(kvs.dir().clone().is_some_and(|p| p == dir));
     }
 }

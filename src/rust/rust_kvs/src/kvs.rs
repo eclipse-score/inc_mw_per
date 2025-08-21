@@ -16,8 +16,7 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 
 use crate::error_code::ErrorCode;
-use crate::kvs_api::{FlushOnExit, InstanceId, KvsApi, SnapshotId};
-use crate::kvs_api::{OpenNeedDefaults, OpenNeedKvs};
+use crate::kvs_api::{Defaults, FlushOnExit, InstanceId, KvsApi, KvsLoad, SnapshotId};
 use crate::kvs_backend::KvsBackend;
 use crate::kvs_value::{KvsMap, KvsValue};
 
@@ -48,8 +47,11 @@ pub struct GenericKvs<J: KvsBackend> {
 }
 
 /// Need-File flag
-#[derive(PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 enum OpenKvsNeedFile {
+    /// Ignored: do not load file.
+    Ignored,
+
     /// Optional: If the file doesn't exist, start with empty data
     Optional,
 
@@ -57,20 +59,22 @@ enum OpenKvsNeedFile {
     Required,
 }
 
-impl From<OpenNeedDefaults> for OpenKvsNeedFile {
-    fn from(val: OpenNeedDefaults) -> OpenKvsNeedFile {
+impl From<Defaults> for OpenKvsNeedFile {
+    fn from(val: Defaults) -> OpenKvsNeedFile {
         match val {
-            OpenNeedDefaults::Optional => OpenKvsNeedFile::Optional,
-            OpenNeedDefaults::Required => OpenKvsNeedFile::Required,
+            Defaults::Ignored => OpenKvsNeedFile::Ignored,
+            Defaults::Optional => OpenKvsNeedFile::Optional,
+            Defaults::Required => OpenKvsNeedFile::Required,
         }
     }
 }
 
-impl From<OpenNeedKvs> for OpenKvsNeedFile {
-    fn from(val: OpenNeedKvs) -> OpenKvsNeedFile {
+impl From<KvsLoad> for OpenKvsNeedFile {
+    fn from(val: KvsLoad) -> OpenKvsNeedFile {
         match val {
-            OpenNeedKvs::Optional => OpenKvsNeedFile::Optional,
-            OpenNeedKvs::Required => OpenKvsNeedFile::Required,
+            KvsLoad::Ignored => OpenKvsNeedFile::Ignored,
+            KvsLoad::Optional => OpenKvsNeedFile::Optional,
+            KvsLoad::Required => OpenKvsNeedFile::Required,
         }
     }
 }
@@ -111,11 +115,17 @@ impl<J: KvsBackend> GenericKvs<J> {
         hash_filename: Option<&PathBuf>,
     ) -> Result<KvsMap, ErrorCode>
     where
-        T: Into<OpenKvsNeedFile>,
+        T: Into<OpenKvsNeedFile> + Clone,
     {
         let do_hash = matches!(verify_hash, OpenKvsVerifyHash::Yes);
         let filename_path = filename.clone();
         let hash_filename_path = hash_filename.cloned();
+
+        // Return empty map if `Ignored`.
+        if need_file.clone().into() == OpenKvsNeedFile::Ignored {
+            return Ok(KvsMap::new());
+        }
+
         match J::load_kvs(filename_path.clone(), do_hash, hash_filename_path.clone()) {
             Ok(_) => {
                 let map = J::load_kvs(filename_path, do_hash, hash_filename_path).map_err(|e| {
@@ -187,8 +197,8 @@ impl<J: KvsBackend> KvsApi for GenericKvs<J> {
     ///
     /// # Parameters
     ///   * `instance_id`: Instance ID
-    ///   * `need_defaults`: Fail when no default file was found
-    ///   * `need_kvs`: Fail when no KVS file was found
+    ///   * `defaults`: Defaults load mode.
+    ///   * `kvs_load`: KVS load mode.
     ///
     /// # Return Values
     ///   * Ok: KVS instance
@@ -199,8 +209,8 @@ impl<J: KvsBackend> KvsApi for GenericKvs<J> {
     ///   * `ErrorCode::UnmappedError`: Generic error
     fn open(
         instance_id: InstanceId,
-        need_defaults: OpenNeedDefaults,
-        need_kvs: OpenNeedKvs,
+        defaults: Defaults,
+        kvs_load: KvsLoad,
         dir: Option<String>,
     ) -> Result<GenericKvs<J>, ErrorCode> {
         let dir = if let Some(dir) = dir {
@@ -213,18 +223,14 @@ impl<J: KvsBackend> KvsApi for GenericKvs<J> {
         let filename_kvs =
             filename_prefix.with_file_name(format!("{}_0", filename_prefix.display()));
 
-        let default = GenericKvs::<J>::open_kvs(
-            &filename_default,
-            need_defaults,
-            OpenKvsVerifyHash::No,
-            None,
-        )?;
+        let default =
+            GenericKvs::<J>::open_kvs(&filename_default, defaults, OpenKvsVerifyHash::No, None)?;
         // Use hash checking for the main KVS file
         let hash_path =
             filename_prefix.with_file_name(format!("{}_0.hash", filename_prefix.display()));
         let kvs = GenericKvs::<J>::open_kvs(
             &filename_kvs,
-            need_kvs,
+            kvs_load,
             OpenKvsVerifyHash::Yes,
             Some(&hash_path),
         )?;
@@ -555,12 +561,7 @@ impl<J: KvsBackend> KvsApi for GenericKvs<J> {
         }
 
         let snap_path = PathBuf::from(format!("{}_{}", self.filename_prefix.display(), id.0));
-        let kvs = Self::open_kvs(
-            &snap_path,
-            OpenKvsNeedFile::Required,
-            OpenKvsVerifyHash::Yes,
-            None,
-        )?;
+        let kvs = Self::open_kvs(&snap_path, KvsLoad::Required, OpenKvsVerifyHash::Yes, None)?;
         *self.kvs.lock()? = kvs;
 
         Ok(())
@@ -624,9 +625,7 @@ mod kvs_tests {
     use crate::error_code::ErrorCode;
     use crate::json_backend::JsonBackend;
     use crate::kvs::{GenericKvs, KVS_MAX_SNAPSHOTS};
-    use crate::kvs_api::{
-        FlushOnExit, InstanceId, KvsApi, OpenNeedDefaults, OpenNeedKvs, SnapshotId,
-    };
+    use crate::kvs_api::{Defaults, FlushOnExit, InstanceId, KvsApi, KvsLoad, SnapshotId};
     use crate::kvs_backend::KvsBackend;
     use crate::kvs_value::{KvsMap, KvsValue};
     use std::path::PathBuf;
@@ -663,8 +662,8 @@ mod kvs_tests {
         let instance_id = InstanceId(1);
         let mut kvs = GenericKvs::<B>::open(
             instance_id,
-            OpenNeedDefaults::Optional,
-            OpenNeedKvs::Optional,
+            Defaults::Optional,
+            KvsLoad::Optional,
             Some(working_dir.display().to_string()),
         )
         .unwrap();

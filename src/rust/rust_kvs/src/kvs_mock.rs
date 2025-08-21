@@ -10,9 +10,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::error_code::ErrorCode;
-use crate::kvs_api::FlushOnExit;
-use crate::kvs_api::KvsApi;
-use crate::kvs_api::SnapshotId;
+use crate::kvs_api::{Defaults, FlushOnExit, InstanceId, KvsApi, KvsLoad, SnapshotId};
 use crate::kvs_value::{KvsMap, KvsValue};
 use std::sync::{Arc, Mutex};
 
@@ -33,9 +31,9 @@ impl Default for MockKvs {
 
 impl KvsApi for MockKvs {
     fn open(
-        _instance_id: crate::kvs_api::InstanceId,
-        _need_defaults: crate::kvs_api::OpenNeedDefaults,
-        _need_kvs: crate::kvs_api::OpenNeedKvs,
+        _instance_id: InstanceId,
+        _defaults: Defaults,
+        _kvs_load: KvsLoad,
         _dir: Option<String>,
     ) -> Result<Self, ErrorCode> {
         Ok(MockKvs {
@@ -168,9 +166,9 @@ impl KvsApi for MockKvs {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::kvs_api::KvsApi;
-    use crate::kvs_api::SnapshotId;
     use crate::kvs_value::KvsValue;
+    use KvsApi;
+    use SnapshotId;
 
     #[test]
     fn test_mock_kvs_pass_and_fail_cases() {

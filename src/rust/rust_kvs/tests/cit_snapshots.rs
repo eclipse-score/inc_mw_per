@@ -18,8 +18,8 @@ fn init_kvs(
 ) -> Result<Kvs, ErrorCode> {
     let kvs = Kvs::open(
         instance_id,
-        OpenNeedDefaults::Optional,
-        OpenNeedKvs::Optional,
+        Defaults::Optional,
+        KvsLoad::Optional,
         Some(dir_string),
     )?;
 
@@ -42,8 +42,8 @@ fn cit_snapshots_snapshot_count_first_flush() -> Result<(), ErrorCode> {
 
     let kvs = Kvs::open(
         InstanceId(0),
-        OpenNeedDefaults::Optional,
-        OpenNeedKvs::Optional,
+        Defaults::Optional,
+        KvsLoad::Optional,
         Some(dir_string),
     )?;
     kvs.set_value("counter", 1.0)?;
@@ -69,11 +69,11 @@ fn cit_snapshots_snapshot_count_full() -> Result<(), ErrorCode> {
     for counter in 0..=Kvs::snapshot_max_count() {
         let kvs = Kvs::open(
             InstanceId(0),
-            OpenNeedDefaults::Optional,
+            Defaults::Optional,
             if counter == 0 {
-                OpenNeedKvs::Optional
+                KvsLoad::Optional
             } else {
-                OpenNeedKvs::Required
+                KvsLoad::Required
             },
             Some(dir_string.clone()),
         )?;
@@ -86,8 +86,8 @@ fn cit_snapshots_snapshot_count_full() -> Result<(), ErrorCode> {
     {
         let kvs = Kvs::open(
             InstanceId(0),
-            OpenNeedDefaults::Optional,
-            OpenNeedKvs::Required,
+            Defaults::Optional,
+            KvsLoad::Required,
             Some(dir_string),
         )?;
         assert_eq!(kvs.snapshot_count(), Kvs::snapshot_max_count());

@@ -49,44 +49,30 @@ impl From<SnapshotId> for usize {
     }
 }
 
-/// Need-Defaults flag
+/// Defaults handling mode.
 #[derive(Clone, Debug, PartialEq)]
-pub enum OpenNeedDefaults {
-    /// Optional: Open defaults only if available
+pub enum Defaults {
+    /// Defaults are not loaded.
+    Ignored,
+
+    /// Defaults are loaded if available.
     Optional,
 
-    /// Required: Defaults must be available
+    /// Defaults must be loaded.
     Required,
 }
 
-/// Need-KVS flag
+/// KVS load mode.
 #[derive(Clone, Debug, PartialEq)]
-pub enum OpenNeedKvs {
-    /// Optional: Use an empty KVS if no KVS is available
+pub enum KvsLoad {
+    /// KVS is not loaded, current shared state is used.
+    Ignored,
+
+    /// KVS is loaded if available.
     Optional,
 
-    /// Required: KVS must be already exist
+    /// KVS must be loaded.
     Required,
-}
-
-impl From<bool> for OpenNeedDefaults {
-    fn from(flag: bool) -> OpenNeedDefaults {
-        if flag {
-            OpenNeedDefaults::Required
-        } else {
-            OpenNeedDefaults::Optional
-        }
-    }
-}
-
-impl From<bool> for OpenNeedKvs {
-    fn from(flag: bool) -> OpenNeedKvs {
-        if flag {
-            OpenNeedKvs::Required
-        } else {
-            OpenNeedKvs::Optional
-        }
-    }
 }
 
 /// Flush on exit mode.
@@ -102,8 +88,8 @@ pub enum FlushOnExit {
 pub trait KvsApi {
     fn open(
         instance_id: InstanceId,
-        need_defaults: OpenNeedDefaults,
-        need_kvs: OpenNeedKvs,
+        defaults: Defaults,
+        kvs_load: KvsLoad,
         dir: Option<String>,
     ) -> Result<Self, ErrorCode>
     where

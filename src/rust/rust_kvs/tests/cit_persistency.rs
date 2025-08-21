@@ -42,8 +42,8 @@ fn cit_persistency_flush_on_exit_enabled() -> Result<(), ErrorCode> {
         // First KVS run.
         let kvs = Kvs::open(
             InstanceId(0),
-            OpenNeedDefaults::Optional,
-            OpenNeedKvs::Optional,
+            Defaults::Optional,
+            KvsLoad::Optional,
             Some(dir_string.clone()),
         )?;
 
@@ -59,8 +59,8 @@ fn cit_persistency_flush_on_exit_enabled() -> Result<(), ErrorCode> {
         // KVS file is expected to exist.
         let kvs = Kvs::open(
             InstanceId(0),
-            OpenNeedDefaults::Optional,
-            OpenNeedKvs::Required,
+            Defaults::Optional,
+            KvsLoad::Required,
             Some(dir_string),
         )?;
 
@@ -102,8 +102,8 @@ fn cit_persistency_flush_on_exit_disabled_drop_data() -> Result<(), ErrorCode> {
         // First KVS run.
         let kvs = Kvs::open(
             InstanceId(0),
-            OpenNeedDefaults::Optional,
-            OpenNeedKvs::Optional,
+            Defaults::Optional,
+            KvsLoad::Optional,
             Some(dir_string.clone()),
         )?;
         kvs.set_flush_on_exit(FlushOnExit::No);
@@ -120,8 +120,8 @@ fn cit_persistency_flush_on_exit_disabled_drop_data() -> Result<(), ErrorCode> {
         // KVS file is expected to not to exist.
         let kvs = Kvs::open(
             InstanceId(0),
-            OpenNeedDefaults::Optional,
-            OpenNeedKvs::Optional,
+            Defaults::Optional,
+            KvsLoad::Optional,
             Some(dir_string),
         )?;
 
@@ -160,8 +160,8 @@ fn cit_persistency_flush_on_exit_disabled_manual_flush() -> Result<(), ErrorCode
         // First KVS run.
         let kvs = Kvs::open(
             InstanceId(0),
-            OpenNeedDefaults::Optional,
-            OpenNeedKvs::Optional,
+            Defaults::Optional,
+            KvsLoad::Optional,
             Some(dir_string.clone()),
         )?;
         kvs.set_flush_on_exit(FlushOnExit::No);
@@ -181,8 +181,8 @@ fn cit_persistency_flush_on_exit_disabled_manual_flush() -> Result<(), ErrorCode
         // KVS file is expected to exist.
         let kvs = Kvs::open(
             InstanceId(0),
-            OpenNeedDefaults::Optional,
-            OpenNeedKvs::Required,
+            Defaults::Optional,
+            KvsLoad::Required,
             Some(dir_string),
         )?;
 

@@ -1,5 +1,5 @@
 //! Example for basic operations.
-//! - Creating KVS instance using `KvsBuilder` with `need_kvs` modes.
+//! - Creating KVS instance using `KvsBuilder` with `kvs_load` modes.
 //! - Basic key-value operations: `get_value`, `get_value_as`, `set_value`, `get_all_keys`.
 //! - Other key-value operations: `reset`, `key_exists`, `remove_key`.
 
@@ -17,11 +17,11 @@ fn main() -> Result<(), ErrorCode> {
 
     {
         // Build KVS instance for given instance ID and temporary directory.
-        // `need_kvs` is explicitly set to `false`, but this is the default value.
+        // `kvs_load` is explicitly set to `KvsLoad::Optional`, but this is the default value.
         // KVS files are not required.
         let builder = KvsBuilder::<Kvs>::new(instance_id)
             .dir(dir_string.clone())
-            .need_kvs(false);
+            .kvs_load(KvsLoad::Optional);
         let kvs = builder.build()?;
 
         println!("-> `set_value` usage");
@@ -63,10 +63,10 @@ fn main() -> Result<(), ErrorCode> {
 
     {
         // Build KVS instance for given instance ID and temporary directory.
-        // `need_kvs` is set to `true` - KVS files must already exist from previous KVS instance.
+        // `kvs_load` is set to `KvsLoad::Required` - KVS files must already exist from previous KVS instance.
         let builder = KvsBuilder::<Kvs>::new(instance_id)
             .dir(dir_string)
-            .need_kvs(true);
+            .kvs_load(KvsLoad::Required);
         let kvs = builder.build()?;
 
         // `get_value` usage - print all existing keys with their values.

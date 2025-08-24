@@ -14,10 +14,6 @@ extern crate alloc;
 use alloc::string::FromUtf8Error;
 use core::array::TryFromSliceError;
 
-use crate::kvs_value::KvsValue;
-use std::collections::HashMap;
-use std::sync::{MutexGuard, PoisonError};
-
 /// Runtime Error Codes
 #[derive(Debug, PartialEq)]
 pub enum ErrorCode {
@@ -75,11 +71,17 @@ pub enum ErrorCode {
     /// Invalid snapshot ID
     InvalidSnapshotId,
 
+    /// Invalid instance ID
+    InvalidInstanceId,
+
     /// Conversion failed
     ConversionFailed,
 
     /// Mutex failed
     MutexLockFailed,
+
+    /// Instance parameters mismatch
+    InstanceParametersMismatch,
 }
 
 impl From<std::io::Error> for ErrorCode {
@@ -116,21 +118,10 @@ impl From<Vec<u8>> for ErrorCode {
     }
 }
 
-impl From<PoisonError<MutexGuard<'_, HashMap<std::string::String, KvsValue>>>> for ErrorCode {
-    fn from(cause: PoisonError<MutexGuard<'_, HashMap<std::string::String, KvsValue>>>) -> Self {
-        eprintln!("error: Mutex locking failed: {cause:#?}");
-        ErrorCode::MutexLockFailed
-    }
-}
-
 #[cfg(test)]
 mod error_code_tests {
     use crate::error_code::ErrorCode;
-    use crate::kvs_value::KvsValue;
-    use std::collections::HashMap;
     use std::io::{Error, ErrorKind};
-    use std::sync::{Arc, Mutex};
-    use std::thread;
 
     #[test]
     fn test_from_io_error_to_file_not_found() {
@@ -164,21 +155,5 @@ mod error_code_tests {
     fn test_from_vec8_to_conversion_failed() {
         let bytes: Vec<u8> = vec![];
         assert_eq!(ErrorCode::from(bytes), ErrorCode::ConversionFailed);
-    }
-
-    #[test]
-    fn test_from_poison_error_mutex_lock_failed() {
-        let mutex: Arc<Mutex<HashMap<String, KvsValue>>> = Arc::default();
-
-        // test from: https://doc.rust-lang.org/std/sync/struct.PoisonError.html
-        let c_mutex = Arc::clone(&mutex);
-        let _ = thread::spawn(move || {
-            let _unused = c_mutex.lock().unwrap();
-            panic!();
-        })
-        .join();
-
-        let error = mutex.lock().unwrap_err();
-        assert_eq!(ErrorCode::from(error), ErrorCode::MutexLockFailed);
     }
 }

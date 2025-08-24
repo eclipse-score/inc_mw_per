@@ -16,12 +16,7 @@ fn init_kvs(
     dir_string: String,
     num_snapshots: usize,
 ) -> Result<Kvs, ErrorCode> {
-    let kvs = Kvs::open(
-        instance_id,
-        Defaults::Optional,
-        KvsLoad::Optional,
-        Some(dir_string),
-    )?;
+    let kvs = KvsBuilder::new(instance_id).dir(dir_string).build()?;
 
     // Add snapshots.
     for i in 1..=num_snapshots {
@@ -40,12 +35,7 @@ fn cit_snapshots_snapshot_count_first_flush() -> Result<(), ErrorCode> {
     let dir = tempdir()?;
     let dir_string = dir.path().to_string_lossy().to_string();
 
-    let kvs = Kvs::open(
-        InstanceId(0),
-        Defaults::Optional,
-        KvsLoad::Optional,
-        Some(dir_string),
-    )?;
+    let kvs = KvsBuilder::new(InstanceId(0)).dir(dir_string).build()?;
     kvs.set_value("counter", 1.0)?;
 
     // Not flushed yet - no snapshots.
@@ -67,16 +57,14 @@ fn cit_snapshots_snapshot_count_full() -> Result<(), ErrorCode> {
 
     // Create snapshots - one more than max count.
     for counter in 0..=Kvs::snapshot_max_count() {
-        let kvs = Kvs::open(
-            InstanceId(0),
-            Defaults::Optional,
-            if counter == 0 {
+        let kvs = KvsBuilder::new(InstanceId(0))
+            .dir(dir_string.clone())
+            .kvs_load(if counter == 0 {
                 KvsLoad::Optional
             } else {
                 KvsLoad::Required
-            },
-            Some(dir_string.clone()),
-        )?;
+            })
+            .build()?;
         kvs.set_value("counter", counter as f64)?;
 
         assert_eq!(kvs.snapshot_count(), counter);
@@ -84,12 +72,10 @@ fn cit_snapshots_snapshot_count_full() -> Result<(), ErrorCode> {
 
     // Check if at max.
     {
-        let kvs = Kvs::open(
-            InstanceId(0),
-            Defaults::Optional,
-            KvsLoad::Required,
-            Some(dir_string),
-        )?;
+        let kvs = KvsBuilder::new(InstanceId(0))
+            .dir(dir_string.clone())
+            .kvs_load(KvsLoad::Required)
+            .build()?;
         assert_eq!(kvs.snapshot_count(), Kvs::snapshot_max_count());
     }
 
@@ -155,7 +141,7 @@ fn cit_snapshots_snapshot_restore_nonexisting_snapshot() -> Result<(), ErrorCode
 }
 
 #[test]
-fn cit_snapshots_get_kvs_filename_existing_snapshot() -> Result<(), ErrorCode> {
+fn cit_snapshots_get_kvs_file_path_existing_snapshot() -> Result<(), ErrorCode> {
     // Temp directory.
     let dir = tempdir()?;
     let dir_string = dir.path().to_string_lossy().to_string();
@@ -167,18 +153,15 @@ fn cit_snapshots_get_kvs_filename_existing_snapshot() -> Result<(), ErrorCode> {
 
     // Assert.
     let last_snapshot_index = num_snapshots - 1;
-    let expected = PathBuf::from(dir_string).join(format!(
-        "kvs_{}_{}.json",
-        instance_id.clone(),
-        last_snapshot_index
-    ));
-    let actual = kvs.get_kvs_filename(SnapshotId(last_snapshot_index))?;
+    let expected =
+        PathBuf::from(dir_string).join(format!("kvs_{instance_id}_{last_snapshot_index}.json"));
+    let actual = kvs.get_kvs_file_path(SnapshotId(last_snapshot_index))?;
     assert_eq!(expected, actual);
     Ok(())
 }
 
 #[test]
-fn cit_snapshots_get_kvs_filename_nonexisting_snapshot() -> Result<(), ErrorCode> {
+fn cit_snapshots_get_kvs_file_path_nonexisting_snapshot() -> Result<(), ErrorCode> {
     // Temp directory.
     let dir = tempdir()?;
     let dir_string = dir.path().to_string_lossy().to_string();
@@ -190,13 +173,13 @@ fn cit_snapshots_get_kvs_filename_nonexisting_snapshot() -> Result<(), ErrorCode
 
     // Assert.
     let invalid_snapshot_index = num_snapshots;
-    let result = kvs.get_kvs_filename(SnapshotId(invalid_snapshot_index));
+    let result = kvs.get_kvs_file_path(SnapshotId(invalid_snapshot_index));
     assert!(result.is_err_and(|e| e == ErrorCode::FileNotFound));
     Ok(())
 }
 
 #[test]
-fn cit_snapshots_get_hash_filename_existing_snapshot() -> Result<(), ErrorCode> {
+fn cit_snapshots_get_hash_file_path_existing_snapshot() -> Result<(), ErrorCode> {
     // Temp directory.
     let dir = tempdir()?;
     let dir_string = dir.path().to_string_lossy().to_string();
@@ -208,18 +191,15 @@ fn cit_snapshots_get_hash_filename_existing_snapshot() -> Result<(), ErrorCode> 
 
     // Assert.
     let last_snapshot_index = num_snapshots - 1;
-    let expected = PathBuf::from(dir_string).join(format!(
-        "kvs_{}_{}.hash",
-        instance_id.clone(),
-        last_snapshot_index
-    ));
-    let actual = kvs.get_hash_filename(SnapshotId(last_snapshot_index))?;
+    let expected =
+        PathBuf::from(dir_string).join(format!("kvs_{instance_id}_{last_snapshot_index}.hash"));
+    let actual = kvs.get_hash_file_path(SnapshotId(last_snapshot_index))?;
     assert_eq!(expected, actual);
     Ok(())
 }
 
 #[test]
-fn cit_snapshots_get_hash_filename_nonexisting_snapshot() -> Result<(), ErrorCode> {
+fn cit_snapshots_get_hash_file_path_nonexisting_snapshot() -> Result<(), ErrorCode> {
     // Temp directory.
     let dir = tempdir()?;
     let dir_string = dir.path().to_string_lossy().to_string();
@@ -231,7 +211,7 @@ fn cit_snapshots_get_hash_filename_nonexisting_snapshot() -> Result<(), ErrorCod
 
     // Assert.
     let invalid_snapshot_index = num_snapshots;
-    let result = kvs.get_hash_filename(SnapshotId(invalid_snapshot_index));
+    let result = kvs.get_hash_file_path(SnapshotId(invalid_snapshot_index));
     assert!(result.is_err_and(|e| e == ErrorCode::FileNotFound));
     Ok(())
 }

@@ -19,7 +19,7 @@ fn main() -> Result<(), ErrorCode> {
         // Build KVS instance for given instance ID and temporary directory.
         // `kvs_load` is explicitly set to `KvsLoad::Optional`, but this is the default value.
         // KVS files are not required.
-        let builder = KvsBuilder::<Kvs>::new(instance_id)
+        let builder = KvsBuilder::new(instance_id)
             .dir(dir_string.clone())
             .kvs_load(KvsLoad::Optional);
         let kvs = builder.build()?;
@@ -64,7 +64,7 @@ fn main() -> Result<(), ErrorCode> {
     {
         // Build KVS instance for given instance ID and temporary directory.
         // `kvs_load` is set to `KvsLoad::Required` - KVS files must already exist from previous KVS instance.
-        let builder = KvsBuilder::<Kvs>::new(instance_id)
+        let builder = KvsBuilder::new(instance_id)
             .dir(dir_string)
             .kvs_load(KvsLoad::Required);
         let kvs = builder.build()?;

@@ -48,12 +48,10 @@ fn cit_persistency_flush_on_exit_enabled() -> Result<(), ErrorCode> {
 
     {
         // First KVS run.
-        let kvs = Kvs::open(
-            InstanceId(0),
-            Defaults::Optional,
-            KvsLoad::Optional,
-            Some(dir_string.clone()),
-        )?;
+        let kvs = KvsBuilder::new(InstanceId(0))
+            .kvs_load(KvsLoad::Optional)
+            .dir(dir_string.clone())
+            .build()?;
 
         // Set values.
         for (key, value) in kv_values.iter() {
@@ -65,12 +63,10 @@ fn cit_persistency_flush_on_exit_enabled() -> Result<(), ErrorCode> {
     {
         // Second KVS run.
         // KVS file is expected to exist.
-        let kvs = Kvs::open(
-            InstanceId(0),
-            Defaults::Optional,
-            KvsLoad::Required,
-            Some(dir_string),
-        )?;
+        let kvs = KvsBuilder::new(InstanceId(0))
+            .kvs_load(KvsLoad::Required)
+            .dir(dir_string.clone())
+            .build()?;
 
         // Compare values.
         for (key, expected_value) in kv_values.iter() {
@@ -113,12 +109,9 @@ fn cit_persistency_flush_on_exit_disabled_drop_data() -> Result<(), ErrorCode> {
 
     {
         // First KVS run.
-        let kvs = Kvs::open(
-            InstanceId(0),
-            Defaults::Optional,
-            KvsLoad::Optional,
-            Some(dir_string.clone()),
-        )?;
+        let kvs = KvsBuilder::new(InstanceId(0))
+            .dir(dir_string.clone())
+            .build()?;
         kvs.set_flush_on_exit(FlushOnExit::No);
 
         // Set values.
@@ -131,12 +124,9 @@ fn cit_persistency_flush_on_exit_disabled_drop_data() -> Result<(), ErrorCode> {
     {
         // Second KVS run.
         // KVS file is expected to not to exist.
-        let kvs = Kvs::open(
-            InstanceId(0),
-            Defaults::Optional,
-            KvsLoad::Optional,
-            Some(dir_string),
-        )?;
+        let kvs = KvsBuilder::new(InstanceId(0))
+            .dir(dir_string.clone())
+            .build()?;
 
         // Make sure no keys are defined.
         assert!(kvs.get_all_keys()?.is_empty());
@@ -176,12 +166,9 @@ fn cit_persistency_flush_on_exit_disabled_manual_flush() -> Result<(), ErrorCode
 
     {
         // First KVS run.
-        let kvs = Kvs::open(
-            InstanceId(0),
-            Defaults::Optional,
-            KvsLoad::Optional,
-            Some(dir_string.clone()),
-        )?;
+        let kvs = KvsBuilder::new(InstanceId(0))
+            .dir(dir_string.clone())
+            .build()?;
         kvs.set_flush_on_exit(FlushOnExit::No);
 
         // Set values.
@@ -197,12 +184,10 @@ fn cit_persistency_flush_on_exit_disabled_manual_flush() -> Result<(), ErrorCode
     {
         // Second KVS run.
         // KVS file is expected to exist.
-        let kvs = Kvs::open(
-            InstanceId(0),
-            Defaults::Optional,
-            KvsLoad::Required,
-            Some(dir_string),
-        )?;
+        let kvs = KvsBuilder::new(InstanceId(0))
+            .kvs_load(KvsLoad::Required)
+            .dir(dir_string.clone())
+            .build()?;
 
         // Compare values.
         for (key, expected_value) in kv_values.iter() {

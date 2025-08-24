@@ -30,19 +30,13 @@ fn cit_persistency_multiple_instances() -> Result<(), ErrorCode> {
 
     {
         // Create first KVS instance.
-        let kvs1 = Kvs::open(
-            InstanceId(0),
-            Defaults::Optional,
-            KvsLoad::Optional,
-            Some(dir_string.clone()),
-        )?;
+        let kvs1 = KvsBuilder::new(InstanceId(0))
+            .dir(dir_string.clone())
+            .build()?;
         // Create second KVS instance.
-        let kvs2 = Kvs::open(
-            InstanceId(1),
-            Defaults::Optional,
-            KvsLoad::Optional,
-            Some(dir_string.clone()),
-        )?;
+        let kvs2 = KvsBuilder::new(InstanceId(1))
+            .dir(dir_string.clone())
+            .build()?;
 
         // Set values to both KVS instances.
         kvs1.set_value(&keyname, value1)?;
@@ -52,18 +46,12 @@ fn cit_persistency_multiple_instances() -> Result<(), ErrorCode> {
     // Assertions.
     {
         // Second KVS run.
-        let kvs1 = Kvs::open(
-            InstanceId(0),
-            Defaults::Optional,
-            KvsLoad::Optional,
-            Some(dir_string.clone()),
-        )?;
-        let kvs2 = Kvs::open(
-            InstanceId(1),
-            Defaults::Optional,
-            KvsLoad::Optional,
-            Some(dir_string.clone()),
-        )?;
+        let kvs1 = KvsBuilder::new(InstanceId(0))
+            .dir(dir_string.clone())
+            .build()?;
+        let kvs2 = KvsBuilder::new(InstanceId(1))
+            .dir(dir_string.clone())
+            .build()?;
 
         // Compare values, ensure they are not mixed up.
         assert_eq!(
@@ -110,19 +98,13 @@ fn cit_persistency_multiple_instances_same_id_common_value() -> Result<(), Error
     let instance_id = InstanceId(0);
     {
         // Create first KVS instance.
-        let kvs1 = Kvs::open(
-            instance_id,
-            Defaults::Optional,
-            KvsLoad::Optional,
-            Some(dir_string.clone()),
-        )?;
+        let kvs1 = KvsBuilder::new(instance_id)
+            .dir(dir_string.clone())
+            .build()?;
         // Create second KVS instance.
-        let kvs2 = Kvs::open(
-            instance_id,
-            Defaults::Optional,
-            KvsLoad::Optional,
-            Some(dir_string.clone()),
-        )?;
+        let kvs2 = KvsBuilder::new(instance_id)
+            .dir(dir_string.clone())
+            .build()?;
 
         // Set values to both KVS instances.
         kvs1.set_value(&common_keyname, common_value)?;
@@ -132,18 +114,12 @@ fn cit_persistency_multiple_instances_same_id_common_value() -> Result<(), Error
     // Assertions.
     {
         // Second KVS run.
-        let kvs1 = Kvs::open(
-            instance_id,
-            Defaults::Optional,
-            KvsLoad::Optional,
-            Some(dir_string.clone()),
-        )?;
-        let kvs2 = Kvs::open(
-            instance_id,
-            Defaults::Optional,
-            KvsLoad::Optional,
-            Some(dir_string.clone()),
-        )?;
+        let kvs1 = KvsBuilder::new(instance_id)
+            .dir(dir_string.clone())
+            .build()?;
+        let kvs2 = KvsBuilder::new(instance_id)
+            .dir(dir_string.clone())
+            .build()?;
 
         assert_eq!(
             kvs1.get_value_as::<f64>(&common_keyname)?,
@@ -182,19 +158,13 @@ fn cit_persistency_multiple_instances_same_id_interfere() -> Result<(), ErrorCod
     let instance_id = InstanceId(0);
     {
         // Create first KVS instance.
-        let kvs1 = Kvs::open(
-            instance_id,
-            Defaults::Optional,
-            KvsLoad::Optional,
-            Some(dir_string.clone()),
-        )?;
+        let kvs1 = KvsBuilder::new(instance_id)
+            .dir(dir_string.clone())
+            .build()?;
         // Create second KVS instance.
-        let kvs2 = Kvs::open(
-            instance_id,
-            Defaults::Optional,
-            KvsLoad::Optional,
-            Some(dir_string.clone()),
-        )?;
+        let kvs2 = KvsBuilder::new(instance_id)
+            .dir(dir_string.clone())
+            .build()?;
 
         // Set values to both KVS instances.
         kvs1.set_value(&keyname, value1)?;
@@ -204,18 +174,12 @@ fn cit_persistency_multiple_instances_same_id_interfere() -> Result<(), ErrorCod
     // Assertions.
     {
         // Second KVS run.
-        let kvs1 = Kvs::open(
-            instance_id,
-            Defaults::Optional,
-            KvsLoad::Optional,
-            Some(dir_string.clone()),
-        )?;
-        let kvs2 = Kvs::open(
-            instance_id,
-            Defaults::Optional,
-            KvsLoad::Optional,
-            Some(dir_string.clone()),
-        )?;
+        let kvs1 = KvsBuilder::new(instance_id)
+            .dir(dir_string.clone())
+            .build()?;
+        let kvs2 = KvsBuilder::new(instance_id)
+            .dir(dir_string.clone())
+            .build()?;
 
         // Change value in first KVS instance.
         // This should affect the second KVS instance as well,

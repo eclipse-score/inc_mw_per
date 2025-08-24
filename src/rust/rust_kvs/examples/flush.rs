@@ -33,7 +33,7 @@ fn main() -> Result<(), ErrorCode> {
 
         {
             // Build KVS instance for given instance ID and temporary directory.
-            let builder = KvsBuilder::<Kvs>::new(instance_id).dir(dir_string.clone());
+            let builder = KvsBuilder::new(instance_id).dir(dir_string.clone());
             let kvs = builder.build()?;
 
             // Disable flush on exit.
@@ -54,7 +54,7 @@ fn main() -> Result<(), ErrorCode> {
 
         {
             // Build KVS instance for given instance ID and temporary directory.
-            let builder = KvsBuilder::<Kvs>::new(instance_id).dir(dir_string.clone());
+            let builder = KvsBuilder::new(instance_id).dir(dir_string.clone());
             let kvs = builder.build()?;
 
             // Explicitly enable flush on exit - this is the default.
@@ -75,7 +75,7 @@ fn main() -> Result<(), ErrorCode> {
 
         {
             // Build KVS instance for given instance ID and temporary directory.
-            let builder = KvsBuilder::<Kvs>::new(instance_id).dir(dir_string.clone());
+            let builder = KvsBuilder::new(instance_id).dir(dir_string.clone());
             let kvs = builder.build()?;
 
             // Disable flush on exit.
@@ -91,7 +91,7 @@ fn main() -> Result<(), ErrorCode> {
 
         {
             // Build KVS instance to check current state.
-            let builder = KvsBuilder::<Kvs>::new(instance_id)
+            let builder = KvsBuilder::new(instance_id)
                 .dir(dir_string)
                 .kvs_load(KvsLoad::Required);
             let kvs = builder.build()?;

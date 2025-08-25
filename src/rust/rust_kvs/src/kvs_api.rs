@@ -49,44 +49,30 @@ impl From<SnapshotId> for usize {
     }
 }
 
-/// Need-Defaults flag
+/// Defaults handling mode.
 #[derive(Clone, Debug, PartialEq)]
-pub enum OpenNeedDefaults {
-    /// Optional: Open defaults only if available
+pub enum Defaults {
+    /// Defaults are not loaded.
+    Ignored,
+
+    /// Defaults are loaded if available.
     Optional,
 
-    /// Required: Defaults must be available
+    /// Defaults must be loaded.
     Required,
 }
 
-/// Need-KVS flag
+/// KVS load mode.
 #[derive(Clone, Debug, PartialEq)]
-pub enum OpenNeedKvs {
-    /// Optional: Use an empty KVS if no KVS is available
+pub enum KvsLoad {
+    /// KVS is not loaded, current shared state is used.
+    Ignored,
+
+    /// KVS is loaded if available.
     Optional,
 
-    /// Required: KVS must be already exist
+    /// KVS must be loaded.
     Required,
-}
-
-impl From<bool> for OpenNeedDefaults {
-    fn from(flag: bool) -> OpenNeedDefaults {
-        if flag {
-            OpenNeedDefaults::Required
-        } else {
-            OpenNeedDefaults::Optional
-        }
-    }
-}
-
-impl From<bool> for OpenNeedKvs {
-    fn from(flag: bool) -> OpenNeedKvs {
-        if flag {
-            OpenNeedKvs::Required
-        } else {
-            OpenNeedKvs::Optional
-        }
-    }
 }
 
 /// Flush on exit mode.
@@ -100,15 +86,6 @@ pub enum FlushOnExit {
 }
 
 pub trait KvsApi {
-    fn open(
-        instance_id: InstanceId,
-        need_defaults: OpenNeedDefaults,
-        need_kvs: OpenNeedKvs,
-        dir: Option<String>,
-    ) -> Result<Self, ErrorCode>
-    where
-        Self: Sized;
-
     fn reset(&self) -> Result<(), ErrorCode>;
     fn reset_key(&self, key: &str) -> Result<(), ErrorCode>;
     fn get_all_keys(&self) -> Result<Vec<String>, ErrorCode>;
@@ -133,9 +110,9 @@ pub trait KvsApi {
     fn snapshot_max_count() -> usize
     where
         Self: Sized;
-    fn snapshot_restore(&self, id: SnapshotId) -> Result<(), ErrorCode>;
-    fn get_kvs_filename(&self, id: SnapshotId) -> Result<PathBuf, ErrorCode>;
-    fn get_hash_filename(&self, id: SnapshotId) -> Result<PathBuf, ErrorCode>;
+    fn snapshot_restore(&self, snapshot_id: SnapshotId) -> Result<(), ErrorCode>;
+    fn get_kvs_file_path(&self, snapshot_id: SnapshotId) -> Result<PathBuf, ErrorCode>;
+    fn get_hash_file_path(&self, snapshot_id: SnapshotId) -> Result<PathBuf, ErrorCode>;
 }
 
 #[cfg(test)]

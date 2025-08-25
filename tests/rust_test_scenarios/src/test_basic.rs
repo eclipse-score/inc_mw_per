@@ -7,8 +7,8 @@ use tracing::info;
 #[derive(Serialize, Deserialize, Debug)]
 struct KvsParameters {
     instance_id: usize,
-    need_defaults: Option<bool>,
-    need_kvs: Option<bool>,
+    defaults: Option<bool>,
+    kvs_load: Option<bool>,
     dir: Option<String>,
     flush_on_exit: Option<bool>,
 }
@@ -35,11 +35,21 @@ impl Scenario for BasicScenario {
         // Set builder parameters.
         let instance_id = InstanceId(params.instance_id);
         let mut builder = KvsBuilder::new(instance_id);
-        if let Some(flag) = params.need_defaults {
-            builder = builder.need_defaults(flag);
+        if let Some(flag) = params.defaults {
+            let mode = if flag {
+                Defaults::Required
+            } else {
+                Defaults::Optional
+            };
+            builder = builder.defaults(mode);
         }
-        if let Some(flag) = params.need_kvs {
-            builder = builder.need_kvs(flag);
+        if let Some(flag) = params.kvs_load {
+            let mode = if flag {
+                KvsLoad::Required
+            } else {
+                KvsLoad::Optional
+            };
+            builder = builder.kvs_load(mode);
         }
         if let Some(dir) = params.dir {
             builder = builder.dir(dir);

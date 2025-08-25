@@ -17,7 +17,7 @@ fn main() -> Result<(), ErrorCode> {
         println!("-> `snapshot_count` and `snapshot_max_count` usage");
 
         // Build KVS instance for given instance ID and temporary directory.
-        let builder = KvsBuilder::<Kvs>::new(instance_id).dir(dir_string.clone());
+        let builder = KvsBuilder::new(instance_id).dir(dir_string.clone());
         let kvs = builder.build()?;
         kvs.set_flush_on_exit(FlushOnExit::No);
 
@@ -39,7 +39,7 @@ fn main() -> Result<(), ErrorCode> {
         println!("-> `snapshot_restore` usage");
 
         // Build KVS instance for given instance ID and temporary directory.
-        let builder = KvsBuilder::<Kvs>::new(instance_id).dir(dir_string.clone());
+        let builder = KvsBuilder::new(instance_id).dir(dir_string.clone());
         let kvs = builder.build()?;
         kvs.set_flush_on_exit(FlushOnExit::No);
 

@@ -30,13 +30,16 @@ fn cit_supported_datatypes_keys() -> Result<(), ErrorCode> {
     Ok(())
 }
 
-fn supported_datatypes_common_impl(data: HashMap<&str, KvsValue>) -> Result<(), ErrorCode> {
+fn supported_datatypes_common_impl(
+    instance_id: InstanceId,
+    data: HashMap<&str, KvsValue>,
+) -> Result<(), ErrorCode> {
     // Temp directory.
     let dir = tempdir()?;
     let dir_string = dir.path().to_string_lossy().to_string();
 
     // Initialize KVS and load data.
-    let kvs: Kvs = KvsBuilder::new(InstanceId(0)).dir(dir_string).build()?;
+    let kvs: Kvs = KvsBuilder::new(instance_id).dir(dir_string).build()?;
     for (k, v) in data.iter() {
         kvs.set_value(k.to_string(), v.clone())?;
     }
@@ -56,25 +59,25 @@ fn cit_supported_datatypes_number() -> Result<(), ErrorCode> {
         ("number1", KvsValue::from(123.0)),
         ("number2", KvsValue::from(-345.6)),
     ]);
-    supported_datatypes_common_impl(data)
+    supported_datatypes_common_impl(InstanceId(1), data)
 }
 
 #[test]
 fn cit_supported_datatypes_boolean() -> Result<(), ErrorCode> {
     let data = HashMap::from([("bool", KvsValue::from(true))]);
-    supported_datatypes_common_impl(data)
+    supported_datatypes_common_impl(InstanceId(2), data)
 }
 
 #[test]
 fn cit_supported_datatypes_string() -> Result<(), ErrorCode> {
     let data = HashMap::from([("string", KvsValue::from("example".to_string()))]);
-    supported_datatypes_common_impl(data)
+    supported_datatypes_common_impl(InstanceId(3), data)
 }
 
 #[test]
 fn cit_supported_datatypes_null() -> Result<(), ErrorCode> {
     let data = HashMap::from([("null", KvsValue::from(()))]);
-    supported_datatypes_common_impl(data)
+    supported_datatypes_common_impl(InstanceId(4), data)
 }
 
 #[test]
@@ -91,12 +94,12 @@ fn cit_supported_datatypes_array() -> Result<(), ErrorCode> {
             KvsValue::from(hashmap),
         ]),
     )]);
-    supported_datatypes_common_impl(data)
+    supported_datatypes_common_impl(InstanceId(5), data)
 }
 
 #[test]
 fn cit_supported_datatypes_object() -> Result<(), ErrorCode> {
     let hashmap = HashMap::from([("sub-number".to_string(), KvsValue::from(789.0))]);
     let data = HashMap::from([("object", KvsValue::from(hashmap))]);
-    supported_datatypes_common_impl(data)
+    supported_datatypes_common_impl(InstanceId(6), data)
 }

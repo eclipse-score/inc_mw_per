@@ -10,9 +10,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::error_code::ErrorCode;
-use crate::kvs_api::FlushOnExit;
-use crate::kvs_api::KvsApi;
-use crate::kvs_api::SnapshotId;
+use crate::kvs_api::{FlushOnExit, KvsApi, SnapshotId};
 use crate::kvs_value::{KvsMap, KvsValue};
 use std::sync::{Arc, Mutex};
 
@@ -24,25 +22,19 @@ pub struct MockKvs {
 
 impl Default for MockKvs {
     fn default() -> Self {
-        Self {
-            map: Arc::new(Mutex::new(KvsMap::new())),
-            fail: false,
-        }
+        let map = Arc::new(Mutex::new(KvsMap::new()));
+        Self { map, fail: false }
+    }
+}
+
+impl MockKvs {
+    pub fn new(kvs_map: KvsMap, fail: bool) -> Result<Self, ErrorCode> {
+        let map = Arc::new(Mutex::new(kvs_map));
+        Ok(MockKvs { map, fail })
     }
 }
 
 impl KvsApi for MockKvs {
-    fn open(
-        _instance_id: crate::kvs_api::InstanceId,
-        _need_defaults: crate::kvs_api::OpenNeedDefaults,
-        _need_kvs: crate::kvs_api::OpenNeedKvs,
-        _dir: Option<String>,
-    ) -> Result<Self, ErrorCode> {
-        Ok(MockKvs {
-            map: Arc::new(Mutex::new(KvsMap::new())),
-            fail: false,
-        })
-    }
     fn flush_on_exit(&self) -> FlushOnExit {
         FlushOnExit::No
     }
@@ -151,13 +143,13 @@ impl KvsApi for MockKvs {
         }
         Ok(())
     }
-    fn get_kvs_filename(&self, _id: SnapshotId) -> Result<std::path::PathBuf, ErrorCode> {
+    fn get_kvs_file_path(&self, _id: SnapshotId) -> Result<std::path::PathBuf, ErrorCode> {
         if self.fail {
             return Err(ErrorCode::UnmappedError);
         }
         Err(ErrorCode::FileNotFound)
     }
-    fn get_hash_filename(&self, _id: SnapshotId) -> Result<std::path::PathBuf, ErrorCode> {
+    fn get_hash_file_path(&self, _id: SnapshotId) -> Result<std::path::PathBuf, ErrorCode> {
         if self.fail {
             return Err(ErrorCode::UnmappedError);
         }
@@ -168,9 +160,9 @@ impl KvsApi for MockKvs {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::kvs_api::KvsApi;
-    use crate::kvs_api::SnapshotId;
     use crate::kvs_value::KvsValue;
+    use KvsApi;
+    use SnapshotId;
 
     #[test]
     fn test_mock_kvs_pass_and_fail_cases() {
@@ -202,8 +194,8 @@ mod tests {
         assert!(kvs_fail.reset_key("a").is_err());
         assert!(kvs_fail.get_default_value("a").is_err());
         assert!(kvs_fail.is_value_default("a").is_err());
-        assert!(kvs_fail.get_kvs_filename(SnapshotId(0)).is_err());
-        assert!(kvs_fail.get_hash_filename(SnapshotId(0)).is_err());
+        assert!(kvs_fail.get_kvs_file_path(SnapshotId(0)).is_err());
+        assert!(kvs_fail.get_hash_file_path(SnapshotId(0)).is_err());
         assert!(kvs_fail.snapshot_restore(SnapshotId(0)).is_err());
     }
 }

@@ -1,15 +1,23 @@
-//! Persistency tests.
-//!
-//! Requirements verified:
-//! - Multiple KVS per Software Architecture Element (feat_req__persistency__multiple_kvs)
-//!   The KVS system shall allow instantiating multiple independent stores per software architecture element.
-//! - Intra-Process Data Access (feat_req__persistency__intra_process_comm)
-//!   The KVS shall support concurrent intra-process data access.
-//!
+// Copyright (c) 2025 Contributors to the Eclipse Foundation
+//
+// See the NOTICE file(s) distributed with this work for additional
+// information regarding copyright ownership.
+//
+// This program and the accompanying materials are made available under the
+// terms of the Apache License Version 2.0 which is available at
+// <https://www.apache.org/licenses/LICENSE-2.0>
+//
+// SPDX-License-Identifier: Apache-2.0
+
 use rust_kvs::prelude::*;
 use tempfile::tempdir;
 
 #[test]
+// #[record_property("PartiallyVerifies", ["comp_req__persistency__multi_instance", "comp_req__persistency__concurrency"])]
+// #[record_property("FullyVerifies", [""])]
+// #[record_property("Description", "Verifies that multiple KVS instances with different IDs store and retrieve independent values without interference.")]
+// #[record_property("TestType", "requirements-based")]
+// #[record_property("DerivationTechnique", "requirements-based")]
 fn cit_persistency_multiple_instances() -> Result<(), ErrorCode> {
     // Temp directory.
     let dir = tempdir()?;
@@ -85,6 +93,11 @@ fn cit_persistency_multiple_instances() -> Result<(), ErrorCode> {
 }
 
 #[test]
+// #[record_property("PartiallyVerifies", ["comp_req__persistency__multi_instance", "comp_req__persistency__concurrency"])]
+// #[record_property("FullyVerifies", [""])]
+// #[record_property("Description", "Checks that multiple KVS instances with the same ID and key maintain consistent values across instances.")]
+// #[record_property("TestType", "requirements-based")]
+// #[record_property("DerivationTechnique", "requirements-based")]
 fn cit_persistency_multiple_instances_same_id_common_value() -> Result<(), ErrorCode> {
     // Temp directory.
     let dir = tempdir()?;
@@ -148,7 +161,12 @@ fn cit_persistency_multiple_instances_same_id_common_value() -> Result<(), Error
 }
 
 #[test]
-#[ignore]
+// #[record_property("PartiallyVerifies", ["comp_req__persistency__multi_instance", "comp_req__persistency__concurrency"])]
+// #[record_property("FullyVerifies", [""])]
+// #[record_property("Description", "Verifies that changes in one KVS instance with a shared ID and key are reflected in another instance, demonstrating interference.")]
+// #[record_property("TestType", "requirements-based")]
+// #[record_property("DerivationTechnique", "requirements-based")]
+#[ignore = "https://github.com/qorix-group/inc_mw_per/issues/20"]
 fn cit_persistency_multiple_instances_same_id_interfere() -> Result<(), ErrorCode> {
     // TODO: https://github.com/qorix-group/inc_mw_per/issues/20
 

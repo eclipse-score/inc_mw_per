@@ -1,11 +1,13 @@
-//! Supported datatypes tests.
-//!
-//! Requirements verified:
-//! - Supported Datatypes (Keys) (feat_req__persistency__support_datatype_keys)
-//!   The KVS system shall support UTF-8 encoded strings as valid key types.
-//! - Supported Datatypes (Values) (feat_req__persistency__support_datatype_value)
-//!   The KVS system shall support storing both primitive and non-primitive datatypes as values.
-//!   The supported datatypes shall match those used by the IPC feature.
+// Copyright (c) 2025 Contributors to the Eclipse Foundation
+//
+// See the NOTICE file(s) distributed with this work for additional
+// information regarding copyright ownership.
+//
+// This program and the accompanying materials are made available under the
+// terms of the Apache License Version 2.0 which is available at
+// <https://www.apache.org/licenses/LICENSE-2.0>
+//
+// SPDX-License-Identifier: Apache-2.0
 
 mod common;
 use common::compare_kvs_values;
@@ -14,6 +16,11 @@ use std::collections::HashMap;
 use tempfile::tempdir;
 
 #[test]
+// #[record_property("PartiallyVerifies", ["comp_req__persistency__key_encoding", "comp_req__persistency__value_data_types"])]
+// #[record_property("FullyVerifies", [""])]
+// #[record_property("Description", "Verifies that KVS supports UTF-8 string keys for storing and retrieving values.")]
+// #[record_property("TestType", "requirements-based")]
+// #[record_property("DerivationTechnique", "interface-test")]
 fn cit_supported_datatypes_keys() -> Result<(), ErrorCode> {
     // Temp directory.
     let dir = tempdir()?;
@@ -51,6 +58,11 @@ fn supported_datatypes_common_impl(data: HashMap<&str, KvsValue>) -> Result<(), 
 }
 
 #[test]
+// #[record_property("PartiallyVerifies", ["comp_req__persistency__key_naming", "comp_req__persistency__key_encoding", "comp_req__persistency__value_data_types"])]
+// #[record_property("FullyVerifies", [""])]
+// #[record_property("Description", "Checks that KVS can store and retrieve numeric values correctly.")]
+// #[record_property("TestType", "requirements-based")]
+// #[record_property("DerivationTechnique", "requirements-based")]
 fn cit_supported_datatypes_number() -> Result<(), ErrorCode> {
     let data = HashMap::from([
         ("number1", KvsValue::from(123.0)),
@@ -60,24 +72,44 @@ fn cit_supported_datatypes_number() -> Result<(), ErrorCode> {
 }
 
 #[test]
+// #[record_property("PartiallyVerifies", ["comp_req__persistency__key_naming", "comp_req__persistency__key_encoding", "comp_req__persistency__value_data_types"])]
+// #[record_property("FullyVerifies", [""])]
+// #[record_property("Description", "Checks that KVS can store and retrieve boolean values correctly.")]
+// #[record_property("TestType", "requirements-based")]
+// #[record_property("DerivationTechnique", "requirements-based")]
 fn cit_supported_datatypes_boolean() -> Result<(), ErrorCode> {
     let data = HashMap::from([("bool", KvsValue::from(true))]);
     supported_datatypes_common_impl(data)
 }
 
 #[test]
+// #[record_property("PartiallyVerifies", ["comp_req__persistency__key_naming", "comp_req__persistency__key_encoding", "comp_req__persistency__value_data_types"])]
+// #[record_property("FullyVerifies", [""])]
+// #[record_property("Description", "Checks that KVS can store and retrieve string values correctly.")]
+// #[record_property("TestType", "requirements-based")]
+// #[record_property("DerivationTechnique", "requirements-based")]
 fn cit_supported_datatypes_string() -> Result<(), ErrorCode> {
     let data = HashMap::from([("string", KvsValue::from("example".to_string()))]);
     supported_datatypes_common_impl(data)
 }
 
 #[test]
+// #[record_property("PartiallyVerifies", ["comp_req__persistency__key_naming", "comp_req__persistency__key_encoding", "comp_req__persistency__value_data_types"])]
+// #[record_property("FullyVerifies", [""])]
+// #[record_property("Description", "Checks that KVS can store and retrieve null/unit values correctly.")]
+// #[record_property("TestType", "requirements-based")]
+// #[record_property("DerivationTechnique", "requirements-based")]
 fn cit_supported_datatypes_null() -> Result<(), ErrorCode> {
     let data = HashMap::from([("null", KvsValue::from(()))]);
     supported_datatypes_common_impl(data)
 }
 
 #[test]
+// #[record_property("PartiallyVerifies", ["comp_req__persistency__key_naming", "comp_req__persistency__key_encoding", "comp_req__persistency__value_data_types"])]
+// #[record_property("FullyVerifies", [""])]
+// #[record_property("Description", "Checks that KVS can store and retrieve array values correctly.")]
+// #[record_property("TestType", "requirements-based")]
+// #[record_property("DerivationTechnique", "requirements-based")]
 fn cit_supported_datatypes_array() -> Result<(), ErrorCode> {
     let hashmap = HashMap::from([("sub-number".to_string(), KvsValue::from(789.0))]);
     let data = HashMap::from([(
@@ -95,6 +127,11 @@ fn cit_supported_datatypes_array() -> Result<(), ErrorCode> {
 }
 
 #[test]
+// #[record_property("PartiallyVerifies", ["comp_req__persistency__key_naming", "comp_req__persistency__key_encoding", "comp_req__persistency__value_data_types"])]
+// #[record_property("FullyVerifies", [""])]
+// #[record_property("Description", "Checks that KVS can store and retrieve object/map values correctly.")]
+// #[record_property("TestType", "requirements-based")]
+// #[record_property("DerivationTechnique", "requirements-based")]
 fn cit_supported_datatypes_object() -> Result<(), ErrorCode> {
     let hashmap = HashMap::from([("sub-number".to_string(), KvsValue::from(789.0))]);
     let data = HashMap::from([("object", KvsValue::from(hashmap))]);

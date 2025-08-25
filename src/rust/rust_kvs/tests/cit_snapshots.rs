@@ -1,9 +1,13 @@
-//! Snapshots tests.
-//!
-//! Requirements verified:
-//! - Snapshots (feat_req__persistency__snapshots)
-//!   The KVS system shall support explicit creation of snapshots identified by unique IDs and allow rollback to previous snapshots.
-//!   Snapshots shall also be deletable.
+// Copyright (c) 2025 Contributors to the Eclipse Foundation
+//
+// See the NOTICE file(s) distributed with this work for additional
+// information regarding copyright ownership.
+//
+// This program and the accompanying materials are made available under the
+// terms of the Apache License Version 2.0 which is available at
+// <https://www.apache.org/licenses/LICENSE-2.0>
+//
+// SPDX-License-Identifier: Apache-2.0
 
 use rust_kvs::prelude::*;
 use std::cmp::min;
@@ -34,8 +38,12 @@ fn init_kvs(
 
     Ok(kvs)
 }
-
 #[test]
+// #[record_property("PartiallyVerifies", ["comp_req__persistency__snapshot_creation"])]
+// #[record_property("FullyVerifies", [""])]
+// #[record_property("Description", "Verifies that a snapshot is only created after the first flush, and not before.")]
+// #[record_property("TestType", "requirements-based")]
+// #[record_property("DerivationTechnique", "requirements-based")]
 fn cit_snapshots_snapshot_count_first_flush() -> Result<(), ErrorCode> {
     let dir = tempdir()?;
     let dir_string = dir.path().to_string_lossy().to_string();
@@ -61,6 +69,11 @@ fn cit_snapshots_snapshot_count_first_flush() -> Result<(), ErrorCode> {
 }
 
 #[test]
+// #[record_property("PartiallyVerifies", ["comp_req__persistency__snapshot_creation"])]
+// #[record_property("FullyVerifies", [""])]
+// #[record_property("Description", "Checks that the snapshot count increases with each flush, up to the maximum allowed count.")]
+// #[record_property("TestType", "requirements-based")]
+// #[record_property("DerivationTechnique", "requirements-based")]
 fn cit_snapshots_snapshot_count_full() -> Result<(), ErrorCode> {
     let dir = tempdir()?;
     let dir_string = dir.path().to_string_lossy().to_string();
@@ -97,6 +110,11 @@ fn cit_snapshots_snapshot_count_full() -> Result<(), ErrorCode> {
 }
 
 #[test]
+// #[record_property("PartiallyVerifies", ["comp_req__persistency__snapshot_max_num"])]
+// #[record_property("FullyVerifies", [""])]
+// #[record_property("Description", "Verifies that the maximum number of snapshots is a constant value.")]
+// #[record_property("TestType", "requirements-based")]
+// #[record_property("DerivationTechnique", "inspection")]
 fn cit_snapshots_snapshot_max_count() -> Result<(), ErrorCode> {
     // Value is constant.
     assert_eq!(Kvs::snapshot_max_count(), 3);
@@ -104,6 +122,11 @@ fn cit_snapshots_snapshot_max_count() -> Result<(), ErrorCode> {
 }
 
 #[test]
+// #[record_property("PartiallyVerifies", ["comp_req__persistency__snapshot_creation", "comp_req__persistency__snapshot_rotate"])]
+// #[record_property("FullyVerifies", ["comp_req__persistency__snapshot_restore"])]
+// #[record_property("Description", "Verifies restoring to a previous snapshot returns the expected value.")]
+// #[record_property("TestType", "requirements-based")]
+// #[record_property("DerivationTechnique", "control-flow-analysis")]
 fn cit_snapshots_snapshot_restore_previous_snapshot() -> Result<(), ErrorCode> {
     // Temp directory.
     let dir = tempdir()?;
@@ -121,6 +144,11 @@ fn cit_snapshots_snapshot_restore_previous_snapshot() -> Result<(), ErrorCode> {
 }
 
 #[test]
+// #[record_property("PartiallyVerifies", ["comp_req__persistency__snapshot_creation"])]
+// #[record_property("FullyVerifies", [""])]
+// #[record_property("Description", "Checks that restoring the current snapshot ID fails with InvalidSnapshotId error.")]
+// #[record_property("TestType", "requirements-based")]
+// #[record_property("DerivationTechnique", "fault-injection")]
 fn cit_snapshots_snapshot_restore_current_snapshot() -> Result<(), ErrorCode> {
     // Temp directory.
     let dir = tempdir()?;
@@ -138,6 +166,11 @@ fn cit_snapshots_snapshot_restore_current_snapshot() -> Result<(), ErrorCode> {
 }
 
 #[test]
+// #[record_property("PartiallyVerifies", ["comp_req__persistency__snapshot_creation", "comp_req__persistency__snapshot_restore"])]
+// #[record_property("FullyVerifies", [""])]
+// #[record_property("Description", "Checks that restoring a non-existing snapshot fails with InvalidSnapshotId error.")]
+// #[record_property("TestType", "requirements-based")]
+// #[record_property("DerivationTechnique", "fault-injection")]
 fn cit_snapshots_snapshot_restore_nonexisting_snapshot() -> Result<(), ErrorCode> {
     // Temp directory.
     let dir = tempdir()?;
@@ -155,6 +188,11 @@ fn cit_snapshots_snapshot_restore_nonexisting_snapshot() -> Result<(), ErrorCode
 }
 
 #[test]
+// #[record_property("PartiallyVerifies", ["comp_req__persistency__snapshot_creation"])]
+// #[record_property("FullyVerifies", [""])]
+// #[record_property("Description", "Verifies that the filename for an existing snapshot is generated correctly.")]
+// #[record_property("TestType", "requirements-based")]
+// #[record_property("DerivationTechnique", "interface-test")]
 fn cit_snapshots_get_kvs_filename_existing_snapshot() -> Result<(), ErrorCode> {
     // Temp directory.
     let dir = tempdir()?;
@@ -178,6 +216,11 @@ fn cit_snapshots_get_kvs_filename_existing_snapshot() -> Result<(), ErrorCode> {
 }
 
 #[test]
+// #[record_property("PartiallyVerifies", ["comp_req__persistency__snapshot_creation"])]
+// #[record_property("FullyVerifies", [""])]
+// #[record_property("Description", "Checks that requesting the filename for a non-existing snapshot returns FileNotFound error.")]
+// #[record_property("TestType", "requirements-based")]
+// #[record_property("DerivationTechnique", "fault-injection")]
 fn cit_snapshots_get_kvs_filename_nonexisting_snapshot() -> Result<(), ErrorCode> {
     // Temp directory.
     let dir = tempdir()?;
@@ -196,6 +239,11 @@ fn cit_snapshots_get_kvs_filename_nonexisting_snapshot() -> Result<(), ErrorCode
 }
 
 #[test]
+// #[record_property("PartiallyVerifies", ["comp_req__persistency__snapshot_creation"])]
+// #[record_property("FullyVerifies", [""])]
+// #[record_property("Description", "Verifies that the hash filename for an existing snapshot is generated correctly.")]
+// #[record_property("TestType", "requirements-based")]
+// #[record_property("DerivationTechnique", "interface-test")]
 fn cit_snapshots_get_hash_filename_existing_snapshot() -> Result<(), ErrorCode> {
     // Temp directory.
     let dir = tempdir()?;
@@ -219,6 +267,11 @@ fn cit_snapshots_get_hash_filename_existing_snapshot() -> Result<(), ErrorCode> 
 }
 
 #[test]
+// #[record_property("PartiallyVerifies", ["comp_req__persistency__snapshot_creation"])]
+// #[record_property("FullyVerifies", [""])]
+// #[record_property("Description", "Checks that requesting the hash filename for a non-existing snapshot returns FileNotFound error.")]
+// #[record_property("TestType", "requirements-based")]
+// #[record_property("DerivationTechnique", "fault-injection")]
 fn cit_snapshots_get_hash_filename_nonexisting_snapshot() -> Result<(), ErrorCode> {
     // Temp directory.
     let dir = tempdir()?;

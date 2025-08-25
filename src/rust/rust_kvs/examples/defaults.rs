@@ -1,5 +1,5 @@
 //! Example for default values.
-//! - Creating KVS instance using `KvsBuilder` with `need_defaults` modes.
+//! - Creating KVS instance using `KvsProvider` with `defaults` modes.
 //! - Default-specific APIs: `get_default_value`, `is_value_default`.
 //! - Key-value operations behavior on defaults available.
 
@@ -33,7 +33,7 @@ fn create_defaults_file(dir_path: PathBuf, instance_id: InstanceId) -> Result<()
 fn main() -> Result<(), ErrorCode> {
     // Temporary directory.
     let dir = tempdir()?;
-    let dir_string = dir.path().to_string_lossy().to_string();
+    let dir_path = dir.path().to_path_buf();
 
     // Instance ID for KVS object instances.
     let instance_id = InstanceId(0);
@@ -42,11 +42,10 @@ fn main() -> Result<(), ErrorCode> {
     create_defaults_file(dir.path().to_path_buf(), instance_id.clone())?;
 
     // Build KVS instance for given instance ID and temporary directory.
-    // `need_defaults` is set to `true` - defaults are required.
-    let builder = KvsBuilder::<Kvs>::new(instance_id)
-        .dir(dir_string)
-        .need_defaults(true);
-    let kvs = builder.build()?;
+    // `defaults` is set to `Defaults::Required` - defaults are required.
+    let mut provider = KvsProvider::new(dir_path.clone());
+    let params = KvsParameters::new(instance_id.clone()).defaults(Defaults::Required);
+    let kvs = provider.init(params)?;
 
     // Set explicit value to `k1`.
     kvs.set_value("k1", -4321i32)?;

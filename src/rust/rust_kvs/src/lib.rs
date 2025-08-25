@@ -58,9 +58,13 @@
 //! ```
 //! use rust_kvs::prelude::*;
 //! use std::collections::HashMap;
+//! use std::path::PathBuf;
 //!
 //! fn main() -> Result<(), ErrorCode> {
-//!     let kvs: Kvs = KvsBuilder::new(InstanceId(0)).dir("").build()?;
+//!     let kvs_parameters = KvsParameters::new(InstanceId(0)).flush_on_exit(FlushOnExit::No);
+//!     let working_dir = PathBuf::new();
+//!     let mut kvs_provider = KvsProvider::new(working_dir);
+//!     let kvs = kvs_provider.init(kvs_parameters)?;
 //!
 //!     kvs.set_value("number", 123.0)?;
 //!     kvs.set_value("bool", true)?;
@@ -130,7 +134,6 @@
 //!     defines that `String` and `str` are always valid UTF-8.
 //!   * Feature `FEAT_REQ__KVS__supported_datatypes_values` is matched by using the same types that
 //!     the IPC will use for the Rust implementation.
-#![forbid(unsafe_code)]
 #![cfg_attr(coverage_nightly, feature(coverage_attribute))]
 
 pub mod error_code;
@@ -138,21 +141,19 @@ mod json_backend;
 pub mod kvs;
 pub mod kvs_api;
 mod kvs_backend;
-pub mod kvs_builder;
+pub mod kvs_provider;
 pub mod kvs_value;
 
-pub mod kvs_mock;
-
-pub type Kvs = kvs::GenericKvs<json_backend::JsonBackend>;
+use json_backend::JsonBackend;
+pub type KvsProvider = kvs_provider::GenericKvsProvider<JsonBackend>;
+pub type Kvs = kvs::GenericKvs<JsonBackend>;
 
 /// Prelude module for convenient imports
 pub mod prelude {
     pub use crate::error_code::ErrorCode;
     pub use crate::kvs::GenericKvs;
-    pub use crate::kvs_api::{
-        FlushOnExit, InstanceId, KvsApi, OpenNeedDefaults, OpenNeedKvs, SnapshotId,
-    };
-    pub use crate::kvs_builder::KvsBuilder;
+    pub use crate::kvs_api::{Defaults, FlushOnExit, InstanceId, KvsApi, KvsLoad, SnapshotId};
+    pub use crate::kvs_provider::{GenericKvsProvider, KvsParameters};
     pub use crate::kvs_value::{KvsMap, KvsValue};
-    pub use crate::Kvs;
+    pub use crate::{Kvs, KvsProvider};
 }

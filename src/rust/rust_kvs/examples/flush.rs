@@ -20,7 +20,7 @@ fn get_kvs_path(dir_path: PathBuf, instance_id: InstanceId) -> (PathBuf, PathBuf
 fn main() -> Result<(), ErrorCode> {
     // Temporary directory.
     let dir = tempdir()?;
-    let dir_string = dir.path().to_string_lossy().to_string();
+    let dir_path = dir.path().to_path_buf();
 
     // Instance ID for KVS object instances.
     let instance_id = InstanceId(0);
@@ -33,11 +33,12 @@ fn main() -> Result<(), ErrorCode> {
 
         {
             // Build KVS instance for given instance ID and temporary directory.
-            let builder = KvsBuilder::<Kvs>::new(instance_id.clone()).dir(dir_string.clone());
-            let mut kvs = builder.build()?;
+            let mut provider = KvsProvider::new(dir_path.clone());
+            let params = KvsParameters::new(instance_id.clone());
+            let kvs = provider.init(params)?;
 
             // Disable flush on exit.
-            kvs.set_flush_on_exit(FlushOnExit::No);
+            kvs.set_flush_on_exit(FlushOnExit::No)?;
 
             // Set value - will be dropped on going out of scope.
             kvs.set_value("k1", "v1")?;
@@ -54,11 +55,12 @@ fn main() -> Result<(), ErrorCode> {
 
         {
             // Build KVS instance for given instance ID and temporary directory.
-            let builder = KvsBuilder::<Kvs>::new(instance_id.clone()).dir(dir_string.clone());
-            let mut kvs = builder.build()?;
+            let mut provider = KvsProvider::new(dir_path.clone());
+            let params = KvsParameters::new(instance_id.clone());
+            let kvs = provider.init(params)?;
 
             // Explicitly enable flush on exit - this is the default.
-            kvs.set_flush_on_exit(FlushOnExit::Yes);
+            kvs.set_flush_on_exit(FlushOnExit::Yes)?;
 
             // Set value.
             kvs.set_value("k1", "v1")?;
@@ -75,11 +77,12 @@ fn main() -> Result<(), ErrorCode> {
 
         {
             // Build KVS instance for given instance ID and temporary directory.
-            let builder = KvsBuilder::<Kvs>::new(instance_id.clone()).dir(dir_string.clone());
-            let mut kvs = builder.build()?;
+            let mut provider = KvsProvider::new(dir_path.clone());
+            let params = KvsParameters::new(instance_id.clone());
+            let kvs = provider.init(params)?;
 
             // Disable flush on exit.
-            kvs.set_flush_on_exit(FlushOnExit::No);
+            kvs.set_flush_on_exit(FlushOnExit::No)?;
 
             // Set value.
             kvs.set_value("k2", "v2")?;
@@ -91,11 +94,10 @@ fn main() -> Result<(), ErrorCode> {
 
         {
             // Build KVS instance to check current state.
-            let builder = KvsBuilder::<Kvs>::new(instance_id.clone())
-                .dir(dir_string)
-                .need_kvs(true);
-            let mut kvs = builder.build()?;
-            kvs.set_flush_on_exit(FlushOnExit::No);
+            let mut provider = KvsProvider::new(dir_path.clone());
+            let params = KvsParameters::new(instance_id.clone()).kvs_load(KvsLoad::Required);
+            let kvs = provider.init(params)?;
+            kvs.set_flush_on_exit(FlushOnExit::No)?;
 
             let k1_key = "k1";
             let k1_value = kvs.get_value(k1_key)?;

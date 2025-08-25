@@ -7,7 +7,7 @@
 //!   The KVS system shall support retrieving the default value associated with a key.
 //! - Set default key values via file (feat_req__persistency__default_value_file)
 //!   The KVS shall support the configuration of default key values using an external file.
-//!
+
 use rust_kvs::prelude::*;
 use std::collections::HashMap;
 use std::path::Path;
@@ -15,11 +15,11 @@ use tempfile::tempdir;
 use tinyjson::{JsonGenerator, JsonValue};
 
 fn write_defaults_file(
-    dir_string: &Path,
+    dir_path: &Path,
     data: HashMap<String, JsonValue>,
     instance: &InstanceId,
 ) -> Result<(), ErrorCode> {
-    let filepath = dir_string.join(format!("kvs_{instance}_default.json"));
+    let filepath = dir_path.join(format!("kvs_{instance}_default.json"));
 
     // Convert HashMap<String, JsonValue> to t-tagged format
     let mut tagged_map = HashMap::new();
@@ -51,7 +51,7 @@ fn write_defaults_file(
 fn cit_persistency_default_values() -> Result<(), ErrorCode> {
     // Temp directory.
     let dir = tempdir()?;
-    let dir_string = dir.path().to_string_lossy().to_string();
+    let dir_path = dir.path().to_path_buf();
 
     // Values.
     let keyname = "test_number".to_string();
@@ -69,24 +69,19 @@ fn cit_persistency_default_values() -> Result<(), ErrorCode> {
 
     // Assertions.
     {
+        let mut kvs_provider = KvsProvider::new(dir_path.clone());
         // KVS instance with defaults.
-        let kvs_with_defaults = Kvs::open(
-            default_id.clone(),
-            OpenNeedDefaults::Required,
-            OpenNeedKvs::Optional,
-            Some(dir_string.clone()),
-        )?;
+        let kvs_with_defaults = kvs_provider
+            .init(KvsParameters::new(default_id.clone()).defaults(Defaults::Required))?;
+
         // KVS instance without defaults.
-        let kvs_without_defaults = Kvs::open(
-            non_default_id.clone(),
-            OpenNeedDefaults::Optional,
-            OpenNeedKvs::Optional,
-            Some(dir_string.clone()),
-        )?;
+        let kvs_without_defaults = kvs_provider
+            .init(KvsParameters::new(non_default_id.clone()).defaults(Defaults::Optional))?;
+
         // Check defaults.
         assert!(
             kvs_with_defaults.is_value_default(&keyname)?,
-            "kvs_with_defaults: key '{keyname}' should be default"
+            "kvs_with_defaults: key '{keyname}' should be default",
         );
         assert_eq!(
             kvs_without_defaults.is_value_default(&keyname).unwrap_err(),
@@ -122,20 +117,15 @@ fn cit_persistency_default_values() -> Result<(), ErrorCode> {
     }
     // Flush and reopen KVS instances to ensure persistency.
     {
+        let mut kvs_provider = KvsProvider::new(dir_path);
         // KVS instance with defaults.
-        let kvs_with_defaults = Kvs::open(
-            default_id.clone(),
-            OpenNeedDefaults::Required,
-            OpenNeedKvs::Optional,
-            Some(dir_string.clone()),
-        )?;
+        let kvs_with_defaults =
+            kvs_provider.init(KvsParameters::new(default_id).defaults(Defaults::Required))?;
+
         // KVS instance without defaults.
-        let kvs_without_defaults = Kvs::open(
-            non_default_id.clone(),
-            OpenNeedDefaults::Optional,
-            OpenNeedKvs::Optional,
-            Some(dir_string.clone()),
-        )?;
+        let kvs_without_defaults =
+            kvs_provider.init(KvsParameters::new(non_default_id).defaults(Defaults::Optional))?;
+
         // Check that the value is still non-default.
         assert_eq!(
             kvs_with_defaults.get_value_as::<f64>(&keyname)?,
@@ -156,7 +146,8 @@ fn cit_persistency_default_values() -> Result<(), ErrorCode> {
 fn cit_persistency_default_values_optional() -> Result<(), ErrorCode> {
     // Temp directory.
     let dir = tempdir().unwrap();
-    let dir_string = dir.path().to_string_lossy().to_string();
+    let dir_path = dir.path().to_path_buf();
+    let mut kvs_provider = KvsProvider::new(dir_path);
 
     // Values.
     let keyname = "test_number".to_string();
@@ -175,12 +166,7 @@ fn cit_persistency_default_values_optional() -> Result<(), ErrorCode> {
     {
         // KVS instance with present defaults file and optional defaults setting
         // (should load defaults).
-        let kvs_optional_defaults = Kvs::open(
-            default_id.clone(),
-            OpenNeedDefaults::Optional,
-            OpenNeedKvs::Optional,
-            Some(dir_string.clone()),
-        )?;
+        let kvs_optional_defaults = kvs_provider.init(KvsParameters::new(default_id.clone()))?;
 
         // Check defaults.
         assert!(
@@ -201,7 +187,8 @@ fn cit_persistency_default_values_optional() -> Result<(), ErrorCode> {
 fn cit_persistency_defaults_enabled_values_removal() -> Result<(), ErrorCode> {
     // Temp directory.
     let dir = tempdir()?;
-    let dir_string = dir.path().to_string_lossy().to_string();
+    let dir_path = dir.path().to_path_buf();
+    let mut kvs_provider = KvsProvider::new(dir_path);
 
     // Values.
     let keyname = "test_number".to_string();
@@ -219,12 +206,9 @@ fn cit_persistency_defaults_enabled_values_removal() -> Result<(), ErrorCode> {
     // Assertions.
     {
         // KVS instance with defaults.
-        let kvs_with_defaults = Kvs::open(
-            default_id.clone(),
-            OpenNeedDefaults::Required,
-            OpenNeedKvs::Optional,
-            Some(dir_string.clone()),
-        )?;
+        let kvs_with_defaults =
+            kvs_provider.init(KvsParameters::new(default_id).defaults(Defaults::Required))?;
+
         // Check default value.
         assert_eq!(
             kvs_with_defaults.get_value_as::<f64>(&keyname)?,
@@ -260,7 +244,8 @@ fn cit_persistency_defaults_enabled_values_removal() -> Result<(), ErrorCode> {
 fn cit_persistency_defaults_disabled_values_removal() -> Result<(), ErrorCode> {
     // Temp directory.
     let dir = tempdir()?;
-    let dir_string = dir.path().to_string_lossy().to_string();
+    let dir_path = dir.path().to_path_buf();
+    let mut kvs_provider = KvsProvider::new(dir_path);
 
     // Values.
     let keyname = "test_number".to_string();
@@ -269,12 +254,9 @@ fn cit_persistency_defaults_disabled_values_removal() -> Result<(), ErrorCode> {
     // Assertions.
     {
         // KVS instance with defaults.
-        let kvs_without_defaults = Kvs::open(
-            InstanceId(0),
-            OpenNeedDefaults::Optional,
-            OpenNeedKvs::Optional,
-            Some(dir_string.clone()),
-        )?;
+        let kvs_without_defaults =
+            kvs_provider.init(KvsParameters::new(InstanceId(0)).defaults(Defaults::Optional))?;
+
         // Set non-default value and check it.
         kvs_without_defaults.set_value(&keyname, non_default_value)?;
         assert_eq!(
@@ -299,7 +281,8 @@ fn cit_persistency_defaults_disabled_values_removal() -> Result<(), ErrorCode> {
 fn cit_persistency_invalid_default_values() -> Result<(), ErrorCode> {
     // Temp directory.
     let dir = tempdir()?;
-    let dir_string = dir.path().to_string_lossy().to_string();
+    let dir_path = dir.path().to_path_buf();
+    let mut kvs_provider = KvsProvider::new(dir_path);
 
     // Write invalid JSON directly
     let keyname = "test_bool";
@@ -309,12 +292,7 @@ fn cit_persistency_invalid_default_values() -> Result<(), ErrorCode> {
     std::fs::write(&filename, invalid_json)?;
 
     // Assertions: opening should fail due to invalid JSON
-    let kvs = Kvs::open(
-        default_id.clone(),
-        OpenNeedDefaults::Required,
-        OpenNeedKvs::Optional,
-        Some(dir_string.clone()),
-    );
+    let kvs = kvs_provider.init(KvsParameters::new(default_id).defaults(Defaults::Required));
     assert!(
         kvs.is_err(),
         "Kvs::open should fail with invalid JSON in defaults file"
@@ -327,7 +305,8 @@ fn cit_persistency_invalid_default_values() -> Result<(), ErrorCode> {
 fn cit_persistency_reset_all_default_values() -> Result<(), ErrorCode> {
     // Temp directory.
     let dir = tempdir()?;
-    let dir_string = dir.path().to_string_lossy().to_string();
+    let dir_path = dir.path().to_path_buf();
+    let mut kvs_provider = KvsProvider::new(dir_path);
 
     // Values.
     let keyname1 = "test_number1".to_string();
@@ -349,12 +328,8 @@ fn cit_persistency_reset_all_default_values() -> Result<(), ErrorCode> {
     // Assertions.
     {
         // KVS instance with defaults.
-        let kvs_with_defaults = Kvs::open(
-            default_id.clone(),
-            OpenNeedDefaults::Required,
-            OpenNeedKvs::Optional,
-            Some(dir_string.clone()),
-        )?;
+        let kvs_with_defaults =
+            kvs_provider.init(KvsParameters::new(default_id).defaults(Defaults::Required))?;
 
         // Check defaults.
         assert!(

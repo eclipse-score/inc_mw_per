@@ -1,5 +1,5 @@
 //! Example for basic operations.
-//! - Creating KVS instance using `KvsBuilder` with `need_kvs` modes.
+//! - Creating KVS instance using `KvsProvider` with `kvs_load` modes.
 //! - Basic key-value operations: `get_value`, `get_value_as`, `set_value`, `get_all_keys`.
 //! - Other key-value operations: `reset`, `key_exists`, `remove_key`.
 
@@ -10,19 +10,18 @@ use tempfile::tempdir;
 fn main() -> Result<(), ErrorCode> {
     // Temporary directory.
     let dir = tempdir()?;
-    let dir_string = dir.path().to_string_lossy().to_string();
+    let dir_path = dir.path().to_path_buf();
 
     // Instance ID for KVS object instances.
     let instance_id = InstanceId(0);
 
     {
         // Build KVS instance for given instance ID and temporary directory.
-        // `need_kvs` is explicitly set to `false`, but this is the default value.
+        // `kvs_load` is explicitly set to `KvsLoad::Optional`, but this is the default value.
         // KVS files are not required.
-        let builder = KvsBuilder::<Kvs>::new(instance_id.clone())
-            .dir(dir_string.clone())
-            .need_kvs(false);
-        let kvs = builder.build()?;
+        let mut provider = KvsProvider::new(dir_path.clone());
+        let params = KvsParameters::new(instance_id.clone()).kvs_load(KvsLoad::Optional);
+        let kvs = provider.init(params)?;
 
         println!("-> `set_value` usage");
         kvs.set_value("number", 123.0)?;
@@ -63,11 +62,10 @@ fn main() -> Result<(), ErrorCode> {
 
     {
         // Build KVS instance for given instance ID and temporary directory.
-        // `need_kvs` is set to `true` - KVS files must already exist from previous KVS instance.
-        let builder = KvsBuilder::<Kvs>::new(instance_id)
-            .dir(dir_string)
-            .need_kvs(true);
-        let kvs = builder.build()?;
+        // `kvs_load` is set to `KvsLoad::Required` - KVS files must already exist from previous KVS instance.
+        let mut provider = KvsProvider::new(dir_path.clone());
+        let params = KvsParameters::new(instance_id.clone()).kvs_load(KvsLoad::Required);
+        let kvs = provider.init(params)?;
 
         // `get_value` usage - print all existing keys with their values.
         // `KvsValue` is returned, underlying type can be determined at runtime.

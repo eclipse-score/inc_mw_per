@@ -8,7 +8,7 @@ use tempfile::tempdir;
 fn main() -> Result<(), ErrorCode> {
     // Temporary directory.
     let dir = tempdir()?;
-    let dir_string = dir.path().to_string_lossy().to_string();
+    let dir_path = dir.path().to_path_buf();
 
     // Instance ID for KVS object instances.
     let instance_id = InstanceId(0);
@@ -17,9 +17,10 @@ fn main() -> Result<(), ErrorCode> {
         println!("-> `snapshot_count` and `snapshot_max_count` usage");
 
         // Build KVS instance for given instance ID and temporary directory.
-        let builder = KvsBuilder::<Kvs>::new(instance_id.clone()).dir(dir_string.clone());
-        let mut kvs = builder.build()?;
-        kvs.set_flush_on_exit(FlushOnExit::No);
+        let mut provider = KvsProvider::new(dir_path.clone());
+        let params = KvsParameters::new(instance_id.clone());
+        let kvs = provider.init(params)?;
+        kvs.set_flush_on_exit(FlushOnExit::No)?;
 
         let max_count = Kvs::snapshot_max_count() as u32;
         println!("Max snapshot count: {max_count:?}");
@@ -39,9 +40,10 @@ fn main() -> Result<(), ErrorCode> {
         println!("-> `snapshot_restore` usage");
 
         // Build KVS instance for given instance ID and temporary directory.
-        let builder = KvsBuilder::<Kvs>::new(instance_id.clone()).dir(dir_string.clone());
-        let mut kvs = builder.build()?;
-        kvs.set_flush_on_exit(FlushOnExit::No);
+        let mut provider = KvsProvider::new(dir_path.clone());
+        let params = KvsParameters::new(instance_id.clone());
+        let kvs = provider.init(params)?;
+        kvs.set_flush_on_exit(FlushOnExit::No)?;
 
         let max_count = Kvs::snapshot_max_count() as u32;
         let counter_key = "counter";
@@ -52,7 +54,7 @@ fn main() -> Result<(), ErrorCode> {
 
         // Print current counter value, then restore oldest snapshot.
         println!("{counter_key} = {:?}", kvs.get_value(counter_key)?);
-        kvs.snapshot_restore(SnapshotId(2))?;
+        kvs.snapshot_restore(&SnapshotId(2))?;
         println!("{counter_key} = {:?}", kvs.get_value(counter_key)?);
 
         println!();

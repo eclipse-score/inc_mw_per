@@ -18,7 +18,7 @@ use tempfile::tempdir;
 fn cit_persistency_flush_on_exit_enabled() -> Result<(), ErrorCode> {
     // Temp directory.
     let dir = tempdir()?;
-    let dir_string = dir.path().to_string_lossy().to_string();
+    let dir_path = dir.path().to_path_buf();
 
     // Values of each type.
     let mut kv_values: HashMap<String, KvsValue> = HashMap::new();
@@ -31,7 +31,7 @@ fn cit_persistency_flush_on_exit_enabled() -> Result<(), ErrorCode> {
     let array = vec![
         KvsValue::from(321.0),
         KvsValue::from(false),
-        KvsValue::from("dbca".to_string()),
+        KvsValue::from("example_string".to_string()),
         KvsValue::from(()),
         KvsValue::from(vec![]),
         KvsValue::from(hashmap),
@@ -39,13 +39,9 @@ fn cit_persistency_flush_on_exit_enabled() -> Result<(), ErrorCode> {
     kv_values.insert("array".to_string(), KvsValue::from(array));
 
     {
+        let mut kvs_provider = KvsProvider::new(dir_path.clone());
         // First KVS run.
-        let kvs = Kvs::open(
-            InstanceId(0),
-            OpenNeedDefaults::Optional,
-            OpenNeedKvs::Optional,
-            Some(dir_string.clone()),
-        )?;
+        let kvs = kvs_provider.init(KvsParameters::new(InstanceId(0)))?;
 
         // Set values.
         for (key, value) in kv_values.iter() {
@@ -55,14 +51,11 @@ fn cit_persistency_flush_on_exit_enabled() -> Result<(), ErrorCode> {
 
     // Assertions.
     {
+        let mut kvs_provider = KvsProvider::new(dir_path);
         // Second KVS run.
         // KVS file is expected to exist.
-        let kvs = Kvs::open(
-            InstanceId(0),
-            OpenNeedDefaults::Optional,
-            OpenNeedKvs::Required,
-            Some(dir_string),
-        )?;
+        let kvs =
+            kvs_provider.init(KvsParameters::new(InstanceId(0)).kvs_load(KvsLoad::Required))?;
 
         // Compare values.
         for (key, expected_value) in kv_values.iter() {
@@ -78,7 +71,8 @@ fn cit_persistency_flush_on_exit_enabled() -> Result<(), ErrorCode> {
 fn cit_persistency_flush_on_exit_disabled_drop_data() -> Result<(), ErrorCode> {
     // Temp directory.
     let dir = tempdir()?;
-    let dir_string = dir.path().to_string_lossy().to_string();
+    let dir_path = dir.path().to_path_buf();
+    let mut kvs_provider = KvsProvider::new(dir_path);
 
     // Values of each type.
     let mut kv_values: HashMap<String, KvsValue> = HashMap::new();
@@ -91,7 +85,7 @@ fn cit_persistency_flush_on_exit_disabled_drop_data() -> Result<(), ErrorCode> {
     let array = vec![
         KvsValue::from(321.0),
         KvsValue::from(false),
-        KvsValue::from("dbca".to_string()),
+        KvsValue::from("example_string".to_string()),
         KvsValue::from(()),
         KvsValue::from(vec![]),
         KvsValue::from(hashmap),
@@ -100,13 +94,8 @@ fn cit_persistency_flush_on_exit_disabled_drop_data() -> Result<(), ErrorCode> {
 
     {
         // First KVS run.
-        let mut kvs = Kvs::open(
-            InstanceId(0),
-            OpenNeedDefaults::Optional,
-            OpenNeedKvs::Optional,
-            Some(dir_string.clone()),
-        )?;
-        kvs.set_flush_on_exit(FlushOnExit::No);
+        let kvs =
+            kvs_provider.init(KvsParameters::new(InstanceId(0)).flush_on_exit(FlushOnExit::No))?;
 
         // Set values.
         for (key, value) in kv_values.iter() {
@@ -114,20 +103,9 @@ fn cit_persistency_flush_on_exit_disabled_drop_data() -> Result<(), ErrorCode> {
         }
     }
 
-    // Assertions.
-    {
-        // Second KVS run.
-        // KVS file is expected to not to exist.
-        let kvs = Kvs::open(
-            InstanceId(0),
-            OpenNeedDefaults::Optional,
-            OpenNeedKvs::Optional,
-            Some(dir_string),
-        )?;
-
-        // Make sure no keys are defined.
-        assert!(kvs.get_all_keys()?.is_empty());
-    }
+    // Assert file is not filled - no flush happened.
+    let exp_json_path = dir.path().join("kvs_0_0.json");
+    assert!(!exp_json_path.exists());
 
     Ok(())
 }
@@ -136,7 +114,7 @@ fn cit_persistency_flush_on_exit_disabled_drop_data() -> Result<(), ErrorCode> {
 fn cit_persistency_flush_on_exit_disabled_manual_flush() -> Result<(), ErrorCode> {
     // Temp directory.
     let dir = tempdir()?;
-    let dir_string = dir.path().to_string_lossy().to_string();
+    let dir_path = dir.path().to_path_buf();
 
     // Values of each type.
     let mut kv_values: HashMap<String, KvsValue> = HashMap::new();
@@ -149,7 +127,7 @@ fn cit_persistency_flush_on_exit_disabled_manual_flush() -> Result<(), ErrorCode
     let array = vec![
         KvsValue::from(321.0),
         KvsValue::from(false),
-        KvsValue::from("dbca".to_string()),
+        KvsValue::from("example_string".to_string()),
         KvsValue::from(()),
         KvsValue::from(vec![]),
         KvsValue::from(hashmap),
@@ -157,14 +135,10 @@ fn cit_persistency_flush_on_exit_disabled_manual_flush() -> Result<(), ErrorCode
     kv_values.insert("array".to_string(), KvsValue::from(array));
 
     {
+        let mut kvs_provider = KvsProvider::new(dir_path.clone());
         // First KVS run.
-        let mut kvs = Kvs::open(
-            InstanceId(0),
-            OpenNeedDefaults::Optional,
-            OpenNeedKvs::Optional,
-            Some(dir_string.clone()),
-        )?;
-        kvs.set_flush_on_exit(FlushOnExit::No);
+        let kvs =
+            kvs_provider.init(KvsParameters::new(InstanceId(0)).flush_on_exit(FlushOnExit::No))?;
 
         // Set values.
         for (key, value) in kv_values.iter() {
@@ -177,13 +151,13 @@ fn cit_persistency_flush_on_exit_disabled_manual_flush() -> Result<(), ErrorCode
 
     // Assertions.
     {
+        let mut kvs_provider = KvsProvider::new(dir_path);
         // Second KVS run.
         // KVS file is expected to exist.
-        let kvs = Kvs::open(
-            InstanceId(0),
-            OpenNeedDefaults::Optional,
-            OpenNeedKvs::Required,
-            Some(dir_string),
+        let kvs = kvs_provider.init(
+            KvsParameters::new(InstanceId(0))
+                .flush_on_exit(FlushOnExit::No)
+                .kvs_load(KvsLoad::Required),
         )?;
 
         // Compare values.
@@ -192,6 +166,35 @@ fn cit_persistency_flush_on_exit_disabled_manual_flush() -> Result<(), ErrorCode
             assert!(compare_kvs_values(expected_value, &actual_value))
         }
     }
+
+    Ok(())
+}
+
+#[test]
+fn cit_persistency_multiple_instances_shared_data() -> Result<(), ErrorCode> {
+    // Temp directory.
+    let dir = tempdir()?;
+    let dir_path = dir.path().to_path_buf();
+    let mut kvs_provider = KvsProvider::new(dir_path);
+
+    // Initialize first KVS instance.
+    let kvs1 =
+        kvs_provider.init(KvsParameters::new(InstanceId(0)).flush_on_exit(FlushOnExit::No))?;
+    {
+        kvs1.set_value("k1", KvsValue::from("v1".to_string()))?;
+    }
+
+    // Initialize seconds KVS instance.
+    let kvs2 = kvs_provider.get(InstanceId(0))?;
+    {
+        kvs2.set_value("k2", KvsValue::from("v2".to_string()))?;
+    }
+
+    // Assert data is shared between objects of same InstanceID.
+    assert_eq!(kvs1.get_value_as::<String>("k1")?, "v1".to_string());
+    assert_eq!(kvs1.get_value_as::<String>("k2")?, "v2".to_string());
+    assert_eq!(kvs2.get_value_as::<String>("k2")?, "v2".to_string());
+    assert_eq!(kvs2.get_value_as::<String>("k1")?, "v1".to_string());
 
     Ok(())
 }

@@ -413,7 +413,7 @@ fn _snapshotrestore(kvs: Kvs, mut args: Arguments) -> Result<(), ErrorCode> {
     };
     println!("Restore Snapshot {}", &snapshot_id);
     let snapshot_id = SnapshotId(snapshot_id as usize);
-    kvs.snapshot_restore(snapshot_id).map_err(|e| {
+    kvs.snapshot_restore(&snapshot_id).map_err(|e| {
         eprintln!("KVS restore failed: {e:?}");
         e
     })?;
@@ -436,7 +436,7 @@ fn _getkvsfilename(kvs: Kvs, mut args: Arguments) -> Result<(), ErrorCode> {
         },
     };
     let snapshot_id = SnapshotId(snapshot_id as usize);
-    let filename = kvs.get_kvs_filename(snapshot_id)?;
+    let filename = kvs.get_kvs_file_path(&snapshot_id)?;
     println!("KVS Filename: {}", filename.display());
     println!("----------------------");
     Ok(())
@@ -458,7 +458,7 @@ fn _gethashfilename(kvs: Kvs, mut args: Arguments) -> Result<(), ErrorCode> {
         },
     };
     let snapshot_id = SnapshotId(snapshot_id as usize);
-    let filename = kvs.get_hash_filename(snapshot_id);
+    let filename = kvs.get_hash_file_path(&snapshot_id);
     println!("Hash Filename: {}", filename?.display());
     println!("----------------------");
     Ok(())
@@ -526,12 +526,12 @@ fn _createtestdata(kvs: Kvs) -> Result<(), ErrorCode> {
 /// Main function to run the KVS tool command line interface.
 fn main() -> Result<(), ErrorCode> {
     let mut args = Arguments::from_env();
+    let current_dir = std::env::current_dir()?;
 
-    let builder = KvsBuilder::new(InstanceId(0))
-        .need_defaults(false)
-        .need_kvs(false);
+    let mut kvs_provider = KvsProvider::new(current_dir);
+    let kvs_parameters = KvsParameters::new(InstanceId(0));
 
-    let kvs = match builder.build() {
+    let kvs = match kvs_provider.init(kvs_parameters) {
         Ok(kvs) => kvs,
         Err(e) => {
             eprintln!("Error opening KVS: {e:?}");

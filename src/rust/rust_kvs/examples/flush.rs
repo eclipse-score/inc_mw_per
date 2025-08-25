@@ -93,7 +93,7 @@ fn main() -> Result<(), ErrorCode> {
             // Build KVS instance to check current state.
             let builder = KvsBuilder::<Kvs>::new(instance_id)
                 .dir(dir_string)
-                .need_kvs(true);
+                .kvs_load(KvsLoad::Required);
             let kvs = builder.build()?;
             kvs.set_flush_on_exit(FlushOnExit::No);
 

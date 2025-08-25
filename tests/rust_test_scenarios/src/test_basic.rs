@@ -1,11 +1,12 @@
 use rust_kvs::{kvs_api::FlushOnExit, prelude::*};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::path::PathBuf;
 use test_scenarios_rust::scenario::Scenario;
 use tracing::info;
 
 #[derive(Serialize, Deserialize, Debug)]
-struct KvsParameters {
+struct InputParameters {
     instance_id: usize,
     need_defaults: Option<bool>,
     need_kvs: Option<bool>,
@@ -30,30 +31,41 @@ impl Scenario for BasicScenario {
         eprintln!("{}", input.clone().unwrap());
 
         let v: Value = serde_json::from_str(input.as_deref().unwrap()).unwrap();
-        let params: KvsParameters = serde_json::from_value(v["kvs_parameters"].clone()).unwrap();
+        let input_parameters: InputParameters =
+            serde_json::from_value(v["kvs_parameters"].clone()).unwrap();
 
-        // Set builder parameters.
-        let instance_id = InstanceId(params.instance_id);
-        let mut builder = KvsBuilder::new(instance_id);
-        if let Some(flag) = params.need_defaults {
-            builder = builder.need_defaults(flag);
+        // Set KVS parameters.
+        let instance_id = InstanceId(input_parameters.instance_id);
+        let mut kvs_parameters = KvsParameters::new(instance_id);
+        if let Some(flag) = input_parameters.need_defaults {
+            kvs_parameters = kvs_parameters.defaults(if flag {
+                Defaults::Required
+            } else {
+                Defaults::Optional
+            });
         }
-        if let Some(flag) = params.need_kvs {
-            builder = builder.need_kvs(flag);
+        if let Some(flag) = input_parameters.need_kvs {
+            kvs_parameters = kvs_parameters.kvs_load(if flag {
+                KvsLoad::Required
+            } else {
+                KvsLoad::Optional
+            });
         }
-        if let Some(dir) = params.dir {
-            builder = builder.dir(dir);
-        }
+        let working_dir = match input_parameters.dir {
+            Some(p) => PathBuf::from(p),
+            None => PathBuf::new(),
+        };
 
         // Create KVS.
-        let mut kvs: Kvs = builder.build().unwrap();
-        if let Some(flag) = params.flush_on_exit {
-            let mode = if flag {
+        let mut provider = KvsProvider::new(working_dir);
+        let kvs = provider.init(kvs_parameters).unwrap();
+        if let Some(flag) = input_parameters.flush_on_exit {
+            kvs.set_flush_on_exit(if flag {
                 FlushOnExit::Yes
             } else {
                 FlushOnExit::No
-            };
-            kvs.set_flush_on_exit(mode);
+            })
+            .unwrap();
         }
 
         // Simple set/get.

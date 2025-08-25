@@ -82,7 +82,7 @@ fn cit_persistency_multiple_instances_same_id_common_value() -> Result<(), Error
     let common_keyname = "number".to_string();
     let common_value = 100.0;
 
-    let instance_id = InstanceId(0);
+    let instance_id = InstanceId(2);
     {
         // Create first KVS instance.
         let kvs1 = KvsBuilder::new(instance_id)
@@ -137,7 +137,7 @@ fn cit_persistency_multiple_instances_same_id_interfere() -> Result<(), ErrorCod
     let value1 = 111.1;
     let value2 = 222.2;
 
-    let instance_id = InstanceId(0);
+    let instance_id = InstanceId(3);
     {
         // Create first KVS instance.
         let kvs1 = KvsBuilder::new(instance_id)

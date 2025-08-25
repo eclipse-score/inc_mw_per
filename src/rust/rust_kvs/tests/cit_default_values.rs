@@ -154,8 +154,8 @@ fn cit_persistency_default_values_optional() -> Result<(), ErrorCode> {
     let keyname = "test_number".to_string();
     let default_value = 111.1;
 
-    // Create defaults file for instance 0.
-    let default_id = InstanceId(0);
+    // Create defaults file for instance 2.
+    let default_id = InstanceId(2);
     write_defaults_file(
         dir.path(),
         HashMap::from([(keyname.clone(), JsonValue::from(default_value))]),
@@ -198,8 +198,8 @@ fn cit_persistency_defaults_enabled_values_removal() -> Result<(), ErrorCode> {
     let default_value = 111.1;
     let non_default_value = 333.3;
 
-    // Create defaults file for instance 0.
-    let default_id = InstanceId(0);
+    // Create defaults file for instance 3.
+    let default_id = InstanceId(3);
     write_defaults_file(
         dir.path(),
         HashMap::from([(keyname.clone(), JsonValue::from(default_value))]),
@@ -257,7 +257,7 @@ fn cit_persistency_defaults_disabled_values_removal() -> Result<(), ErrorCode> {
     // Assertions.
     {
         // KVS instance with defaults.
-        let builder_without_defaults = KvsBuilder::new(InstanceId(0))
+        let builder_without_defaults = KvsBuilder::new(InstanceId(4))
             .defaults(Defaults::Optional)
             .dir(dir_string.clone());
         let kvs_without_defaults = builder_without_defaults.build()?;
@@ -289,7 +289,7 @@ fn cit_persistency_invalid_default_values() -> Result<(), ErrorCode> {
 
     // Write invalid JSON directly
     let keyname = "test_bool";
-    let default_id = InstanceId(0);
+    let default_id = InstanceId(5);
     let filename = dir.path().join(format!("kvs_{default_id}_default.json"));
     let invalid_json = format!(r#"{{"{keyname}": True}}"#);
     std::fs::write(&filename, invalid_json)?;
@@ -319,8 +319,8 @@ fn cit_persistency_reset_all_default_values() -> Result<(), ErrorCode> {
     let default_value: f64 = 111.1;
     let non_default_value = 333.3;
 
-    // Create defaults file for instance 0.
-    let default_id = InstanceId(0);
+    // Create defaults file for instance 6.
+    let default_id = InstanceId(6);
     write_defaults_file(
         dir.path(),
         HashMap::from([

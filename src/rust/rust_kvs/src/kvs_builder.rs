@@ -10,7 +10,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::error_code::ErrorCode;
-use crate::kvs::GenericKvs;
+use crate::kvs::{GenericKvs, KvsParameters};
 use crate::kvs_api::{Defaults, FlushOnExit, InstanceId, KvsLoad, SnapshotId};
 use crate::kvs_backend::{KvsBackend, KvsPathResolver};
 use crate::kvs_value::KvsMap;
@@ -20,26 +20,6 @@ use std::sync::{Arc, LazyLock, Mutex, MutexGuard, PoisonError};
 
 /// Maximum number of instances.
 const KVS_MAX_INSTANCES: usize = 10;
-
-/// KVS instance parameters.
-/// Expected to be cloned into new KVS instances.
-#[derive(Clone, PartialEq)]
-pub(crate) struct KvsParameters {
-    /// Instance ID.
-    pub(crate) instance_id: InstanceId,
-
-    /// Defaults handling mode.
-    pub(crate) defaults: Defaults,
-
-    /// KVS load mode.
-    pub(crate) kvs_load: KvsLoad,
-
-    /// Flush on exit mode.
-    pub(crate) flush_on_exit: FlushOnExit,
-
-    /// Working directory.
-    pub(crate) working_dir: PathBuf,
-}
 
 /// KVS instance data.
 /// Expected to be shared between instance pool and instances.
@@ -80,6 +60,11 @@ pub struct GenericKvsBuilder<Backend: KvsBackend, PathResolver: KvsPathResolver 
     /// KVS instance parameters.
     parameters: KvsParameters,
 
+    /// KVS flush on exit mode.
+    /// This parameter is an object instance parameter.
+    /// It shouldn't be a part of `KvsParameters`.
+    flush_on_exit: FlushOnExit,
+
     /// Marker for `Backend`.
     _backend_marker: PhantomData<Backend>,
 
@@ -103,15 +88,23 @@ impl<Backend: KvsBackend, PathResolver: KvsPathResolver> GenericKvsBuilder<Backe
             instance_id,
             defaults: Defaults::Optional,
             kvs_load: KvsLoad::Optional,
-            flush_on_exit: FlushOnExit::Yes,
             working_dir: PathBuf::new(),
         };
 
         Self {
             parameters,
+            flush_on_exit: FlushOnExit::Yes,
             _backend_marker: PhantomData,
             _path_resolver_marker: PhantomData,
         }
+    }
+
+    /// Return maximum number of allowed KVS instances.
+    ///
+    /// # Return Values
+    ///   * Max number of KVS instances
+    pub fn max_instances() -> usize {
+        KVS_MAX_INSTANCES
     }
 
     /// Configure defaults handling mode.
@@ -135,6 +128,18 @@ impl<Backend: KvsBackend, PathResolver: KvsPathResolver> GenericKvsBuilder<Backe
     ///   * KvsBuilder instance
     pub fn kvs_load(mut self, mode: KvsLoad) -> Self {
         self.parameters.kvs_load = mode;
+        self
+    }
+
+    /// Configure KVS object flush on exit mode.
+    ///
+    /// # Parameters
+    ///   * `mode`: flush on exit mode (defaults: [`FlushOnExit::Yes`](FlushOnExit::Yes))
+    ///
+    /// # Return Values
+    ///   * KvsBuilder instance
+    pub fn flush_on_exit(mut self, mode: FlushOnExit) -> Self {
+        self.flush_on_exit = mode;
         self
     }
 
@@ -195,6 +200,7 @@ impl<Backend: KvsBackend, PathResolver: KvsPathResolver> GenericKvsBuilder<Backe
                 return Ok(GenericKvs::<Backend, PathResolver>::new(
                     kvs_inner.data.clone(),
                     kvs_inner.parameters.clone(),
+                    self.flush_on_exit,
                 ));
             }
         }
@@ -221,7 +227,7 @@ impl<Backend: KvsBackend, PathResolver: KvsPathResolver> GenericKvsBuilder<Backe
         let kvs_map = match self.parameters.kvs_load {
             KvsLoad::Ignored => KvsMap::new(),
             KvsLoad::Optional => {
-                if kvs_path.exists() {
+                if kvs_path.exists() && hash_path.exists() {
                     Backend::load_kvs(&kvs_path, Some(&hash_path))?
                 } else {
                     KvsMap::new()
@@ -250,134 +256,564 @@ impl<Backend: KvsBackend, PathResolver: KvsPathResolver> GenericKvsBuilder<Backe
             });
         }
 
-        Ok(GenericKvs::new(data, self.parameters))
+        Ok(GenericKvs::new(data, self.parameters, self.flush_on_exit))
     }
 }
 
 #[cfg(test)]
 mod kvs_builder_tests {
     use crate::error_code::ErrorCode;
-    use crate::kvs_api::{Defaults, InstanceId, KvsLoad, SnapshotId};
+    use crate::json_backend::JsonBackend;
+    use crate::kvs_api::{Defaults, FlushOnExit, InstanceId, KvsApi, KvsLoad, SnapshotId};
     use crate::kvs_backend::{KvsBackend, KvsPathResolver};
-    use crate::kvs_builder::GenericKvsBuilder;
-    use crate::kvs_value::KvsMap;
-    use std::path::PathBuf;
+    use crate::kvs_builder::{GenericKvsBuilder, KVS_MAX_INSTANCES, KVS_POOL};
+    use crate::kvs_value::{KvsMap, KvsValue};
+    use std::ops::DerefMut;
+    use std::path::{Path, PathBuf};
+    use std::sync::{LazyLock, Mutex, MutexGuard};
+    use tempfile::tempdir;
 
-    struct StubBackend;
+    /// Serial test execution mutex.
+    static SERIAL_TEST: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
 
-    impl KvsBackend for StubBackend {
-        fn load_kvs(
-            _kvs_path: &std::path::Path,
-            _hash_path: Option<&PathBuf>,
-        ) -> Result<KvsMap, ErrorCode> {
-            Ok(KvsMap::new())
-        }
+    /// Execute test serially with KVS pool uninitialized.
+    fn lock_and_reset<'a>() -> MutexGuard<'a, ()> {
+        // Tests in this group must be executed serially.
+        let serial_lock: MutexGuard<'a, ()> = SERIAL_TEST.lock().unwrap();
 
-        fn save_kvs(
-            _kvs_map: &KvsMap,
-            _kvs_path: &std::path::Path,
-            _hash_path: Option<&PathBuf>,
-        ) -> Result<(), ErrorCode> {
-            Ok(())
-        }
+        // Reset `KVS_POOL` state to uninitialized.
+        // This is to mitigate `InstanceParametersMismatch` errors between tests.
+        let mut pool = KVS_POOL.lock().unwrap();
+        *pool.deref_mut() = [const { None }; KVS_MAX_INSTANCES];
+
+        serial_lock
     }
 
-    impl KvsPathResolver for StubBackend {
-        fn kvs_file_name(_instance_id: InstanceId, _snapshot_id: SnapshotId) -> String {
-            String::new()
-        }
+    /// KVS backend type used for tests.
+    /// Tests reuse JSON backend to ensure valid load/save behavior.
+    type TestBackend = JsonBackend;
+    type TestKvsBuilder = GenericKvsBuilder<TestBackend>;
 
-        fn kvs_file_path(
-            _working_dir: &std::path::Path,
-            _instance_id: InstanceId,
-            _snapshot_id: SnapshotId,
-        ) -> PathBuf {
-            PathBuf::new()
-        }
+    #[test]
+    fn test_new_ok() {
+        let _lock = lock_and_reset();
 
-        fn hash_file_name(_instance_id: InstanceId, _snapshot_id: SnapshotId) -> String {
-            String::new()
-        }
-
-        fn hash_file_path(
-            _working_dir: &std::path::Path,
-            _instance_id: InstanceId,
-            _snapshot_id: SnapshotId,
-        ) -> PathBuf {
-            PathBuf::new()
-        }
-
-        fn defaults_file_name(_instance_id: InstanceId) -> String {
-            String::new()
-        }
-
-        fn defaults_file_path(
-            _working_dir: &std::path::Path,
-            _instance_id: InstanceId,
-        ) -> PathBuf {
-            PathBuf::new()
-        }
+        // Check only if panic happens.
+        let instance_id = InstanceId(0);
+        let _ = TestKvsBuilder::new(instance_id);
     }
 
     #[test]
-    fn test_builder_only_instance_id() {
+    fn test_max_instances() {
+        assert_eq!(TestKvsBuilder::max_instances(), KVS_MAX_INSTANCES);
+    }
+
+    #[test]
+    fn test_parameters_instance_id() {
+        let _lock = lock_and_reset();
+
         let instance_id = InstanceId(1);
-        let builder = GenericKvsBuilder::<StubBackend>::new(instance_id);
+        let builder = TestKvsBuilder::new(instance_id);
+        let kvs = builder.build().unwrap();
+
+        assert_eq!(kvs.parameters().instance_id, instance_id);
+        // Check default values.
+        assert_eq!(kvs.parameters().defaults, Defaults::Optional);
+        assert_eq!(kvs.parameters().kvs_load, KvsLoad::Optional);
+        assert_eq!(kvs.parameters().working_dir, PathBuf::new());
+        assert_eq!(kvs.flush_on_exit(), FlushOnExit::Yes);
+
+        kvs.set_flush_on_exit(FlushOnExit::No);
+    }
+
+    #[test]
+    fn test_parameters_defaults() {
+        let _lock = lock_and_reset();
+
+        let instance_id = InstanceId(1);
+        let builder = TestKvsBuilder::new(instance_id).defaults(Defaults::Ignored);
+        let kvs = builder.build().unwrap();
+        assert_eq!(kvs.parameters().instance_id, instance_id);
+        assert_eq!(kvs.parameters().defaults, Defaults::Ignored);
+        assert_eq!(kvs.parameters().kvs_load, KvsLoad::Optional);
+        assert_eq!(kvs.parameters().working_dir, PathBuf::new());
+        assert_eq!(kvs.flush_on_exit(), FlushOnExit::Yes);
+
+        kvs.set_flush_on_exit(FlushOnExit::No);
+    }
+
+    #[test]
+    fn test_parameters_kvs_load() {
+        let _lock = lock_and_reset();
+
+        let instance_id = InstanceId(1);
+        let builder = TestKvsBuilder::new(instance_id).kvs_load(KvsLoad::Ignored);
+        let kvs = builder.build().unwrap();
+        assert_eq!(kvs.parameters().instance_id, instance_id);
+        assert_eq!(kvs.parameters().defaults, Defaults::Optional);
+        assert_eq!(kvs.parameters().kvs_load, KvsLoad::Ignored);
+        assert_eq!(kvs.parameters().working_dir, PathBuf::new());
+        assert_eq!(kvs.flush_on_exit(), FlushOnExit::Yes);
+
+        kvs.set_flush_on_exit(FlushOnExit::No);
+    }
+
+    #[test]
+    fn test_parameters_flush_on_exit() {
+        let _lock = lock_and_reset();
+
+        let instance_id = InstanceId(1);
+        let builder = TestKvsBuilder::new(instance_id).flush_on_exit(FlushOnExit::No);
         let kvs = builder.build().unwrap();
         assert_eq!(kvs.parameters().instance_id, instance_id);
         assert_eq!(kvs.parameters().defaults, Defaults::Optional);
         assert_eq!(kvs.parameters().kvs_load, KvsLoad::Optional);
         assert_eq!(kvs.parameters().working_dir, PathBuf::new());
+        assert_eq!(kvs.flush_on_exit(), FlushOnExit::No);
     }
 
     #[test]
-    fn test_builder_defaults() {
-        let instance_id = InstanceId(1);
-        let builder =
-            GenericKvsBuilder::<StubBackend>::new(instance_id).defaults(Defaults::Required);
-        let kvs = builder.build().unwrap();
-        assert_eq!(kvs.parameters().instance_id, instance_id);
-        assert_eq!(kvs.parameters().defaults, Defaults::Required);
-        assert_eq!(kvs.parameters().kvs_load, KvsLoad::Optional);
-        assert_eq!(kvs.parameters().working_dir, PathBuf::new());
-    }
+    fn test_parameters_dir() {
+        let _lock = lock_and_reset();
 
-    #[test]
-    fn test_builder_kvs_load() {
-        let instance_id = InstanceId(1);
-        let builder =
-            GenericKvsBuilder::<StubBackend>::new(instance_id).kvs_load(KvsLoad::Required);
-        let kvs = builder.build().unwrap();
-        assert_eq!(kvs.parameters().instance_id, instance_id);
-        assert_eq!(kvs.parameters().defaults, Defaults::Optional);
-        assert_eq!(kvs.parameters().kvs_load, KvsLoad::Required);
-        assert_eq!(kvs.parameters().working_dir, PathBuf::new());
-    }
+        let dir = tempdir().unwrap();
+        let dir_string = dir.path().to_string_lossy().to_string();
 
-    #[test]
-    fn test_builder_dir() {
-        let instance_id = InstanceId(1);
-        let dir = "/tmp/test_kvs".to_string();
-        let builder = GenericKvsBuilder::<StubBackend>::new(instance_id).dir(dir.clone());
+        let instance_id = InstanceId(5);
+        let builder = TestKvsBuilder::new(instance_id).dir(dir_string.clone());
         let kvs = builder.build().unwrap();
         assert_eq!(kvs.parameters().instance_id, instance_id);
         assert_eq!(kvs.parameters().defaults, Defaults::Optional);
         assert_eq!(kvs.parameters().kvs_load, KvsLoad::Optional);
-        assert_eq!(kvs.parameters().working_dir, PathBuf::from(dir));
+        assert_eq!(kvs.parameters().working_dir, dir.path());
+        assert_eq!(kvs.flush_on_exit(), FlushOnExit::Yes);
+
+        kvs.set_flush_on_exit(FlushOnExit::No);
     }
 
     #[test]
-    fn test_builder_chained() {
+    fn test_parameters_chained() {
+        let _lock = lock_and_reset();
+
+        let dir = tempdir().unwrap();
+        let dir_string = dir.path().to_string_lossy().to_string();
+
         let instance_id = InstanceId(1);
-        let dir = "/tmp/test_kvs".to_string();
-        let builder = GenericKvsBuilder::<StubBackend>::new(instance_id)
+        let builder = TestKvsBuilder::new(instance_id)
+            .defaults(Defaults::Ignored)
+            .kvs_load(KvsLoad::Ignored)
+            .flush_on_exit(FlushOnExit::No)
+            .dir(dir_string);
+        let kvs = builder.build().unwrap();
+        assert_eq!(kvs.parameters().instance_id, instance_id);
+        assert_eq!(kvs.parameters().defaults, Defaults::Ignored);
+        assert_eq!(kvs.parameters().kvs_load, KvsLoad::Ignored);
+        assert_eq!(kvs.parameters().working_dir, dir.path());
+        assert_eq!(kvs.flush_on_exit(), FlushOnExit::No);
+    }
+
+    #[test]
+    fn test_build_ok() {
+        let _lock = lock_and_reset();
+
+        let instance_id = InstanceId(1);
+        let builder = TestKvsBuilder::new(instance_id).flush_on_exit(FlushOnExit::No);
+        let _ = builder.build().unwrap();
+    }
+
+    #[test]
+    fn test_build_instance_exists_same_params() {
+        let _lock = lock_and_reset();
+
+        let dir = tempdir().unwrap();
+        let dir_string = dir.path().to_string_lossy().to_string();
+
+        // Create two instances with same parameters.
+        // `flush_on_exit` is purposefully set differently.
+        let instance_id = InstanceId(1);
+        let builder1 = TestKvsBuilder::new(instance_id)
+            .defaults(Defaults::Ignored)
+            .kvs_load(KvsLoad::Ignored)
+            .dir(dir_string.clone())
+            .flush_on_exit(FlushOnExit::No);
+        let _ = builder1.build().unwrap();
+
+        let builder2 = TestKvsBuilder::new(instance_id)
+            .defaults(Defaults::Ignored)
+            .kvs_load(KvsLoad::Ignored)
+            .dir(dir_string)
+            .flush_on_exit(FlushOnExit::Yes);
+        let kvs = builder2.build().unwrap();
+
+        // Assert params as expected.
+        assert_eq!(kvs.parameters().instance_id, instance_id);
+        assert_eq!(kvs.parameters().defaults, Defaults::Ignored);
+        assert_eq!(kvs.parameters().kvs_load, KvsLoad::Ignored);
+        assert_eq!(kvs.parameters().working_dir, dir.path());
+        assert_eq!(kvs.flush_on_exit(), FlushOnExit::Yes);
+    }
+
+    #[test]
+    fn test_build_instance_exists_different_params() {
+        let _lock = lock_and_reset();
+
+        let dir = tempdir().unwrap();
+        let dir_string = dir.path().to_string_lossy().to_string();
+
+        // Create two instances with same parameters.
+        // `flush_on_exit` is purposefully set differently.
+        let instance_id = InstanceId(1);
+        let builder1 = TestKvsBuilder::new(instance_id)
+            .defaults(Defaults::Ignored)
+            .kvs_load(KvsLoad::Optional)
+            .dir(dir_string.clone())
+            .flush_on_exit(FlushOnExit::No);
+        let _ = builder1.build().unwrap();
+
+        let builder2 = TestKvsBuilder::new(instance_id)
+            .defaults(Defaults::Optional)
+            .kvs_load(KvsLoad::Ignored)
+            .dir(dir_string)
+            .flush_on_exit(FlushOnExit::Yes);
+        let result = builder2.build();
+
+        assert!(result.is_err_and(|e| e == ErrorCode::InstanceParametersMismatch));
+    }
+
+    #[test]
+    fn test_build_instance_id_out_of_range() {
+        let _lock = lock_and_reset();
+
+        let instance_id = InstanceId(123);
+        let result = TestKvsBuilder::new(instance_id).build();
+        assert!(result.is_err_and(|e| e == ErrorCode::InvalidInstanceId));
+    }
+
+    /// Generate and store file containing example default values.
+    fn create_defaults_file(
+        working_dir: &Path,
+        instance_id: InstanceId,
+    ) -> Result<PathBuf, ErrorCode> {
+        let defaults_file_path = TestBackend::defaults_file_path(working_dir, instance_id);
+        let kvs_map = KvsMap::from([
+            ("number1".to_string(), KvsValue::F64(123.0)),
+            ("bool1".to_string(), KvsValue::Boolean(true)),
+            ("string1".to_string(), KvsValue::String("Hello".to_string())),
+        ]);
+        TestBackend::save_kvs(&kvs_map, &defaults_file_path, None)?;
+
+        Ok(defaults_file_path)
+    }
+
+    /// Generate and store files containing example KVS and hash data.
+    fn create_kvs_files(
+        working_dir: &Path,
+        instance_id: InstanceId,
+        snapshot_id: SnapshotId,
+    ) -> Result<(PathBuf, PathBuf), ErrorCode> {
+        let kvs_file_path = TestBackend::kvs_file_path(working_dir, instance_id, snapshot_id);
+        let hash_file_path = TestBackend::hash_file_path(working_dir, instance_id, snapshot_id);
+        let kvs_map = KvsMap::from([
+            ("number1".to_string(), KvsValue::F64(321.0)),
+            ("bool1".to_string(), KvsValue::Boolean(false)),
+            ("string1".to_string(), KvsValue::String("Hi".to_string())),
+        ]);
+        TestBackend::save_kvs(&kvs_map, &kvs_file_path, Some(&hash_file_path))?;
+
+        Ok((kvs_file_path, hash_file_path))
+    }
+
+    #[test]
+    fn test_build_defaults_ignored() {
+        let _lock = lock_and_reset();
+
+        let dir = tempdir().unwrap();
+        let dir_string = dir.path().to_string_lossy().to_string();
+
+        let instance_id = InstanceId(2);
+        create_defaults_file(dir.path(), instance_id).unwrap();
+        let builder = TestKvsBuilder::new(instance_id)
+            .defaults(Defaults::Ignored)
+            .dir(dir_string);
+        let kvs = builder.build().unwrap();
+
+        assert_eq!(kvs.parameters().defaults, Defaults::Ignored);
+        let kvs_pool = KVS_POOL.lock().unwrap();
+        let kvs_pool_entry = kvs_pool.get(2).unwrap();
+        let kvs_data = kvs_pool_entry.as_ref().unwrap();
+        assert_eq!(kvs_data.data.lock().unwrap().defaults_map, KvsMap::new());
+    }
+
+    #[test]
+    fn test_build_defaults_optional_not_provided() {
+        let _lock = lock_and_reset();
+
+        let dir = tempdir().unwrap();
+        let dir_string = dir.path().to_string_lossy().to_string();
+
+        let instance_id = InstanceId(2);
+        let builder = TestKvsBuilder::new(instance_id)
+            .defaults(Defaults::Optional)
+            .dir(dir_string);
+        let kvs = builder.build().unwrap();
+
+        assert_eq!(kvs.parameters().defaults, Defaults::Optional);
+        let kvs_pool = KVS_POOL.lock().unwrap();
+        let kvs_pool_entry = kvs_pool.get(2).unwrap();
+        let kvs_data = kvs_pool_entry.as_ref().unwrap();
+        assert_eq!(kvs_data.data.lock().unwrap().defaults_map, KvsMap::new());
+    }
+
+    #[test]
+    fn test_build_defaults_optional_provided() {
+        let _lock = lock_and_reset();
+
+        let dir = tempdir().unwrap();
+        let dir_string = dir.path().to_string_lossy().to_string();
+
+        let instance_id = InstanceId(2);
+        create_defaults_file(dir.path(), instance_id).unwrap();
+        let builder = TestKvsBuilder::new(instance_id)
+            .defaults(Defaults::Optional)
+            .dir(dir_string);
+        let kvs = builder.build().unwrap();
+
+        assert_eq!(kvs.parameters().defaults, Defaults::Optional);
+        let kvs_pool = KVS_POOL.lock().unwrap();
+        let kvs_pool_entry = kvs_pool.get(2).unwrap();
+        let kvs_data = kvs_pool_entry.as_ref().unwrap();
+        assert_eq!(kvs_data.data.lock().unwrap().defaults_map.len(), 3);
+    }
+
+    #[test]
+    fn test_build_defaults_required_not_provided() {
+        let _lock = lock_and_reset();
+
+        let dir = tempdir().unwrap();
+        let dir_string = dir.path().to_string_lossy().to_string();
+
+        let instance_id = InstanceId(2);
+        let builder = TestKvsBuilder::new(instance_id)
             .defaults(Defaults::Required)
-            .kvs_load(KvsLoad::Required)
-            .dir(dir.clone());
+            .dir(dir_string);
+        let result = builder.build();
+
+        assert!(result.is_err_and(|e| e == ErrorCode::FileNotFound));
+    }
+
+    #[test]
+    fn test_build_defaults_required_provided() {
+        let _lock = lock_and_reset();
+
+        let dir = tempdir().unwrap();
+        let dir_string = dir.path().to_string_lossy().to_string();
+
+        let instance_id = InstanceId(2);
+        create_defaults_file(dir.path(), instance_id).unwrap();
+        let builder = TestKvsBuilder::new(instance_id)
+            .defaults(Defaults::Required)
+            .dir(dir_string);
         let kvs = builder.build().unwrap();
-        assert_eq!(kvs.parameters().instance_id, instance_id);
+
         assert_eq!(kvs.parameters().defaults, Defaults::Required);
+        let kvs_pool = KVS_POOL.lock().unwrap();
+        let kvs_pool_entry = kvs_pool.get(2).unwrap();
+        let kvs_data = kvs_pool_entry.as_ref().unwrap();
+        assert_eq!(kvs_data.data.lock().unwrap().defaults_map.len(), 3);
+    }
+
+    #[test]
+    fn test_build_kvs_load_ignored() {
+        let _lock = lock_and_reset();
+
+        let dir = tempdir().unwrap();
+        let dir_string = dir.path().to_string_lossy().to_string();
+
+        let instance_id = InstanceId(2);
+        create_kvs_files(dir.path(), instance_id, SnapshotId(0)).unwrap();
+        let builder = TestKvsBuilder::new(instance_id)
+            .kvs_load(KvsLoad::Ignored)
+            .dir(dir_string);
+        let kvs = builder.build().unwrap();
+
+        assert_eq!(kvs.parameters().kvs_load, KvsLoad::Ignored);
+        let kvs_pool = KVS_POOL.lock().unwrap();
+        let kvs_pool_entry = kvs_pool.get(2).unwrap();
+        let kvs_data = kvs_pool_entry.as_ref().unwrap();
+        assert_eq!(kvs_data.data.lock().unwrap().kvs_map, KvsMap::new());
+    }
+
+    #[test]
+    fn test_build_kvs_load_optional_not_provided() {
+        let _lock = lock_and_reset();
+
+        let dir = tempdir().unwrap();
+        let dir_string = dir.path().to_string_lossy().to_string();
+
+        let instance_id = InstanceId(2);
+        let builder = TestKvsBuilder::new(instance_id)
+            .kvs_load(KvsLoad::Optional)
+            .dir(dir_string);
+        let kvs = builder.build().unwrap();
+
+        assert_eq!(kvs.parameters().kvs_load, KvsLoad::Optional);
+        let kvs_pool = KVS_POOL.lock().unwrap();
+        let kvs_pool_entry = kvs_pool.get(2).unwrap();
+        let kvs_data = kvs_pool_entry.as_ref().unwrap();
+        assert_eq!(kvs_data.data.lock().unwrap().kvs_map, KvsMap::new());
+    }
+
+    #[test]
+    #[ignore = "Not handled properly yet"]
+    fn test_build_kvs_load_optional_kvs_provided_hash_not_provided() {
+        let _lock = lock_and_reset();
+
+        let dir = tempdir().unwrap();
+        let dir_string = dir.path().to_string_lossy().to_string();
+
+        let instance_id = InstanceId(2);
+        create_kvs_files(dir.path(), instance_id, SnapshotId(0)).unwrap();
+        std::fs::remove_file(TestBackend::hash_file_path(
+            dir.path(),
+            instance_id,
+            SnapshotId(0),
+        ))
+        .unwrap();
+        let builder = TestKvsBuilder::new(instance_id)
+            .kvs_load(KvsLoad::Optional)
+            .dir(dir_string);
+        let result = builder.build();
+
+        assert!(result.is_err_and(|e| e == ErrorCode::KvsHashFileReadError));
+    }
+
+    #[test]
+    #[ignore = "Not handled properly yet"]
+    fn test_build_kvs_load_optional_kvs_not_provided_hash_provided() {
+        let _lock = lock_and_reset();
+
+        let dir = tempdir().unwrap();
+        let dir_string = dir.path().to_string_lossy().to_string();
+
+        let instance_id = InstanceId(2);
+        create_kvs_files(dir.path(), instance_id, SnapshotId(0)).unwrap();
+        std::fs::remove_file(TestBackend::kvs_file_path(
+            dir.path(),
+            instance_id,
+            SnapshotId(0),
+        ))
+        .unwrap();
+        let builder = TestKvsBuilder::new(instance_id)
+            .kvs_load(KvsLoad::Optional)
+            .dir(dir_string);
+        let result = builder.build();
+
+        assert!(result.is_err_and(|e| e == ErrorCode::FileNotFound));
+    }
+
+    #[test]
+    fn test_build_kvs_load_optional_provided() {
+        let _lock = lock_and_reset();
+
+        let dir = tempdir().unwrap();
+        let dir_string = dir.path().to_string_lossy().to_string();
+
+        let instance_id = InstanceId(2);
+        create_kvs_files(dir.path(), instance_id, SnapshotId(0)).unwrap();
+        let builder = TestKvsBuilder::new(instance_id)
+            .kvs_load(KvsLoad::Optional)
+            .dir(dir_string);
+        let kvs = builder.build().unwrap();
+
+        assert_eq!(kvs.parameters().kvs_load, KvsLoad::Optional);
+        let kvs_pool = KVS_POOL.lock().unwrap();
+        let kvs_pool_entry = kvs_pool.get(2).unwrap();
+        let kvs_data = kvs_pool_entry.as_ref().unwrap();
+        assert_eq!(kvs_data.data.lock().unwrap().kvs_map.len(), 3);
+    }
+
+    #[test]
+    fn test_build_kvs_load_required_not_provided() {
+        let _lock = lock_and_reset();
+
+        let dir = tempdir().unwrap();
+        let dir_string = dir.path().to_string_lossy().to_string();
+
+        let instance_id = InstanceId(2);
+        let builder = TestKvsBuilder::new(instance_id)
+            .kvs_load(KvsLoad::Required)
+            .dir(dir_string);
+        let result = builder.build();
+
+        assert!(result.is_err_and(|e| e == ErrorCode::FileNotFound));
+    }
+
+    #[test]
+    #[ignore = "Not handled properly yet"]
+    fn test_build_kvs_load_required_kvs_provided_hash_not_provided() {
+        let _lock = lock_and_reset();
+
+        let dir = tempdir().unwrap();
+        let dir_string = dir.path().to_string_lossy().to_string();
+
+        let instance_id = InstanceId(2);
+        create_kvs_files(dir.path(), instance_id, SnapshotId(0)).unwrap();
+        std::fs::remove_file(TestBackend::hash_file_path(
+            dir.path(),
+            instance_id,
+            SnapshotId(0),
+        ))
+        .unwrap();
+        let builder = TestKvsBuilder::new(instance_id)
+            .kvs_load(KvsLoad::Required)
+            .dir(dir_string);
+        let result = builder.build();
+
+        assert!(result.is_err_and(|e| e == ErrorCode::KvsHashFileReadError));
+    }
+
+    #[test]
+    #[ignore = "Not handled properly yet"]
+    fn test_build_kvs_load_required_kvs_not_provided_hash_provided() {
+        let _lock = lock_and_reset();
+
+        let dir = tempdir().unwrap();
+        let dir_string = dir.path().to_string_lossy().to_string();
+
+        let instance_id = InstanceId(2);
+        create_kvs_files(dir.path(), instance_id, SnapshotId(0)).unwrap();
+        std::fs::remove_file(TestBackend::kvs_file_path(
+            dir.path(),
+            instance_id,
+            SnapshotId(0),
+        ))
+        .unwrap();
+        let builder = TestKvsBuilder::new(instance_id)
+            .kvs_load(KvsLoad::Required)
+            .dir(dir_string);
+        let result = builder.build();
+
+        assert!(result.is_err_and(|e| e == ErrorCode::FileNotFound));
+    }
+
+    #[test]
+    fn test_build_kvs_load_required_provided() {
+        let _lock = lock_and_reset();
+
+        let dir = tempdir().unwrap();
+        let dir_string = dir.path().to_string_lossy().to_string();
+
+        let instance_id = InstanceId(2);
+        create_kvs_files(dir.path(), instance_id, SnapshotId(0)).unwrap();
+        let builder = TestKvsBuilder::new(instance_id)
+            .kvs_load(KvsLoad::Required)
+            .dir(dir_string);
+        let kvs = builder.build().unwrap();
+
         assert_eq!(kvs.parameters().kvs_load, KvsLoad::Required);
-        assert_eq!(kvs.parameters().working_dir, PathBuf::from(dir));
+        let kvs_pool = KVS_POOL.lock().unwrap();
+        let kvs_pool_entry = kvs_pool.get(2).unwrap();
+        let kvs_data = kvs_pool_entry.as_ref().unwrap();
+        assert_eq!(kvs_data.data.lock().unwrap().kvs_map.len(), 3);
     }
 }

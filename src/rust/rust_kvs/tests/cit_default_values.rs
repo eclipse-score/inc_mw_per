@@ -1,13 +1,14 @@
-//! Persistency tests.
-//!
-//! Requirements verified:
-//! - Default Values (feat_req__persistency__default_values)
-//!   The KVS system shall support predefined default values for keys.
-//! - Default Values Retrieval (feat_req__persistency__default_value_get)
-//!   The KVS system shall support retrieving the default value associated with a key.
-//! - Set default key values via file (feat_req__persistency__default_value_file)
-//!   The KVS shall support the configuration of default key values using an external file.
-//!
+// Copyright (c) 2025 Contributors to the Eclipse Foundation
+//
+// See the NOTICE file(s) distributed with this work for additional
+// information regarding copyright ownership.
+//
+// This program and the accompanying materials are made available under the
+// terms of the Apache License Version 2.0 which is available at
+// <https://www.apache.org/licenses/LICENSE-2.0>
+//
+// SPDX-License-Identifier: Apache-2.0
+
 use rust_kvs::prelude::*;
 use std::collections::HashMap;
 use std::path::Path;
@@ -48,6 +49,11 @@ fn write_defaults_file(
 }
 
 #[test]
+// #[record_property("PartiallyVerifies", ["comp_req__persistency__value_default", "comp_req__persistency__default_value_config", "comp_req__persistency__default_value_types", "comp_req__persistency__default_value_query"])]
+// #[record_property("FullyVerifies", [])]
+// #[record_property("Description", "Verifies default value loading, querying, and override behavior for KVS instances with and without defaults.")]
+// #[record_property("TestType", "requirements-based")]
+// #[record_property("DerivationTechnique", "requirements-based")]
 fn cit_persistency_default_values() -> Result<(), ErrorCode> {
     // Temp directory.
     let dir = tempdir()?;
@@ -89,7 +95,19 @@ fn cit_persistency_default_values() -> Result<(), ErrorCode> {
             "kvs_with_defaults: key '{keyname}' should be default"
         );
         assert_eq!(
+            kvs_with_defaults.get_default_value(&keyname)?,
+            KvsValue::from(default_value),
+            "kvs_with_defaults: key '{keyname}' should have default value {default_value}"
+        );
+        assert_eq!(
             kvs_without_defaults.is_value_default(&keyname).unwrap_err(),
+            ErrorCode::KeyNotFound,
+            "kvs_without_defaults: key '{keyname}' should not exist and return KeyNotFound"
+        );
+        assert_eq!(
+            kvs_without_defaults
+                .get_default_value(&keyname)
+                .unwrap_err(),
             ErrorCode::KeyNotFound,
             "kvs_without_defaults: key '{keyname}' should not exist and return KeyNotFound"
         );
@@ -153,6 +171,11 @@ fn cit_persistency_default_values() -> Result<(), ErrorCode> {
 }
 
 #[test]
+// #[record_property("PartiallyVerifies", ["comp_req__persistency__value_default", "comp_req__persistency__default_value_config", "comp_req__persistency__default_value_types"])]
+// #[record_property("FullyVerifies", [""])]
+// #[record_property("Description", "Checks that KVS loads default values when defaults are present and OpenNeedDefaults is set to Optional.")]
+// #[record_property("TestType", "requirements-based")]
+// #[record_property("DerivationTechnique", "requirements-based")]
 fn cit_persistency_default_values_optional() -> Result<(), ErrorCode> {
     // Temp directory.
     let dir = tempdir().unwrap();
@@ -198,6 +221,11 @@ fn cit_persistency_default_values_optional() -> Result<(), ErrorCode> {
 }
 
 #[test]
+// #[record_property("PartiallyVerifies", ["comp_req__persistency__value_default", "comp_req__persistency__default_value_config", "comp_req__persistency__default_value_types"])]
+// #[record_property("FullyVerifies", [""])]
+// #[record_property("Description", "Tests removal of values in KVS with defaults enabled, ensuring keys revert to their default values.")]
+// #[record_property("TestType", "requirements-based")]
+// #[record_property("DerivationTechnique", "requirements-based")]
 fn cit_persistency_defaults_enabled_values_removal() -> Result<(), ErrorCode> {
     // Temp directory.
     let dir = tempdir()?;
@@ -257,6 +285,11 @@ fn cit_persistency_defaults_enabled_values_removal() -> Result<(), ErrorCode> {
 }
 
 #[test]
+// #[record_property("PartiallyVerifies", ["comp_req__persistency__value_default", "comp_req__persistency__default_value_types"])]
+// #[record_property("FullyVerifies", [""])]
+// #[record_property("Description", "Tests removal of values in KVS without defaults, ensuring removed keys are not found and return KeyNotFound.")]
+// #[record_property("TestType", "requirements-based")]
+// #[record_property("DerivationTechnique", "requirements-based")]
 fn cit_persistency_defaults_disabled_values_removal() -> Result<(), ErrorCode> {
     // Temp directory.
     let dir = tempdir()?;
@@ -296,6 +329,11 @@ fn cit_persistency_defaults_disabled_values_removal() -> Result<(), ErrorCode> {
 }
 
 #[test]
+// #[record_property("PartiallyVerifies", ["comp_req__persistency__value_default", "comp_req__persistency__default_value_config", "comp_req__persistency__default_value_types"])]
+// #[record_property("FullyVerifies", [""])]
+// #[record_property("Description", "Verifies that KVS fails to open when the defaults file contains invalid JSON.")]
+// #[record_property("TestType", "requirements-based")]
+// #[record_property("DerivationTechnique", "requirements-based")]
 fn cit_persistency_invalid_default_values() -> Result<(), ErrorCode> {
     // Temp directory.
     let dir = tempdir()?;
@@ -324,6 +362,11 @@ fn cit_persistency_invalid_default_values() -> Result<(), ErrorCode> {
 }
 
 #[test]
+// #[record_property("PartiallyVerifies", ["comp_req__persistency__value_default", "comp_req__persistency__default_value_config", "comp_req__persistency__default_value_types"])]
+// #[record_property("FullyVerifies", ["comp_req__persistency__value_reset"])]
+// #[record_property("Description", "Checks that resetting KVS restores all keys to their default values.")]
+// #[record_property("TestType", "requirements-based")]
+// #[record_property("DerivationTechnique", "requirements-based")]
 fn cit_persistency_reset_all_default_values() -> Result<(), ErrorCode> {
     // Temp directory.
     let dir = tempdir()?;
@@ -396,7 +439,58 @@ fn cit_persistency_reset_all_default_values() -> Result<(), ErrorCode> {
 }
 
 #[test]
-#[ignore]
+// #[record_property("PartiallyVerifies", ["comp_req__persistency__value_default", "comp_req__persistency__default_value_config"])]
+// #[record_property("FullyVerifies", ["comp_req__persistency__default_value_checksum"])]
+// #[record_property("Description", "Ensures that a checksum file is created when opening KVS with defaults.")]
+// #[record_property("TestType", "requirements-based")]
+// #[record_property("DerivationTechnique", "requirements-based")]
+fn cit_persistency_defaults_checksum() -> Result<(), ErrorCode> {
+    // Temp directory.
+    let dir = tempdir()?;
+    let dir_string = dir.path().to_string_lossy().to_string();
+
+    // Values.
+    let keyname = "test_number".to_string();
+    let default_value = 111.1;
+    // Create defaults file for instance 0.
+    let default_id = InstanceId(0);
+    write_defaults_file(
+        dir.path(),
+        HashMap::from([(keyname.clone(), JsonValue::from(default_value))]),
+        default_id,
+    )?;
+
+    let hash_file = dir.path().join(format!("kvs_{default_id}_0.hash"));
+    assert!(
+        !hash_file.exists(),
+        "Hash file should NOT exist before opening KVS with defaults"
+    );
+
+    {
+        // KVS instance with defaults.
+        let kvs_with_defaults = Kvs::open(
+            default_id.clone(),
+            OpenNeedDefaults::Required,
+            OpenNeedKvs::Optional,
+            Some(dir_string.clone()),
+        )?;
+    }
+
+    assert!(
+        hash_file.exists(),
+        "Hash file should exist after opening KVS with defaults"
+    );
+
+    Ok(())
+}
+
+#[test]
+// #[record_property("PartiallyVerifies", ["comp_req__persistency__value_default", "comp_req__persistency__default_value_config"])]
+// #[record_property("FullyVerifies", [""])]
+// #[record_property("Description", "Placeholder for future test: should verify resetting a single key to its default value.")]
+// #[record_property("TestType", "requirements-based")]
+// #[record_property("DerivationTechnique", "requirements-based")]
+#[ignore = "not implemented yet"]
 fn cit_persistency_reset_single_default_value() -> Result<(), ErrorCode> {
     // TODO: This test is not implemented yet.
     // API supports resetting only all keys.

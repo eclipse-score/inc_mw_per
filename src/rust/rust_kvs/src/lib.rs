@@ -60,7 +60,9 @@
 //! use std::collections::HashMap;
 //!
 //! fn main() -> Result<(), ErrorCode> {
-//!     let kvs: Kvs = KvsBuilder::new(InstanceId(0)).dir("").build()?;
+//!     let kvs: Kvs = KvsBuilder::new(InstanceId(0))
+//!         .flush_on_exit(FlushOnExit::No)
+//!         .build()?;
 //!
 //!     kvs.set_value("number", 123.0)?;
 //!     kvs.set_value("bool", true)?;

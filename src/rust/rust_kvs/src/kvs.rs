@@ -9,21 +9,38 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+use std::cell::RefCell;
 use std::fs;
 use std::marker::PhantomData;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use crate::error_code::ErrorCode;
-use crate::kvs_api::{FlushOnExit, KvsApi, SnapshotId};
+use crate::kvs_api::{Defaults, FlushOnExit, InstanceId, KvsApi, KvsLoad, SnapshotId};
 use crate::kvs_backend::{KvsBackend, KvsPathResolver};
-use crate::kvs_builder::{KvsData, KvsParameters};
+use crate::kvs_builder::KvsData;
 use crate::kvs_value::{KvsMap, KvsValue};
 
 /// Maximum number of snapshots
 ///
 /// Feature: `FEAT_REQ__KVS__snapshots`
 const KVS_MAX_SNAPSHOTS: usize = 3;
+
+/// KVS instance parameters.
+#[derive(Clone, PartialEq)]
+pub struct KvsParameters {
+    /// Instance ID.
+    pub instance_id: InstanceId,
+
+    /// Defaults handling mode.
+    pub defaults: Defaults,
+
+    /// KVS load mode.
+    pub kvs_load: KvsLoad,
+
+    /// Working directory.
+    pub working_dir: PathBuf,
+}
 
 /// Key-value-storage data
 pub struct GenericKvs<Backend: KvsBackend, PathResolver: KvsPathResolver = Backend> {
@@ -33,6 +50,9 @@ pub struct GenericKvs<Backend: KvsBackend, PathResolver: KvsPathResolver = Backe
     /// KVS instance parameters.
     parameters: KvsParameters,
 
+    /// Flush on exit flag.
+    flush_on_exit: RefCell<FlushOnExit>,
+
     /// Marker for `Backend`.
     _backend_marker: PhantomData<Backend>,
 
@@ -41,16 +61,21 @@ pub struct GenericKvs<Backend: KvsBackend, PathResolver: KvsPathResolver = Backe
 }
 
 impl<Backend: KvsBackend, PathResolver: KvsPathResolver> GenericKvs<Backend, PathResolver> {
-    pub(crate) fn new(data: Arc<Mutex<KvsData>>, parameters: KvsParameters) -> Self {
+    pub(crate) fn new(
+        data: Arc<Mutex<KvsData>>,
+        parameters: KvsParameters,
+        flush_on_exit: FlushOnExit,
+    ) -> Self {
         Self {
             data,
             parameters,
+            flush_on_exit: RefCell::new(flush_on_exit),
             _backend_marker: PhantomData,
             _path_resolver_marker: PhantomData,
         }
     }
 
-    pub(crate) fn parameters(&self) -> &KvsParameters {
+    pub fn parameters(&self) -> &KvsParameters {
         &self.parameters
     }
 
@@ -94,18 +119,23 @@ impl<Backend: KvsBackend, PathResolver: KvsPathResolver> GenericKvs<Backend, Pat
 
             println!("rotating: {snap_name_old} -> {snap_name_new}");
 
-            let res = fs::rename(hash_path_old, hash_path_new);
-            if let Err(err) = res {
-                if err.kind() != std::io::ErrorKind::NotFound {
-                    return Err(err.into());
-                } else {
-                    continue;
-                }
-            }
+            // Check snapshot and hash files exist.
+            let snap_old_exists = snap_path_old.exists();
+            let hash_old_exists = hash_path_old.exists();
 
-            let res = fs::rename(snap_path_old, snap_path_new);
-            if let Err(err) = res {
-                return Err(err.into());
+            // If both exist - rename them.
+            if snap_old_exists && hash_old_exists {
+                fs::rename(hash_path_old, hash_path_new)?;
+                fs::rename(snap_path_old, snap_path_new)?;
+            }
+            // If neither exist - continue.
+            else if !snap_old_exists && !hash_old_exists {
+                continue;
+            }
+            // In other case - this is erroneous scenario.
+            // Either snapshot or hash file got removed.
+            else {
+                return Err(ErrorCode::IntegrityCorrupted);
             }
         }
 
@@ -121,7 +151,7 @@ impl<Backend: KvsBackend, PathResolver: KvsPathResolver> KvsApi
     /// # Return Values
     ///    * `FlushOnExit`: Current flush on exit behavior.
     fn flush_on_exit(&self) -> FlushOnExit {
-        self.parameters.flush_on_exit.clone()
+        self.flush_on_exit.borrow().clone()
     }
 
     /// Control the flush on exit behavior
@@ -129,7 +159,7 @@ impl<Backend: KvsBackend, PathResolver: KvsPathResolver> KvsApi
     /// # Parameters
     ///   * `flush_on_exit`: Flag to control flush-on-exit behavior
     fn set_flush_on_exit(&self, flush_on_exit: FlushOnExit) {
-        self.parameters.flush_on_exit = flush_on_exit;
+        *self.flush_on_exit.borrow_mut() = flush_on_exit
     }
 
     /// Resets a key-value-storage to its initial state
@@ -517,10 +547,10 @@ impl<Backend: KvsBackend, PathResolver: KvsPathResolver> Drop
 mod kvs_tests {
     use crate::error_code::ErrorCode;
     use crate::json_backend::JsonBackend;
-    use crate::kvs::{GenericKvs, KVS_MAX_SNAPSHOTS};
+    use crate::kvs::{GenericKvs, KvsParameters, KVS_MAX_SNAPSHOTS};
     use crate::kvs_api::{Defaults, FlushOnExit, InstanceId, KvsApi, KvsLoad, SnapshotId};
     use crate::kvs_backend::{KvsBackend, KvsPathResolver};
-    use crate::kvs_builder::{KvsData, KvsParameters};
+    use crate::kvs_builder::KvsData;
     use crate::kvs_value::{KvsMap, KvsValue};
     use std::path::PathBuf;
     use std::sync::{Arc, Mutex};
@@ -595,16 +625,24 @@ mod kvs_tests {
             instance_id,
             defaults: Defaults::Optional,
             kvs_load: KvsLoad::Optional,
-            flush_on_exit: FlushOnExit::No,
             working_dir,
         };
-        GenericKvs::<B>::new(data, parameters)
+        GenericKvs::<B>::new(data, parameters, FlushOnExit::No)
     }
 
     #[test]
     fn test_new_ok() {
         // Check only if panic happens.
         get_kvs::<MockBackend>(PathBuf::new(), KvsMap::new(), KvsMap::new());
+    }
+
+    #[test]
+    fn test_parameters_ok() {
+        let kvs = get_kvs::<MockBackend>(PathBuf::new(), KvsMap::new(), KvsMap::new());
+        assert_eq!(kvs.parameters().instance_id, InstanceId(1));
+        assert_eq!(kvs.parameters().defaults, Defaults::Optional);
+        assert_eq!(kvs.parameters().kvs_load, KvsLoad::Optional);
+        assert_eq!(kvs.parameters().working_dir, PathBuf::new());
     }
 
     #[test]

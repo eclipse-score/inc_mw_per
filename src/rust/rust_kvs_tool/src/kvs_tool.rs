@@ -528,8 +528,8 @@ fn main() -> Result<(), ErrorCode> {
     let mut args = Arguments::from_env();
 
     let builder = KvsBuilder::new(InstanceId(0))
-        .need_defaults(false)
-        .need_kvs(false);
+        .defaults(Defaults::Optional)
+        .kvs_load(KvsLoad::Optional);
 
     let kvs = match builder.build() {
         Ok(kvs) => kvs,

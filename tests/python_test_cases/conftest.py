@@ -128,3 +128,9 @@ def pytest_terminal_summary(terminalreporter):
         terminalreporter.write_line(
             f"{entry['nodeid']} | Run command:\n{entry['command']}\n"
         )
+
+
+def pytest_collection_modifyitems(items: list[pytest.Function]):
+    for item in items:
+        for marker in item.iter_markers():
+            item.user_properties.append((marker.name, marker.args[0]))

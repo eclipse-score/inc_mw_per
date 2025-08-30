@@ -43,27 +43,32 @@ TEST(kvs_kvsbuilder, kvsbuilder_build) {
     builder.need_kvs_flag(false);
     result_build = builder.build();
     EXPECT_TRUE(result_build);
-    result_build.value().flush_on_exit = false;
-    EXPECT_EQ(result_build.value().filename_prefix.CStr(), "./kvsbuilder/kvs_"+std::to_string(instance_id.id));
+    result_build.value()->flush_on_exit = false;
+    EXPECT_EQ(result_build.value()->filename_prefix.CStr(), "./kvsbuilder/kvs_"+std::to_string(instance_id.id));
 }
 
 TEST(kvs_kvsbuilder, kvsbuilder_directory_check) {
 
     /* Test the KvsBuilder with all configurations for the current working directory */
-    KvsBuilder builder(instance_id);
+    InstanceId id(10);
+    KvsBuilder builder(id);
     builder.dir("");
     auto result_build = builder.build();
     EXPECT_TRUE(result_build);
-    EXPECT_EQ(result_build.value().filename_prefix.CStr(), "./kvs_"+std::to_string(instance_id.id));
+    EXPECT_EQ(result_build.value()->filename_prefix.CStr(), "./kvs_"+std::to_string(id.id));
 
+    InstanceId id1(20);
     builder.dir("./");
+    builder.instance_id = id1;
     result_build = builder.build();
     EXPECT_TRUE(result_build);
-    EXPECT_EQ(result_build.value().filename_prefix.CStr(), "./kvs_"+std::to_string(instance_id.id));
+    EXPECT_EQ(result_build.value()->filename_prefix.CStr(), "./kvs_"+std::to_string(id1.id));
 
+    InstanceId id2(30);
     builder.dir(".");
+    builder.instance_id = id2;
     result_build = builder.build();
     EXPECT_TRUE(result_build);
-    EXPECT_EQ(result_build.value().filename_prefix.CStr(), "./kvs_"+std::to_string(instance_id.id));
+    EXPECT_EQ(result_build.value()->filename_prefix.CStr(), "./kvs_"+std::to_string(id2.id));
 
 }

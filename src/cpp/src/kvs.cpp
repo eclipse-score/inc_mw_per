@@ -17,7 +17,6 @@
 #include "kvs.hpp"
 
 //TODO Default Value Handling TBD
-//TODO Add Score Logging
 //TODO Replace std libs with baselibs
 //TODO String Handling in set_value TBD: (e.g. set_value("key", "value") is not correct, since KvsValue() expects a string ptr and not a string)
 

@@ -14,8 +14,9 @@
 #define SCORE_LIB_KVS_KVSBUILDER_HPP
 
 #include <string>
+#include <unordered_map>
+#include <mutex>
 #include "kvs.hpp"
-
 namespace score::mw::per::kvs {
 
 /**
@@ -65,6 +66,11 @@ public:
     explicit KvsBuilder(const InstanceId& instance_id);
 
     /**
+     * @brief Destroys the KvsBuilder instance.
+     */
+    ~KvsBuilder();
+
+    /**
      * @brief Specify whether default values must be loaded.
      * @param flag True to require default values; false to make them optional.
      * @return Reference to this builder (for chaining).
@@ -94,13 +100,26 @@ public:
      *
      * @return A score::Result<Kvs> containing the opened store or an ErrorCode.
      */
-    score::Result<Kvs> build();
+    score::Result<std::shared_ptr<Kvs>> build();
+
+    /**
+     * @brief Clears the cache for the KVS instance.
+     *
+     * This function removes all cached data associated with the KVS instance,
+     * allowing for a fresh cache.
+     */
+    void clear_cache();
 
 private:
-    InstanceId                         instance_id;   ///< ID of the KVS instance
-    bool                               need_defaults; ///< Whether default values are required
-    bool                               need_kvs;      ///< Whether an existing KVS is required
-    std::string                        directory;     ///< Directory where to store the KVS Files
+    InstanceId                         instance_id;                         ///< ID of the KVS instance
+    bool                               need_defaults;                       ///< Whether default values are required
+    bool                               need_kvs;                            ///< Whether an existing KVS is required
+    std::string                        directory;                           ///< Directory where to store the KVS Files
+    static std::mutex                  kvs_instances_mutex;                 ///< Mutex for synchronizing access to KVS instances
+    static std::mutex                  latest_instance_mutex;               ///< Mutex for synchronizing access to KVS Builder
+    static std::unordered_map<size_t, std::shared_ptr<Kvs>> kvs_instances;  ///< Map of KVS instances
+    static KvsBuilder* latest_instance;
+    
 };
 
 } /* namespace score::mw::per::kvs */

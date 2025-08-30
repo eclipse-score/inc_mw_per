@@ -4,6 +4,10 @@
     "url": "https://eclipse-score.github.io/inc_mw_per/main/"
   },
   {
+    "version": "pr-100",
+    "url": "https://eclipse-score.github.io/inc_mw_per/pr-100/"
+  },
+  {
     "version": "pr-15",
     "url": "https://eclipse-score.github.io/inc_mw_per/pr-15/"
   },
@@ -44,15 +48,7 @@
     "url": "https://eclipse-score.github.io/inc_mw_per/pr-92/"
   },
   {
-    "version": "pr-96",
-    "url": "https://eclipse-score.github.io/inc_mw_per/pr-96/"
-  },
-  {
     "version": "pr-97",
     "url": "https://eclipse-score.github.io/inc_mw_per/pr-97/"
-  },
-  {
-    "version": "pr-100",
-    "url": "https://eclipse-score.github.io/inc_mw_per/pr-100/"
   }
 ]

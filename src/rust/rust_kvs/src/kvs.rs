@@ -135,7 +135,8 @@ impl<J: KvsBackend> GenericKvs<J> {
                 Ok(map)
             }
             Err(e) => {
-                if need_file.into() == OpenKvsNeedFile::Required {
+                if need_file.into() == OpenKvsNeedFile::Required || e != ErrorCode::KvsFileReadError
+                {
                     eprintln!("error: file {filename:?} could not be read: {e:?}");
                     Err(e)
                 } else {

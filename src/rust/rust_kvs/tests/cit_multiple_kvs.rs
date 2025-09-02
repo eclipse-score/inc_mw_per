@@ -30,19 +30,13 @@ fn cit_persistency_multiple_instances() -> Result<(), ErrorCode> {
 
     {
         // Create first KVS instance.
-        let kvs1 = Kvs::open(
-            InstanceId(0),
-            OpenNeedDefaults::Optional,
-            OpenNeedKvs::Optional,
-            Some(dir_string.clone()),
-        )?;
+        let kvs1 = KvsBuilder::new(InstanceId(0))
+            .dir(dir_string.clone())
+            .build()?;
         // Create second KVS instance.
-        let kvs2 = Kvs::open(
-            InstanceId(1),
-            OpenNeedDefaults::Optional,
-            OpenNeedKvs::Optional,
-            Some(dir_string.clone()),
-        )?;
+        let kvs2 = KvsBuilder::new(InstanceId(1))
+            .dir(dir_string.clone())
+            .build()?;
 
         // Set values to both KVS instances.
         kvs1.set_value(&keyname, value1)?;
@@ -52,18 +46,12 @@ fn cit_persistency_multiple_instances() -> Result<(), ErrorCode> {
     // Assertions.
     {
         // Second KVS run.
-        let kvs1 = Kvs::open(
-            InstanceId(0),
-            OpenNeedDefaults::Optional,
-            OpenNeedKvs::Optional,
-            Some(dir_string.clone()),
-        )?;
-        let kvs2 = Kvs::open(
-            InstanceId(1),
-            OpenNeedDefaults::Optional,
-            OpenNeedKvs::Optional,
-            Some(dir_string.clone()),
-        )?;
+        let kvs1 = KvsBuilder::new(InstanceId(0))
+            .dir(dir_string.clone())
+            .build()?;
+        let kvs2 = KvsBuilder::new(InstanceId(1))
+            .dir(dir_string.clone())
+            .build()?;
 
         // Compare values, ensure they are not mixed up.
         assert_eq!(
@@ -107,22 +95,16 @@ fn cit_persistency_multiple_instances_same_id_common_value() -> Result<(), Error
     let common_keyname = "number".to_string();
     let common_value = 100.0;
 
-    let instance_id = InstanceId(0);
+    let instance_id = InstanceId(2);
     {
         // Create first KVS instance.
-        let kvs1 = Kvs::open(
-            instance_id,
-            OpenNeedDefaults::Optional,
-            OpenNeedKvs::Optional,
-            Some(dir_string.clone()),
-        )?;
+        let kvs1 = KvsBuilder::new(instance_id)
+            .dir(dir_string.clone())
+            .build()?;
         // Create second KVS instance.
-        let kvs2 = Kvs::open(
-            instance_id,
-            OpenNeedDefaults::Optional,
-            OpenNeedKvs::Optional,
-            Some(dir_string.clone()),
-        )?;
+        let kvs2 = KvsBuilder::new(instance_id)
+            .dir(dir_string.clone())
+            .build()?;
 
         // Set values to both KVS instances.
         kvs1.set_value(&common_keyname, common_value)?;
@@ -132,18 +114,12 @@ fn cit_persistency_multiple_instances_same_id_common_value() -> Result<(), Error
     // Assertions.
     {
         // Second KVS run.
-        let kvs1 = Kvs::open(
-            instance_id,
-            OpenNeedDefaults::Optional,
-            OpenNeedKvs::Optional,
-            Some(dir_string.clone()),
-        )?;
-        let kvs2 = Kvs::open(
-            instance_id,
-            OpenNeedDefaults::Optional,
-            OpenNeedKvs::Optional,
-            Some(dir_string.clone()),
-        )?;
+        let kvs1 = KvsBuilder::new(instance_id)
+            .dir(dir_string.clone())
+            .build()?;
+        let kvs2 = KvsBuilder::new(instance_id)
+            .dir(dir_string.clone())
+            .build()?;
 
         assert_eq!(
             kvs1.get_value_as::<f64>(&common_keyname)?,
@@ -179,22 +155,16 @@ fn cit_persistency_multiple_instances_same_id_interfere() -> Result<(), ErrorCod
     let value1 = 111.1;
     let value2 = 222.2;
 
-    let instance_id = InstanceId(0);
+    let instance_id = InstanceId(3);
     {
         // Create first KVS instance.
-        let kvs1 = Kvs::open(
-            instance_id,
-            OpenNeedDefaults::Optional,
-            OpenNeedKvs::Optional,
-            Some(dir_string.clone()),
-        )?;
+        let kvs1 = KvsBuilder::new(instance_id)
+            .dir(dir_string.clone())
+            .build()?;
         // Create second KVS instance.
-        let kvs2 = Kvs::open(
-            instance_id,
-            OpenNeedDefaults::Optional,
-            OpenNeedKvs::Optional,
-            Some(dir_string.clone()),
-        )?;
+        let kvs2 = KvsBuilder::new(instance_id)
+            .dir(dir_string.clone())
+            .build()?;
 
         // Set values to both KVS instances.
         kvs1.set_value(&keyname, value1)?;
@@ -204,18 +174,12 @@ fn cit_persistency_multiple_instances_same_id_interfere() -> Result<(), ErrorCod
     // Assertions.
     {
         // Second KVS run.
-        let kvs1 = Kvs::open(
-            instance_id,
-            OpenNeedDefaults::Optional,
-            OpenNeedKvs::Optional,
-            Some(dir_string.clone()),
-        )?;
-        let kvs2 = Kvs::open(
-            instance_id,
-            OpenNeedDefaults::Optional,
-            OpenNeedKvs::Optional,
-            Some(dir_string.clone()),
-        )?;
+        let kvs1 = KvsBuilder::new(instance_id)
+            .dir(dir_string.clone())
+            .build()?;
+        let kvs2 = KvsBuilder::new(instance_id)
+            .dir(dir_string.clone())
+            .build()?;
 
         // Change value in first KVS instance.
         // This should affect the second KVS instance as well,

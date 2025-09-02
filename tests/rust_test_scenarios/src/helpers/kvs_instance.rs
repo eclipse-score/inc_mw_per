@@ -1,24 +1,18 @@
 //! KVS instance test helpers.
 
 use crate::helpers::kvs_parameters::KvsParameters;
-use rust_kvs::prelude::{ErrorCode, Kvs, KvsApi, KvsBuilder, OpenNeedDefaults, OpenNeedKvs};
+use rust_kvs::prelude::{ErrorCode, Kvs, KvsApi, KvsBuilder};
 
 /// Create KVS instance based on provided parameters.
 pub fn kvs_instance(kvs_parameters: KvsParameters) -> Result<Kvs, ErrorCode> {
     let mut builder = KvsBuilder::new(kvs_parameters.instance_id);
 
-    if let Some(flag) = kvs_parameters.need_defaults {
-        builder = builder.need_defaults(match flag {
-            OpenNeedDefaults::Optional => false,
-            OpenNeedDefaults::Required => true,
-        });
+    if let Some(flag) = kvs_parameters.defaults {
+        builder = builder.defaults(flag);
     }
 
-    if let Some(flag) = kvs_parameters.need_kvs {
-        builder = builder.need_kvs(match flag {
-            OpenNeedKvs::Optional => false,
-            OpenNeedKvs::Required => true,
-        });
+    if let Some(flag) = kvs_parameters.kvs_load {
+        builder = builder.kvs_load(flag);
     }
 
     if let Some(dir) = kvs_parameters.dir {

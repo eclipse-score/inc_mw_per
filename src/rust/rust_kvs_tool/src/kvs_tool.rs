@@ -436,7 +436,7 @@ fn _getkvsfilename(kvs: Kvs, mut args: Arguments) -> Result<(), ErrorCode> {
         },
     };
     let snapshot_id = SnapshotId(snapshot_id as usize);
-    let filename = kvs.get_kvs_filename(snapshot_id)?;
+    let filename = kvs.get_kvs_file_path(snapshot_id)?;
     println!("KVS Filename: {}", filename.display());
     println!("----------------------");
     Ok(())
@@ -458,7 +458,7 @@ fn _gethashfilename(kvs: Kvs, mut args: Arguments) -> Result<(), ErrorCode> {
         },
     };
     let snapshot_id = SnapshotId(snapshot_id as usize);
-    let filename = kvs.get_hash_filename(snapshot_id);
+    let filename = kvs.get_hash_file_path(snapshot_id);
     println!("Hash Filename: {}", filename?.display());
     println!("----------------------");
     Ok(())
@@ -528,8 +528,8 @@ fn main() -> Result<(), ErrorCode> {
     let mut args = Arguments::from_env();
 
     let builder = KvsBuilder::new(InstanceId(0))
-        .need_defaults(false)
-        .need_kvs(false);
+        .defaults(Defaults::Optional)
+        .kvs_load(KvsLoad::Optional);
 
     let kvs = match builder.build() {
         Ok(kvs) => kvs,

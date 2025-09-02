@@ -23,17 +23,11 @@ impl Scenario for BasicScenario {
 
         // Set builder parameters.
         let mut builder = KvsBuilder::new(params.instance_id);
-        if let Some(flag) = params.need_defaults {
-            builder = builder.need_defaults(match flag {
-                OpenNeedDefaults::Optional => false,
-                OpenNeedDefaults::Required => true,
-            });
+        if let Some(flag) = params.defaults {
+            builder = builder.defaults(flag);
         }
-        if let Some(flag) = params.need_kvs {
-            builder = builder.need_kvs(match flag {
-                OpenNeedKvs::Optional => false,
-                OpenNeedKvs::Required => true,
-            });
+        if let Some(flag) = params.kvs_load {
+            builder = builder.kvs_load(flag);
         }
         if let Some(dir) = params.dir {
             builder = builder.dir(dir.to_string_lossy().to_string());

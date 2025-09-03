@@ -38,11 +38,11 @@
     <link rel="stylesheet" type="text/css" href="_static/sphinx-design.min.css?v=95c83b7e" />
     <link rel="stylesheet" type="text/css" href="_static/sphinx-data-viewer/jsonview.bundle.css?v=f6ef2277" />
     <link rel="stylesheet" type="text/css" href="_static/sphinx-needs/libs/html/datatables.min.css?v=4b4fd840" />
-    <link rel="stylesheet" type="text/css" href="_static/sphinx-needs/common_css/need_core.css?v=f5b60a78" />
-    <link rel="stylesheet" type="text/css" href="_static/sphinx-needs/common_css/needstable.css?v=5e1b6797" />
-    <link rel="stylesheet" type="text/css" href="_static/sphinx-needs/common_css/need_links.css?v=2150a916" />
-    <link rel="stylesheet" type="text/css" href="_static/sphinx-needs/common_css/need_style.css?v=92936fa5" />
     <link rel="stylesheet" type="text/css" href="_static/sphinx-needs/common_css/need_toggle.css?v=5c6620df" />
+    <link rel="stylesheet" type="text/css" href="_static/sphinx-needs/common_css/need_core.css?v=f5b60a78" />
+    <link rel="stylesheet" type="text/css" href="_static/sphinx-needs/common_css/need_style.css?v=92936fa5" />
+    <link rel="stylesheet" type="text/css" href="_static/sphinx-needs/common_css/need_links.css?v=2150a916" />
+    <link rel="stylesheet" type="text/css" href="_static/sphinx-needs/common_css/needstable.css?v=5e1b6797" />
     <link rel="stylesheet" type="text/css" href="_static/sphinx-needs/modern.css?v=803738c0" />
   
   <!-- So that users can add custom icons -->
@@ -371,7 +371,7 @@
 <div id="searchbox"></div>
                 <article class="bd-article">
                   
-  <div class="need_container docutils container" id="SNCB-32743551">
+  <div class="need_container docutils container" id="SNCB-026780d5">
 <div class="pst-scrollable-table-container"><table class="need needs_grid_complex needs_layout_score needs_style_none needs_type_document table" id="doc__persistency_software_verification_plan">
 <tbody>
 <tr class="head row-odd"><td class="head_left" colspan="2"><div class="needs_head_left line-block">
@@ -394,7 +394,7 @@
 <div class="line"><span class="needs_safety"><span class="needs_label">safety: </span><span class="needs_data">QM</span></span></div>
 <div class="line"><span class="needs_security"><span class="needs_label">security: </span><span class="needs_data">NO</span></span></div>
 </span></span></div>
-<div class="line"><span><div class="line">realizes: <span class="realizes"><span><a class="external_link reference external" href="https://eclipse-score.github.io/score/main/__error__.html#PROCESS_wp__verification__plan">S-CORE_PROCESS_wp__verification__plan</a></span></span></div>
+<div class="line"><span><div class="line">realizes: <span class="realizes"><span><a class="external_link reference external" href="https://eclipse-score.github.io/process_description//main/process_areas/verification/workproducts.html#wp__verification__plan">PROCESS_wp__verification__plan</a></span></span></div>
 </span></div>
 </div>
 </td>
@@ -597,30 +597,32 @@ After successful verification including review and automatically executed featur
 <section id="levels-of-integration-and-verification">
 <h3>Levels of Integration and Verification<a class="headerlink" href="#levels-of-integration-and-verification" title="Link to this heading">#</a></h3>
 <ol class="arabic simple">
-<li><p><strong>Unit/Module Level</strong>: Focuses on testing individual functions of the KVS module in isolation from the rest of the system. The goal is to verify the logical correctness of the code.</p></li>
-<li><p><strong>Component Integration Level</strong>: Tests the KVS module along with the storage driver or file system it directly depends on. The goal is to verify the interfaces and interactions between these closely coupled components.</p></li>
-<li><p><strong>Platform Level</strong>: Tests the fully integrated KVS module on the reference hardware. The goal is to verify non-functional requirements like performance and robustness in a production-representative environment.</p></li>
+<li><p><a class="external_link reference external" href="https://eclipse-score.github.io/process_description//main/process_areas/verification/workproducts.html#wp__verification__sw_unit_test">PROCESS_wp__verification__sw_unit_test</a>: Focuses on testing individual functions of the KVS module in isolation from the rest of the system. The goal is to verify the logical correctness of the code.</p></li>
+<li><p><a class="external_link reference external" href="https://eclipse-score.github.io/process_description//main/process_areas/verification/workproducts.html#wp__verification__comp_int_test">PROCESS_wp__verification__comp_int_test</a>: Tests the KVS module along with the storage driver or file system it directly depends on. The goal is to verify the interfaces and interactions between these closely coupled components.</p></li>
+<li><p><a class="external_link reference external" href="https://eclipse-score.github.io/process_description//main/process_areas/verification/workproducts.html#wp__verification__feat_int_test">PROCESS_wp__verification__feat_int_test</a>: Tests the KVS module in conjunction with other system components to validate end-to-end functionality. The goal is to ensure that the KVS module works correctly within the context of the overall system.</p></li>
+<li><p><a class="external_link reference external" href="https://eclipse-score.github.io/process_description//main/process_areas/verification/workproducts.html#wp__verification__platform_test">PROCESS_wp__verification__platform_test</a>: Tests the fully integrated KVS module on the reference hardware. The goal is to verify non-functional requirements like performance and robustness in a production-representative environment.</p></li>
 </ol>
 </section>
 <section id="verification-methods">
 <h3>Verification Methods<a class="headerlink" href="#verification-methods" title="Link to this heading">#</a></h3>
-<p><a class="reference external" href="https://eclipse-score.github.io/process_description/main/process_areas/verification/guidance/verification_methods.html">https://eclipse-score.github.io/process_description/main/process_areas/verification/guidance/verification_methods.html</a></p>
+<p>All verification methods listed in <a class="external_link reference external" href="https://eclipse-score.github.io/process_description//main/process_areas/verification/guidance/verification_methods.html#gd_meth__verification__methods">PROCESS_gd_meth__verification__methods</a> are applicable. The following methods will be primarily used:</p>
 <ol class="arabic simple">
-<li><p>Fault Injection</p></li>
-<li><p>Interface Test</p></li>
-<li><p>Structural Coverage</p></li>
+<li><p><strong>Fault Injection</strong> - Most effective for identifying edge cases and potential failure points by simulating faults in the system.</p></li>
+<li><p><strong>Interface Test</strong> - Validates the interactions between the KVS module and its dependencies, ensuring correct data exchange and protocol adherence.</p></li>
+<li><p><strong>Structural Coverage</strong> - Assesses the codebase to ensure all branches and conditions are tested, providing insights into untested areas.</p></li>
 </ol>
 <section id="test-derivation-methods">
 <h4>Test Derivation Methods<a class="headerlink" href="#test-derivation-methods" title="Link to this heading">#</a></h4>
+<p>All derivation methods listed in <a class="external_link reference external" href="https://eclipse-score.github.io/process_description//main/process_areas/verification/guidance/verification_methods.html#gd_meth__verification__derivation">PROCESS_gd_meth__verification__derivation</a> are applicable. In addition, the following methods will be primarily used:</p>
 <ol class="arabic simple">
 <li><p>Analysis of requirements (requirements-analysis)</p></li>
 <li><p>Analysis of design (design-analysis)</p></li>
 <li><p>Analysis of boundary values (boundary-values)</p></li>
 <li><p>Analysis of equivalence classes (equivalence-classes)</p></li>
-<li><p>Fuzzy testing (fuzz-testing)</p></li>
 <li><p>Error guessing based on knowledge or experience (error-guessing)</p></li>
 <li><p>Explorative testing (explorative-testing)</p></li>
 </ol>
+<p>Some derivation methods such as fuzzy testing can be not used directly but they can be used in higher testing levels such as Feature Integration Tests.</p>
 </section>
 </section>
 <section id="quality-criteria">
@@ -683,20 +685,20 @@ The results of integrated SCORE components will be published to a sphinx-needs d
 </tr>
 </thead>
 <tbody>
-<tr class="row-even"><td><p>Verification Plan</p></td>
+<tr class="row-even"><td><p><a class="external_link reference external" href="https://eclipse-score.github.io/score/main/platform_management_plan/software_verification.html#doc__verification_plan">S-CORE_doc__verification_plan</a></p></td>
 <td><p>This document.</p></td>
 <td><p>Github Pages</p></td>
 </tr>
 <tr class="row-odd"><td><p>Test Specification</p></td>
-<td><p>Detailed descriptions of all test cases.</p></td>
+<td><p>Detailed descriptions of all test cases as described in <a class="external_link reference external" href="https://eclipse-score.github.io/process_description//main/process_areas/verification/guidance/verification_process_toolreqs.html#gd_req__verification__link_tests">PROCESS_gd_req__verification__link_tests</a>.</p></td>
 <td><p>Github Pages, Github Repository</p></td>
 </tr>
-<tr class="row-even"><td><p>Test Scripts</p></td>
+<tr class="row-even"><td><p>Test Implementation</p></td>
 <td><p>The automated test code.</p></td>
 <td><p>Github Repository</p></td>
 </tr>
 <tr class="row-odd"><td><p>Test Reports</p></td>
-<td><p>The results of each test execution cycle.</p></td>
+<td><p>The results of each test execution cycle. - <a class="external_link reference external" href="https://eclipse-score.github.io/process_description//main/process_areas/verification/workproducts.html#wp__verification__module_ver_report">PROCESS_wp__verification__module_ver_report</a>, <a class="external_link reference external" href="https://eclipse-score.github.io/process_description//main/process_areas/verification/workproducts.html#wp__verification__platform_ver_report">PROCESS_wp__verification__platform_ver_report</a></p></td>
 <td><p>Github Actions, Github Pages</p></td>
 </tr>
 <tr class="row-even"><td><p>Defect Reports</p></td>
@@ -749,13 +751,12 @@ The results of integrated SCORE components will be published to a sphinx-needs d
 <ol class="arabic simple">
 <li><p><strong>Developer PC</strong>: Windows/Linux PC with development tools and simulators for local testing and debugging.</p></li>
 <li><p><strong>CI Environment</strong>: A dedicated CI server that runs automated tests on every commit, ensuring that the codebase remains stable and functional.</p></li>
-<li><p><strong>Reference Hardware</strong>: External hardware board connected to a PC via debugging probes and a controllable power supply for automated system and robustness testing.</p></li>
+<li><p><strong>Reference Hardware</strong>: External hardware board connected to a PC via debugging probes and a controllable power supply for automated system and robustness testing. Emulations created with QEMU and QNX image.</p></li>
 </ol>
 </section>
 <section id="test-execution-environment-and-reference-hardware">
 <h3>Test Execution Environment and Reference Hardware<a class="headerlink" href="#test-execution-environment-and-reference-hardware" title="Link to this heading">#</a></h3>
 <div class="line-block">
-<div class="line"><strong>CI Runner image</strong>: <a class="github reference external" href="https://github.com/qorix-group/gh_action_runner_image">qorix-group/gh_action_runner_image</a></div>
 <div class="line"><strong>HW</strong>: Qualcomm SA8650 running QNX7.1 / QNX8.0</div>
 </div>
 </section>

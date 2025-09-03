@@ -1,6 +1,6 @@
 ..
    # *******************************************************************************
-   # Copyright (c) 2024 Contributors to the Eclipse Foundation
+   # Copyright (c) 2025 Contributors to the Eclipse Foundation
    #
    # See the NOTICE file(s) distributed with this work for additional
    # information regarding copyright ownership.
@@ -19,7 +19,7 @@
     :status: valid
     :security: NO
     :safety: QM
-    :realizes: S-CORE_PROCESS_wp__verification__plan
+    :realizes: PROCESS_wp__verification__plan
 
 Software Verification Plan
 **************************
@@ -192,9 +192,10 @@ Levels of Integration and Verification
 .. (e.g., unit, component, system). Each level should be clearly defined, with associated criteria
 .. for successful completion.
 
-#. **Unit/Module Level**: Focuses on testing individual functions of the KVS module in isolation from the rest of the system. The goal is to verify the logical correctness of the code.
-#. **Component Integration Level**: Tests the KVS module along with the storage driver or file system it directly depends on. The goal is to verify the interfaces and interactions between these closely coupled components.
-#. **Platform Level**: Tests the fully integrated KVS module on the reference hardware. The goal is to verify non-functional requirements like performance and robustness in a production-representative environment.
+#. :need:`PROCESS_wp__verification__sw_unit_test`: Focuses on testing individual functions of the KVS module in isolation from the rest of the system. The goal is to verify the logical correctness of the code.
+#. :need:`PROCESS_wp__verification__comp_int_test`: Tests the KVS module along with the storage driver or file system it directly depends on. The goal is to verify the interfaces and interactions between these closely coupled components.
+#. :need:`PROCESS_wp__verification__feat_int_test`: Tests the KVS module in conjunction with other system components to validate end-to-end functionality. The goal is to ensure that the KVS module works correctly within the context of the overall system.
+#. :need:`PROCESS_wp__verification__platform_test`: Tests the fully integrated KVS module on the reference hardware. The goal is to verify non-functional requirements like performance and robustness in a production-representative environment.
 
 Verification Methods
 --------------------
@@ -203,11 +204,11 @@ Verification Methods
 .. including its purpose and applicability at different levels of verification.
 .. Reference tables can list methods, identifiers, applicable levels and ASIL relevance.
 
-https://eclipse-score.github.io/process_description/main/process_areas/verification/guidance/verification_methods.html
+All verification methods listed in :need:`PROCESS_gd_meth__verification__methods` are applicable. The following methods will be primarily used:
 
-#. Fault Injection
-#. Interface Test
-#. Structural Coverage
+#. **Fault Injection** - Most effective for identifying edge cases and potential failure points by simulating faults in the system.
+#. **Interface Test** - Validates the interactions between the KVS module and its dependencies, ensuring correct data exchange and protocol adherence.
+#. **Structural Coverage** - Assesses the codebase to ensure all branches and conditions are tested, providing insights into untested areas.
 
 Test Derivation Methods
 ^^^^^^^^^^^^^^^^^^^^^^^
@@ -215,13 +216,16 @@ Test Derivation Methods
 .. equivalence partitioning, requirements tracing). It should clarify which techniques are used
 .. at each level of testing and for different ASIL levels.  Again, a reference table is recommended.
 
+All derivation methods listed in :need:`PROCESS_gd_meth__verification__derivation` are applicable. In addition, the following methods will be primarily used:
+
 #. Analysis of requirements (requirements-analysis)
 #. Analysis of design (design-analysis)
 #. Analysis of boundary values (boundary-values)
 #. Analysis of equivalence classes (equivalence-classes)
-#. Fuzzy testing (fuzz-testing)
 #. Error guessing based on knowledge or experience (error-guessing)
 #. Explorative testing (explorative-testing)
+
+Some derivation methods such as fuzzy testing can be not used directly but they can be used in higher testing levels such as Feature Integration Tests.
 
 Quality Criteria
 ----------------
@@ -293,17 +297,17 @@ Work Products and Traceability
     * - Work Product
       - Description
       - Location
-    * - Verification Plan
+    * - :need:`S-CORE_doc__verification_plan`
       - This document.
       - Github Pages
     * - Test Specification
-      - Detailed descriptions of all test cases.
+      - Detailed descriptions of all test cases as described in :need:`PROCESS_gd_req__verification__link_tests`.
       - Github Pages, Github Repository
-    * - Test Scripts
+    * - Test Implementation
       - The automated test code.
       - Github Repository
     * - Test Reports
-      - The results of each test execution cycle.
+      - The results of each test execution cycle. - :need:`PROCESS_wp__verification__module_ver_report`, :need:`PROCESS_wp__verification__platform_ver_report`
       - Github Actions, Github Pages
     * - Defect Reports
       - Detailed reports for each failed test or identified issue.
@@ -353,7 +357,7 @@ Verification Setups and Variants
 
 #. **Developer PC**: Windows/Linux PC with development tools and simulators for local testing and debugging.
 #. **CI Environment**: A dedicated CI server that runs automated tests on every commit, ensuring that the codebase remains stable and functional.
-#. **Reference Hardware**: External hardware board connected to a PC via debugging probes and a controllable power supply for automated system and robustness testing.
+#. **Reference Hardware**: External hardware board connected to a PC via debugging probes and a controllable power supply for automated system and robustness testing. Emulations created with QEMU and QNX image.
 
 
 Test Execution Environment and Reference Hardware
@@ -364,5 +368,4 @@ Test Execution Environment and Reference Hardware
 .. access control and maintenance.
 
 
-| **CI Runner image**: https://github.com/qorix-group/gh_action_runner_image
 | **HW**: Qualcomm SA8650 running QNX7.1 / QNX8.0

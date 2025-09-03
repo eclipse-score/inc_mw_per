@@ -140,37 +140,33 @@ KVS Tool - Command Line Interface
 ---------------------------------------
 
 Version 0.1.0
-Author: Joshua Licht, Continental Automotive Technologies GmbH - Contributors to the Eclipse Foundation
 
 ---------------------------------------
 
 Options:
 -h, --help          Show this help message and exit
--o, --operation     Specify the operation to perform (setkey, getkey, removekey, listkeys, reset, snapshotcount, snapshotmaxcount, snapshotrestore, getkvsfilename, gethashfilename, createtestdata)
+-o, --operation     Specify the operation to perform (setkey, getkey, removekey, 
+                    listkeys, reset, snapshotcount, snapshotmaxcount, snapshotrestore, 
+                    getkvsfilename, gethashfilename, createtestdata)
 -k, --key           Specify the key to operate on (for key operations)
 -p, --payload       Specify the value to write (for set operations)
--t, --type          Specify the value type for get operations (number, bool, string, null, array, object or first letter as a short form: n = number (except NULL))
 -s, --snapshotid    Specify the snapshot ID for Snapshot operations
+-d, --directory     Specify the directory of the Key-Files (default is current directory)
 
 ---------------------------------------
 
 Usage Examples:
 
 Read a Key and show value:
-    kvs_tool -o getkey -k MyKey [optional: -t for type, if not specified, String is used. Panic if not correct type!]
-    kvs_tool -o getkey -k MyKey -t number (or -t n)
-    kvs_tool -o getkey -k MyKey -t bool (or -t b)
-    kvs_tool -o getkey -k MyKey -t array (or -t a)
-    kvs_tool -o getkey -k MyKey -t object (or -t o)
-    kvs_tool -o getkey -k MyKey -t string (or -t s or no type specification => string is default)
-    kvs_tool -o getkey -k MyKey -t null
+    kvs_tool -o getkey -k MyKey
 
 Write a Key and use the <payload> as the data source:
-    kvs_tool -o setkey  -k MyKey -p 'Hello World' (automatically detects following types: Number, Boolean, String, Null, Object, Array)
+    (automatically detects following types: Number, Boolean, String, Null, Object, Array)
+    kvs_tool -o setkey  -k MyKey -p 'Hello World' 
     kvs_tool -o setkey  -k MyKey -p 'true'
     kvs_tool -o setkey  -k MyKey -p 15
     kvs_tool -o setkey  -k MyKey -p '[456,false,"Second"]'
-    kvs_tool -o setkey  -k MyKey -p '{"sub-number":789,"sub-string":"Third","sub-bool":true,"sub-array":[1246,false,"Fourth"],"sub-null":null}'
+    kvs_tool -o setkey  -k MyKey -p '{"sub-number":789,"sub-array":[1246,false,"Fourth"]}'
 
 Delete a key:
     kvs_tool -o removekey -k MyKey

@@ -9,7 +9,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-//! # Key-Value and File Handling Command Line Tool based on the KVS API
+//! # Key-Value Handling Command Line Tool based on the KVS API
 //!
 //! ## Introduction
 //!
@@ -27,28 +27,22 @@
 //!    -o, --operation     Specify the operation to perform (setkey, getkey, removekey, listkeys, reset, snapshotcount, snapshotmaxcount, snapshotrestore, getkvsfilename, gethashfilename, createtestdata)
 //!    -k, --key           Specify the key to operate on (for key operations)
 //!    -p, --payload       Specify the value to write (for set operations)
-//!    -t, --type          Specify the value type for get operations (number, bool, string, null, array, object or first letter as a short form: n = number (except NULL))
 //!    -s, --snapshotid    Specify the snapshot ID for Snapshot operations
+//!    -d, --directory     Specify the directory of the Key-Files (default is current directory)
 //!
 //!    ---------------------------------------
 //!
 //!    Usage Examples:
 //!
 //!    Read a Key and show value:
-//!        kvs_tool -o getkey -k MyKey [optional: -t for type, if not specified, String is used. Panic if not correct type!]
-//!        kvs_tool -o getkey -k MyKey -t number (or -t n)
-//!        kvs_tool -o getkey -k MyKey -t bool (or -t b)
-//!        kvs_tool -o getkey -k MyKey -t array (or -t a)
-//!        kvs_tool -o getkey -k MyKey -t object (or -t o)
-//!        kvs_tool -o getkey -k MyKey -t string (or -t s or no type specification at all => string is default)
-//!        kvs_tool -o getkey -k MyKey -t null
+//!        kvs_tool -o getkey -k MyKey
 //!
 //!    Write a Key and use the <payload> as the data source:
 //!        kvs_tool -o setkey  -k MyKey -p 'Hello World' (automatically detects following types: Number, Boolean, String, Null, Object, Array)
 //!        kvs_tool -o setkey  -k MyKey -p 'true'
 //!        kvs_tool -o setkey  -k MyKey -p 15
 //!        kvs_tool -o setkey  -k MyKey -p '[456,false,"Second"]'
-//!        kvs_tool -o setkey  -k MyKey -p '{"sub-number":789,"sub-string":"Third","sub-bool":true,"sub-array":[1246,false,"Fourth"],"sub-null":null}'
+//!        kvs_tool -o setkey  -k MyKey -p '{"sub-number":789,"sub-array":[1246,false,"Fourth"]}'
 //!
 //!    Delete a key:
 //!        kvs_tool -o removekey -k MyKey
@@ -99,18 +93,6 @@ enum OperationMode {
     GetHashFilename,
     CreateTestData,
 }
-/// Defines the supported types for key-value pairs.
-/// This enum is used to specify the type of value when retrieving it from the KVS.
-enum SupportedTypes {
-    Number,
-    Bool,
-    String,
-    Null,
-    Array,
-    Object,
-    Invalid,
-}
-// TODO Disable flush_on_exit: read-only access in some Operation-modes  (no modifications to persist)
 
 /// Converts a TinyJSON value to a KVS value.
 fn from_tinyjson(value: &JsonValue) -> KvsValue {
@@ -138,6 +120,8 @@ fn from_tinyjson(value: &JsonValue) -> KvsValue {
 /// It also prints the default value.
 fn _getkey(kvs: Kvs, mut args: Arguments) -> Result<(), ErrorCode> {
     println!("----------------------");
+    kvs.set_flush_on_exit(FlushOnExit::No);
+
     let key: String = match args.opt_value_from_str("--key") {
         Ok(Some(val)) => val,
         Ok(None) | Err(_) => match args.opt_value_from_str("-k") {
@@ -162,6 +146,14 @@ fn _getkey(kvs: Kvs, mut args: Arguments) -> Result<(), ErrorCode> {
 
     if key_exist {
         println!("Key '{key}' exists!");
+        match kvs.get_value(&key) {
+            Ok(value) => {
+                println!("Key Value: {value:?}");
+            }
+            Err(e) => {
+                eprintln!("Get Key Error: {e:?}");
+            }
+        };
     } else {
         println!("Key '{key}' does not exist!");
         if is_default {
@@ -181,86 +173,6 @@ fn _getkey(kvs: Kvs, mut args: Arguments) -> Result<(), ErrorCode> {
         }
     };
 
-    let datatype: Option<String> = match args.opt_value_from_str("--type") {
-        Ok(Some(val)) => Some(val),
-        Ok(None) | Err(_) => match args.opt_value_from_str("-t") {
-            Ok(Some(val)) => Some(val),
-            _ => None,
-        },
-    };
-    let get_mode = match datatype {
-        Some(op) => match op.as_str() {
-            "number" => SupportedTypes::Number,
-            "bool" => SupportedTypes::Bool,
-            "string" => SupportedTypes::String,
-            "null" => SupportedTypes::Null,
-            "array" => SupportedTypes::Array,
-            "object" => SupportedTypes::Object,
-            "n" => SupportedTypes::Number,
-            "b" => SupportedTypes::Bool,
-            "s" => SupportedTypes::String,
-            "a" => SupportedTypes::Array,
-            "o" => SupportedTypes::Object,
-            _ => SupportedTypes::Invalid,
-        },
-        None => SupportedTypes::String,
-    };
-
-    match get_mode {
-        SupportedTypes::Number => {
-            let value = kvs.get_value_as::<f64>(&key).map_err(|e| {
-                eprintln!("KVS get failed: {e:?}");
-                e
-            })?;
-            println!("Key:'{key}' \nValue: {value}");
-        }
-        SupportedTypes::Bool => {
-            let value = kvs.get_value_as::<bool>(&key).map_err(|e| {
-                eprintln!("KVS get failed: {e:?}");
-                e
-            })?;
-            println!("Key:'{key}' \nValue: {value}");
-        }
-        SupportedTypes::String => {
-            let value = kvs.get_value_as::<String>(&key).map_err(|e| {
-                eprintln!("KVS get failed: {e:?}");
-                e
-            })?;
-            println!("Key:'{key}' \nValue: {value}");
-        }
-        // Different Syntax to be compliant with "clippy::let_unit_value"
-        SupportedTypes::Null => {
-            kvs.get_value_as::<()>(&key).map_err(|e| {
-                eprintln!("KVS get failed: {e:?}");
-                e
-            })?;
-            println!("Key:'{}' \nValue: {:?}", key, ());
-        }
-        SupportedTypes::Array => {
-            let value = kvs.get_value_as::<Vec<KvsValue>>(&key).map_err(|e| {
-                eprintln!("KVS get failed: {e:?}");
-                e
-            })?;
-            println!("Key:'{key}' \nValue: {value:?}");
-        }
-        SupportedTypes::Object => {
-            let value = kvs
-                .get_value_as::<HashMap<String, KvsValue>>(&key)
-                .map_err(|e| {
-                    eprintln!("KVS get failed: {e:?}");
-                    e
-                })?;
-            println!("Key:'{key}' \nValue: {value:?}");
-        }
-
-        SupportedTypes::Invalid => {
-            eprintln!(
-                "Error: Unsupported type specified. Use -t or --type followed by a valid type."
-            );
-            println!("----------------------");
-            return Err(ErrorCode::UnmappedError);
-        }
-    };
     println!("----------------------");
     Ok(())
 }
@@ -273,7 +185,7 @@ fn _getkey(kvs: Kvs, mut args: Arguments) -> Result<(), ErrorCode> {
 fn _setkey(kvs: Kvs, mut args: Arguments) -> Result<(), ErrorCode> {
     println!("----------------------");
     println!("Set Key");
-
+    kvs.set_flush_on_exit(FlushOnExit::Yes);
     let key: String = match args.opt_value_from_str("--key") {
         Ok(Some(val)) => val,
         Ok(None) | Err(_) => match args.opt_value_from_str("-k") {
@@ -324,7 +236,7 @@ fn _setkey(kvs: Kvs, mut args: Arguments) -> Result<(), ErrorCode> {
 /// Removes a key-value pair from the KVS.
 fn _removekey(kvs: Kvs, mut args: Arguments) -> Result<(), ErrorCode> {
     println!("----------------------");
-
+    kvs.set_flush_on_exit(FlushOnExit::Yes);
     let key: String = match args.opt_value_from_str("--key") {
         Ok(Some(val)) => val,
         Ok(None) | Err(_) => match args.opt_value_from_str("-k") {
@@ -349,7 +261,7 @@ fn _removekey(kvs: Kvs, mut args: Arguments) -> Result<(), ErrorCode> {
 fn _listkeys(kvs: Kvs) -> Result<(), ErrorCode> {
     println!("----------------------");
     println!("List Keys");
-
+    kvs.set_flush_on_exit(FlushOnExit::No);
     let keys = kvs.get_all_keys().map_err(|e| {
         eprintln!("KVS list failed: {e:?}");
         e
@@ -367,6 +279,7 @@ fn _listkeys(kvs: Kvs) -> Result<(), ErrorCode> {
 fn _reset(kvs: Kvs) -> Result<(), ErrorCode> {
     println!("----------------------");
     println!("Reset KVS");
+    kvs.set_flush_on_exit(FlushOnExit::Yes);
     kvs.reset().map_err(|e| {
         eprintln!("KVS set failed: {e:?}");
         e
@@ -379,6 +292,7 @@ fn _reset(kvs: Kvs) -> Result<(), ErrorCode> {
 fn _snapshotcount(kvs: Kvs) -> Result<(), ErrorCode> {
     println!("----------------------");
     println!("Snapshot Count");
+    kvs.set_flush_on_exit(FlushOnExit::No);
     let count = kvs.snapshot_count();
     println!("Snapshot Count: {count}");
     println!("----------------------");
@@ -386,9 +300,10 @@ fn _snapshotcount(kvs: Kvs) -> Result<(), ErrorCode> {
 }
 
 /// Retrieves the maximum snapshot count from the KVS.
-fn _snapshotmaxcount() -> Result<(), ErrorCode> {
+fn _snapshotmaxcount(kvs: Kvs) -> Result<(), ErrorCode> {
     println!("----------------------");
     println!("Snapshots Max Count");
+    kvs.set_flush_on_exit(FlushOnExit::No);
     let max = Kvs::snapshot_max_count();
     println!("Snapshots Maximum Count: {max}");
     println!("----------------------");
@@ -400,6 +315,7 @@ fn _snapshotmaxcount() -> Result<(), ErrorCode> {
 fn _snapshotrestore(kvs: Kvs, mut args: Arguments) -> Result<(), ErrorCode> {
     println!("----------------------");
     println!("Snapshot Restore");
+    kvs.set_flush_on_exit(FlushOnExit::Yes);
 
     let snapshot_id: u32 = match args.opt_value_from_str("--snapshotid") {
         Ok(Some(val)) => val,
@@ -425,6 +341,7 @@ fn _snapshotrestore(kvs: Kvs, mut args: Arguments) -> Result<(), ErrorCode> {
 fn _getkvsfilename(kvs: Kvs, mut args: Arguments) -> Result<(), ErrorCode> {
     println!("----------------------");
     println!("Get KVS Filename");
+    kvs.set_flush_on_exit(FlushOnExit::No);
     let snapshot_id: u32 = match args.opt_value_from_str("--snapshotid") {
         Ok(Some(val)) => val,
         Ok(None) | Err(_) => match args.opt_value_from_str("-s") {
@@ -446,6 +363,7 @@ fn _getkvsfilename(kvs: Kvs, mut args: Arguments) -> Result<(), ErrorCode> {
 fn _gethashfilename(kvs: Kvs, mut args: Arguments) -> Result<(), ErrorCode> {
     println!("----------------------");
     println!("Get Hash Filename");
+    kvs.set_flush_on_exit(FlushOnExit::No);
 
     let snapshot_id: u32 = match args.opt_value_from_str("--snapshotid") {
         Ok(Some(val)) => val,
@@ -468,6 +386,7 @@ fn _gethashfilename(kvs: Kvs, mut args: Arguments) -> Result<(), ErrorCode> {
 fn _createtestdata(kvs: Kvs) -> Result<(), ErrorCode> {
     println!("----------------------");
     println!("Create Test Data");
+    kvs.set_flush_on_exit(FlushOnExit::Yes);
 
     kvs.set_value("number", 123.0).map_err(|e| {
         eprintln!("KVS Create Test Data Error (number): {e:?}");
@@ -527,18 +446,6 @@ fn _createtestdata(kvs: Kvs) -> Result<(), ErrorCode> {
 fn main() -> Result<(), ErrorCode> {
     let mut args = Arguments::from_env();
 
-    let builder = KvsBuilder::new(InstanceId(0))
-        .need_defaults(false)
-        .need_kvs(false);
-
-    let kvs = match builder.build() {
-        Ok(kvs) => kvs,
-        Err(e) => {
-            eprintln!("Error opening KVS: {e:?}");
-            return Err(e);
-        }
-    };
-
     if args.contains(["-h", "--help"]) {
         const HELP: &str = r#"
 
@@ -547,37 +454,33 @@ fn main() -> Result<(), ErrorCode> {
         ---------------------------------------
 
         Version 0.1.0
-        Author: Joshua Licht, Continental Automotive Technologies GmbH - Contributors to the Eclipse Foundation
 
         ---------------------------------------
 
         Options:
         -h, --help          Show this help message and exit
-        -o, --operation     Specify the operation to perform (setkey, getkey, removekey, listkeys, reset, snapshotcount, snapshotmaxcount, snapshotrestore, getkvsfilename, gethashfilename, createtestdata)
+        -o, --operation     Specify the operation to perform (setkey, getkey, removekey, 
+                            listkeys, reset, snapshotcount, snapshotmaxcount, snapshotrestore, 
+                            getkvsfilename, gethashfilename, createtestdata)
         -k, --key           Specify the key to operate on (for key operations)
         -p, --payload       Specify the value to write (for set operations)
-        -t, --type          Specify the value type for get operations (number, bool, string, null, array, object or first letter as a short form: n = number (except NULL))
         -s, --snapshotid    Specify the snapshot ID for Snapshot operations
+        -d, --directory     Specify the directory of the Key-Files (default is current directory)
 
         ---------------------------------------
 
         Usage Examples:
 
         Read a Key and show value:
-            kvs_tool -o getkey -k MyKey [optional: -t for type, if not specified, String is used. Panic if not correct type!]
-            kvs_tool -o getkey -k MyKey -t number (or -t n)
-            kvs_tool -o getkey -k MyKey -t bool (or -t b)
-            kvs_tool -o getkey -k MyKey -t array (or -t a)
-            kvs_tool -o getkey -k MyKey -t object (or -t o)
-            kvs_tool -o getkey -k MyKey -t string (or -t s or no type specification => string is default)
-            kvs_tool -o getkey -k MyKey -t null
+            kvs_tool -o getkey -k MyKey
 
         Write a Key and use the <payload> as the data source:
-            kvs_tool -o setkey  -k MyKey -p 'Hello World' (automatically detects following types: Number, Boolean, String, Null, Object, Array)
+            (automatically detects following types: Number, Boolean, String, Null, Object, Array)
+            kvs_tool -o setkey  -k MyKey -p 'Hello World'
             kvs_tool -o setkey  -k MyKey -p 'true'
             kvs_tool -o setkey  -k MyKey -p 15
             kvs_tool -o setkey  -k MyKey -p '[456,false,"Second"]'
-            kvs_tool -o setkey  -k MyKey -p '{"sub-number":789,"sub-string":"Third","sub-bool":true,"sub-array":[1246,false,"Fourth"],"sub-null":null}'
+            kvs_tool -o setkey  -k MyKey -p '{"sub-number":789,"sub-array":[1246,false,"Fourth"]}'
 
         Delete a key:
             kvs_tool -o removekey -k MyKey
@@ -611,6 +514,32 @@ fn main() -> Result<(), ErrorCode> {
         println!("{HELP}");
         return Ok(());
     }
+    let directory: Option<String> = match args.opt_value_from_str("--directory") {
+        Ok(Some(val)) => Some(val),
+        Ok(None) | Err(_) => match args.opt_value_from_str("-d") {
+            Ok(Some(val)) => Some(val),
+            _ => None,
+        },
+    };
+
+    let builder = KvsBuilder::new(InstanceId(0))
+        .need_defaults(false)
+        .need_kvs(false);
+
+    let builder = if let Some(dir) = directory {
+        builder.dir(dir)
+    } else {
+        builder
+    };
+
+    let kvs = match builder.build() {
+        Ok(kvs) => kvs,
+        Err(e) => {
+            eprintln!("Error opening KVS: {e:?}");
+            return Err(e);
+        }
+    };
+
     let operation: Option<String> = match args.opt_value_from_str("--operation") {
         Ok(Some(val)) => Some(val),
         Ok(None) | Err(_) => match args.opt_value_from_str("-o") {
@@ -667,7 +596,7 @@ fn main() -> Result<(), ErrorCode> {
             Ok(())
         }
         OperationMode::SnapshotMaxCount => {
-            _snapshotmaxcount()?;
+            _snapshotmaxcount(kvs)?;
             Ok(())
         }
         OperationMode::SnapshotRestore => {

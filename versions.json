@@ -28,6 +28,10 @@
     "url": "https://eclipse-score.github.io/inc_mw_per/pr-107/"
   },
   {
+    "version": "pr-109",
+    "url": "https://eclipse-score.github.io/inc_mw_per/pr-109/"
+  },
+  {
     "version": "pr-15",
     "url": "https://eclipse-score.github.io/inc_mw_per/pr-15/"
   },
@@ -66,9 +70,5 @@
   {
     "version": "pr-92",
     "url": "https://eclipse-score.github.io/inc_mw_per/pr-92/"
-  },
-  {
-    "version": "pr-109",
-    "url": "https://eclipse-score.github.io/inc_mw_per/pr-109/"
   }
 ]

@@ -1,4 +1,6 @@
 from pathlib import Path
+import shutil
+from typing import Generator
 import pytest
 from testing_utils import Scenario, LogContainer, BuildTools, BazelTools
 
@@ -14,11 +16,44 @@ class ResultCode:
     SIGABRT = -6
 
 
+def temp_dir_common(
+    tmp_path_factory: pytest.TempPathFactory, base_name: str, *args: str
+) -> Generator[Path, None, None]:
+    """
+    Create temporary directory and remove it after test.
+    Common implementation to be reused by fixtures.
+
+    Returns generator providing numbered path to temporary directory.
+    E.g., '<TMP_PATH>/<BASE_NAME>-<ARG1>-<ARG2><NUMBER>/'.
+
+    Parameters
+    ----------
+    tmp_path_factory : pytest.TempPathFactory
+        Factory for temporary directories.
+    base_name : str
+        Base directory name.
+        'self.__class__.__name__' use is recommended.
+    *args : Any
+        Other parameters to be included in directory name.
+    """
+    parts = [base_name, *args]
+    dir_name = "-".join(parts)
+    dir_path = tmp_path_factory.mktemp(dir_name, numbered=True)
+    yield dir_path
+    shutil.rmtree(dir_path)
+
+
 class CommonScenario(Scenario):
     @pytest.fixture(scope="class")
     def build_tools(self, version: str) -> BuildTools:
         assert version in ("cpp", "rust")
         return BazelTools(option_prefix=version)
+
+    @pytest.fixture(scope="class")
+    def temp_dir(
+        self, tmp_path_factory: pytest.TempPathFactory, version: str
+    ) -> Generator[Path, None, None]:
+        yield from temp_dir_common(tmp_path_factory, self.__class__.__name__, version)
 
     @pytest.fixture(scope="class")
     def logs_target(self, target_path: Path, logs: LogContainer) -> LogContainer:

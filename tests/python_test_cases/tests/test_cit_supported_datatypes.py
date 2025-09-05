@@ -3,7 +3,7 @@ from abc import abstractmethod
 from typing import Any
 
 import pytest
-from common_scenario import CommonScenario, ResultCode
+from common import CommonScenario, ResultCode
 from testing_utils import ScenarioResult, LogContainer
 
 pytestmark = pytest.mark.parametrize("version", ["rust"], scope="class")

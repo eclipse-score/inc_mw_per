@@ -7,6 +7,9 @@ on:
 jobs:
   component-integration-tests:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -16,5 +19,36 @@ jobs:
         with:
           toolchain: 1.83.0
 
-      - name: Run tests
-        run: cargo test --no-fail-fast --package rust_kvs --test cit_*
+      - name: Setup Bazel
+        uses: bazel-contrib/setup-bazel@0.15.0
+        with:
+          bazelisk-version: 1.26.0 # newest LTS before 1 Jun 2025
+          disk-cache: true
+          repository-cache: true
+          bazelisk-cache: true
+
+      - name: Build C++ test scenarios with Bazel
+        run: |
+          bazel build //tests/cpp_test_scenarios:cpp_test_scenarios
+
+      - name: Build Rust test scenarios with Bazel
+        run: |
+          bazel build //tests/rust_test_scenarios:rust_test_scenarios
+
+      - name: Set up Python 3
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Set up Python virtual environment
+        working-directory: tests/python_test_cases
+        run: |
+          python -m venv .venv
+          source .venv/bin/activate
+          pip install -r requirements.txt
+
+      - name: Run Python tests with pytest
+        working-directory: tests/python_test_cases
+        run: |
+          source .venv/bin/activate
+          python -m pytest

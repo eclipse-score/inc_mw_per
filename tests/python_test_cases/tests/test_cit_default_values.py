@@ -98,7 +98,7 @@ class TestDefaultValues(DefaultValuesScenario):
             "kvs_parameters": {
                 "instance_id": self.instance_id(),
                 "dir": str(temp_dir),
-                "need_defaults": defaults,
+                "defaults": defaults,
             }
         }
 
@@ -176,7 +176,7 @@ class TestRemoveKey(DefaultValuesScenario):
             "kvs_parameters": {
                 "instance_id": self.instance_id(),
                 "dir": str(temp_dir),
-                "need_defaults": defaults,
+                "defaults": defaults,
             }
         }
 
@@ -258,7 +258,7 @@ class TestMalformedDefaultsFile(DefaultValuesScenario):
             "kvs_parameters": {
                 "instance_id": self.instance_id(),
                 "dir": str(temp_dir),
-                "need_defaults": defaults,
+                "defaults": defaults,
             }
         }
 
@@ -317,7 +317,7 @@ class TestMissingDefaultsFile(DefaultValuesScenario):
             "kvs_parameters": {
                 "instance_id": self.instance_id(),
                 "dir": str(temp_dir),
-                "need_defaults": defaults,
+                "defaults": defaults,
             }
         }
 
@@ -355,7 +355,7 @@ class TestResetAllKeys(DefaultValuesScenario):
             "kvs_parameters": {
                 "instance_id": self.instance_id(),
                 "dir": str(temp_dir),
-                "need_defaults": defaults,
+                "defaults": defaults,
             }
         }
 
@@ -421,7 +421,7 @@ class TestResetSingleKey(DefaultValuesScenario):
             "kvs_parameters": {
                 "instance_id": self.instance_id(),
                 "dir": str(temp_dir),
-                "need_defaults": defaults,
+                "defaults": defaults,
             }
         }
 
@@ -501,7 +501,7 @@ class TestChecksumOnProvidedDefaults(DefaultValuesScenario):
             "kvs_parameters": {
                 "instance_id": self.instance_id(),
                 "dir": str(temp_dir),
-                "need_defaults": defaults,
+                "defaults": defaults,
                 "flush_on_exit": False,
             }
         }

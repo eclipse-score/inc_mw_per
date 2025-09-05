@@ -1,25 +1,10 @@
 from pathlib import Path
-from typing import Any, Generator
+from typing import Any
 import pytest
-from common import CommonScenario, ResultCode, temp_dir_common
+from common import CommonScenario, ResultCode
 from testing_utils import ScenarioResult, LogContainer
 
 pytestmark = pytest.mark.parametrize("version", ["rust"], scope="class")
-
-
-class PersistencyScenario(CommonScenario):
-    """
-    Common base implementation for persistency tests.
-    """
-
-    def instance_id(self) -> int:
-        return 2
-
-    @pytest.fixture(scope="class")
-    def temp_dir(
-        self, tmp_path_factory: pytest.TempPathFactory, version: str
-    ) -> Generator[Path, None, None]:
-        yield from temp_dir_common(tmp_path_factory, self.__class__.__name__, version)
 
 
 @pytest.mark.PartiallyVerifies([])
@@ -29,7 +14,7 @@ class PersistencyScenario(CommonScenario):
 )
 @pytest.mark.TestType("requirements-based")
 @pytest.mark.DerivationTechnique("requirements-based")
-class TestExplicitFlush(PersistencyScenario):
+class TestExplicitFlush(CommonScenario):
     NUM_VALUES = 5
 
     @pytest.fixture(scope="class")
@@ -40,7 +25,7 @@ class TestExplicitFlush(PersistencyScenario):
     def test_config(self, temp_dir: Path) -> dict[str, Any]:
         return {
             "kvs_parameters": {
-                "instance_id": self.instance_id(),
+                "instance_id": 2,
                 "dir": str(temp_dir),
                 "flush_on_exit": False,
             }
@@ -62,7 +47,7 @@ class TestExplicitFlush(PersistencyScenario):
 )
 @pytest.mark.TestType("requirements-based")
 @pytest.mark.DerivationTechnique("requirements-based")
-class TestFlushOnExitEnabled(PersistencyScenario):
+class TestFlushOnExitEnabled(CommonScenario):
     NUM_VALUES = 5
 
     @pytest.fixture(scope="class")
@@ -73,7 +58,7 @@ class TestFlushOnExitEnabled(PersistencyScenario):
     def test_config(self, temp_dir: Path) -> dict[str, Any]:
         return {
             "kvs_parameters": {
-                "instance_id": self.instance_id(),
+                "instance_id": 2,
                 "dir": str(temp_dir),
                 "flush_on_exit": True,
             }
@@ -95,7 +80,7 @@ class TestFlushOnExitEnabled(PersistencyScenario):
 )
 @pytest.mark.TestType("requirements-based")
 @pytest.mark.DerivationTechnique("requirements-based")
-class TestFlushOnExitDisabled(PersistencyScenario):
+class TestFlushOnExitDisabled(CommonScenario):
     NUM_VALUES = 5
 
     @pytest.fixture(scope="class")
@@ -106,7 +91,7 @@ class TestFlushOnExitDisabled(PersistencyScenario):
     def test_config(self, temp_dir: Path) -> dict[str, Any]:
         return {
             "kvs_parameters": {
-                "instance_id": self.instance_id(),
+                "instance_id": 2,
                 "dir": str(temp_dir),
                 "flush_on_exit": False,
             }

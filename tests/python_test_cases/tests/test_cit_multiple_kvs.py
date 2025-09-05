@@ -1,24 +1,12 @@
 from pathlib import Path
-from typing import Any, Generator
+from typing import Any
 import pytest
 
-from common import CommonScenario, ResultCode, temp_dir_common
+from common import CommonScenario, ResultCode
 from testing_utils import ScenarioResult, LogContainer
 
 
 pytestmark = pytest.mark.parametrize("version", ["rust"], scope="class")
-
-
-class MultipleKvsScenario(CommonScenario):
-    """
-    Common base implementation for multiple KVS tests.
-    """
-
-    @pytest.fixture(scope="class")
-    def temp_dir(
-        self, tmp_path_factory: pytest.TempPathFactory, version: str
-    ) -> Generator[Path, None, None]:
-        yield from temp_dir_common(tmp_path_factory, self.__class__.__name__, version)
 
 
 @pytest.mark.PartiallyVerifies(
@@ -30,7 +18,7 @@ class MultipleKvsScenario(CommonScenario):
 )
 @pytest.mark.TestType("requirements-based")
 @pytest.mark.DerivationTechnique("requirements-based")
-class TestMultipleInstanceIds(MultipleKvsScenario):
+class TestMultipleInstanceIds(CommonScenario):
     @pytest.fixture(scope="class")
     def scenario_name(self) -> str:
         return "cit.multiple_kvs.multiple_instance_ids"
@@ -70,7 +58,7 @@ class TestMultipleInstanceIds(MultipleKvsScenario):
 )
 @pytest.mark.TestType("requirements-based")
 @pytest.mark.DerivationTechnique("requirements-based")
-class TestSameInstanceIdSameValue(MultipleKvsScenario):
+class TestSameInstanceIdSameValue(CommonScenario):
     @pytest.fixture(scope="class")
     def scenario_name(self) -> str:
         return "cit.multiple_kvs.same_instance_id_same_value"
@@ -105,7 +93,7 @@ class TestSameInstanceIdSameValue(MultipleKvsScenario):
 )
 @pytest.mark.TestType("requirements-based")
 @pytest.mark.DerivationTechnique("requirements-based")
-class TestSameInstanceIdDifferentValue(MultipleKvsScenario):
+class TestSameInstanceIdDifferentValue(CommonScenario):
     @pytest.fixture(scope="class")
     def scenario_name(self) -> str:
         return "cit.multiple_kvs.same_instance_id_diff_value"

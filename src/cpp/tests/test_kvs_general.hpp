@@ -55,6 +55,7 @@ const std::string data_dir = "./data_folder/";
 const std::string default_prefix = data_dir + "kvs_"+std::to_string(instance)+"_default";
 const std::string kvs_prefix     = data_dir + "kvs_"+std::to_string(instance)+"_0";
 const std::string filename_prefix = data_dir + "kvs_"+std::to_string(instance);
+const score::os::Stat::Mode storage_mode = score::os::Stat::Mode::kReadUser | score::os::Stat::Mode::kWriteUser | score::os::Stat::Mode::kReadGroup | score::os::Stat::Mode::kReadOthers;
 
 const std::string default_json = R"({
     "default": {

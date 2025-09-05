@@ -27,6 +27,12 @@ impl KvsParameters {
         let v: Value = serde_json::from_str(json_str)?;
         serde_json::from_value(v["kvs_parameters"].clone())
     }
+
+    /// Parse `KvsParameters` from `Value`.
+    /// `Value` is expected to contain `kvs_parameters` field.
+    pub fn from_value(value: &serde_json::Value) -> Result<Self, serde_json::Error> {
+        serde_json::from_value(value["kvs_parameters"].clone())
+    }
 }
 
 fn deserialize_instance_id<'de, D>(deserializer: D) -> Result<InstanceId, D::Error>

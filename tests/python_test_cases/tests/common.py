@@ -50,6 +50,12 @@ class CommonScenario(Scenario):
         return BazelTools(option_prefix=version)
 
     @pytest.fixture(scope="class")
+    def temp_dir(
+        self, tmp_path_factory: pytest.TempPathFactory, version: str
+    ) -> Generator[Path, None, None]:
+        yield from temp_dir_common(tmp_path_factory, self.__class__.__name__, version)
+
+    @pytest.fixture(scope="class")
     def logs_target(self, target_path: Path, logs: LogContainer) -> LogContainer:
         """
         Logs with messages generated strictly by the tested code.

@@ -18,7 +18,7 @@
 //! [Adler32](https://crates.io/crates/adler32) crate. No other direct dependencies are used
 //! besides the Rust `std` library.
 //!
-//! The key-value-storage is opened or initialized with [`KvsBuilder::<Kvs>::new`] where various settings
+//! The key-value-storage is opened or initialized with [`KvsBuilder::new`] where various settings
 //! can be applied before the KVS instance is created.
 //!
 //! All `TinyJSON` provided datatypes can be used:
@@ -57,7 +57,8 @@
 //! use std::collections::HashMap;
 //!
 //! fn main() -> Result<(), ErrorCode> {
-//!     let kvs: Kvs = KvsBuilder::new(InstanceId(0)).dir("").build()?;
+//!     let kvs: Kvs = KvsBuilder::new(InstanceId(0))
+//!         .build()?;
 //!
 //!     kvs.set_value("number", 123.0)?;
 //!     kvs.set_value("bool", true)?;
@@ -136,18 +137,19 @@ pub mod kvs;
 pub mod kvs_api;
 mod kvs_backend;
 pub mod kvs_builder;
+pub mod kvs_mock;
 pub mod kvs_value;
 
-pub mod kvs_mock;
-
-pub type Kvs = kvs::GenericKvs<json_backend::JsonBackend>;
+use json_backend::JsonBackend;
+pub type KvsBuilder = kvs_builder::GenericKvsBuilder<JsonBackend>;
+pub type Kvs = kvs::GenericKvs<JsonBackend>;
 
 /// Prelude module for convenient imports
 pub mod prelude {
     pub use crate::error_code::ErrorCode;
     pub use crate::kvs::GenericKvs;
     pub use crate::kvs_api::{InstanceId, KvsApi, KvsDefaults, KvsLoad, SnapshotId};
-    pub use crate::kvs_builder::KvsBuilder;
+    pub use crate::kvs_builder::GenericKvsBuilder;
     pub use crate::kvs_value::{KvsMap, KvsValue};
-    pub use crate::Kvs;
+    pub use crate::{Kvs, KvsBuilder};
 }

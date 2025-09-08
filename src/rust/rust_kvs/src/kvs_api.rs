@@ -9,13 +9,10 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use std::path::PathBuf;
-
-//core and alloc libs
-use core::fmt;
-
 use crate::error_code::ErrorCode;
 use crate::kvs_value::KvsValue;
+use core::fmt;
+use std::path::PathBuf;
 
 /// Instance ID
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -76,15 +73,6 @@ pub enum KvsLoad {
 }
 
 pub trait KvsApi {
-    fn open(
-        instance_id: InstanceId,
-        defaults: KvsDefaults,
-        kvs_load: KvsLoad,
-        dir: Option<String>,
-    ) -> Result<Self, ErrorCode>
-    where
-        Self: Sized;
-
     fn reset(&self) -> Result<(), ErrorCode>;
     fn reset_key(&self, key: &str) -> Result<(), ErrorCode>;
     fn get_all_keys(&self) -> Result<Vec<String>, ErrorCode>;
@@ -107,9 +95,9 @@ pub trait KvsApi {
     fn snapshot_max_count() -> usize
     where
         Self: Sized;
-    fn snapshot_restore(&self, id: SnapshotId) -> Result<(), ErrorCode>;
-    fn get_kvs_filename(&self, id: SnapshotId) -> Result<PathBuf, ErrorCode>;
-    fn get_hash_filename(&self, id: SnapshotId) -> Result<PathBuf, ErrorCode>;
+    fn snapshot_restore(&self, snapshot_id: SnapshotId) -> Result<(), ErrorCode>;
+    fn get_kvs_filename(&self, snapshot_id: SnapshotId) -> Result<PathBuf, ErrorCode>;
+    fn get_hash_filename(&self, snapshot_id: SnapshotId) -> Result<PathBuf, ErrorCode>;
 }
 
 #[cfg(test)]

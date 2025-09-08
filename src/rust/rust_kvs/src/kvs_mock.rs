@@ -10,7 +10,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::error_code::ErrorCode;
-use crate::kvs_api::{InstanceId, KvsApi, KvsDefaults, KvsLoad, SnapshotId};
+use crate::kvs_api::{KvsApi, SnapshotId};
 use crate::kvs_value::{KvsMap, KvsValue};
 use std::sync::{Arc, Mutex};
 
@@ -22,25 +22,19 @@ pub struct MockKvs {
 
 impl Default for MockKvs {
     fn default() -> Self {
-        Self {
-            map: Arc::new(Mutex::new(KvsMap::new())),
-            fail: false,
-        }
+        let map = Arc::new(Mutex::new(KvsMap::new()));
+        Self { map, fail: false }
+    }
+}
+
+impl MockKvs {
+    pub fn new(kvs_map: KvsMap, fail: bool) -> Result<Self, ErrorCode> {
+        let map = Arc::new(Mutex::new(kvs_map));
+        Ok(MockKvs { map, fail })
     }
 }
 
 impl KvsApi for MockKvs {
-    fn open(
-        _instance_id: InstanceId,
-        _defaults: KvsDefaults,
-        _kvs_load: KvsLoad,
-        _dir: Option<String>,
-    ) -> Result<Self, ErrorCode> {
-        Ok(MockKvs {
-            map: Arc::new(Mutex::new(KvsMap::new())),
-            fail: false,
-        })
-    }
     fn reset(&self) -> Result<(), ErrorCode> {
         if self.fail {
             return Err(ErrorCode::UnmappedError);

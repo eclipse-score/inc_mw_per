@@ -23,23 +23,24 @@ impl Scenario for ExplicitFlush {
         }
 
         // Check parameters.
-        let params = KvsParameters::from_json(input.as_ref().unwrap()).unwrap();
+        let input_string = input.as_ref().expect("Test input is expected");
+        let params = KvsParameters::from_json(input_string).expect("Failed to parse parameters");
         {
             // First KVS instance object - used for setting and flushing data.
-            let kvs = kvs_instance(params.clone()).unwrap();
+            let kvs = kvs_instance(params.clone()).expect("Failed to create KVS instance");
 
             // Set values.
             for (key, value) in key_values.iter() {
-                kvs.set_value(key, *value).unwrap();
+                kvs.set_value(key, *value).expect("Failed to set value");
             }
 
             // Explicit flush.
-            kvs.flush().unwrap();
+            kvs.flush().expect("Failed to flush KVS instance");
         }
 
         {
             // Second KVS instance object - used for flush check.
-            let kvs = kvs_instance(params).unwrap();
+            let kvs = kvs_instance(params).expect("Failed to create KVS instance");
 
             // Get values.
             for (key, _) in key_values.iter() {
@@ -70,14 +71,15 @@ impl Scenario for TestFlushOnExit {
         }
 
         // Check parameters.
-        let params = KvsParameters::from_json(input.as_ref().unwrap()).unwrap();
+        let input_string = input.as_ref().expect("Test input is expected");
+        let params = KvsParameters::from_json(input_string).expect("Failed to parse parameters");
         {
             // First KVS instance object - used for setting and flushing data.
-            let kvs = kvs_instance(params.clone()).unwrap();
+            let kvs = kvs_instance(params.clone()).expect("Failed to create KVS instance");
 
             // Set values.
             for (key, value) in key_values.iter() {
-                kvs.set_value(key, *value).unwrap();
+                kvs.set_value(key, *value).expect("Failed to set value");
             }
 
             // Flush happens on `kvs` going out of scope and `flush_on_exit` enabled.
@@ -85,7 +87,7 @@ impl Scenario for TestFlushOnExit {
 
         {
             // Second KVS instance object - used for flush check.
-            let kvs = kvs_instance(params).unwrap();
+            let kvs = kvs_instance(params).expect("Failed to create KVS instance");
 
             let snapshot_id = SnapshotId(0);
             let kvs_path_result = kvs.get_kvs_filename(snapshot_id);

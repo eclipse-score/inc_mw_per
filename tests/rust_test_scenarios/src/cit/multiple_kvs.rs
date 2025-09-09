@@ -18,29 +18,38 @@ impl Scenario for MultipleInstanceIds {
         let value2 = 222.2;
 
         // Parameters.
-        let v: Value = serde_json::from_str(input.as_ref().unwrap()).unwrap();
-        let params1 = KvsParameters::from_value(&v["kvs_parameters_1"]).unwrap();
-        let params2 = KvsParameters::from_value(&v["kvs_parameters_2"]).unwrap();
+        let input_string = input.as_ref().expect("Test input is expected");
+        let v: Value = serde_json::from_str(input_string).expect("Failed to parse input string");
+        let params1 =
+            KvsParameters::from_value(&v["kvs_parameters_1"]).expect("Failed to parse parameters");
+        let params2 =
+            KvsParameters::from_value(&v["kvs_parameters_2"]).expect("Failed to parse parameters");
         {
             // Create first KVS instance.
-            let kvs1 = kvs_instance(params1.clone()).unwrap();
+            let kvs1 = kvs_instance(params1.clone()).expect("Failed to create KVS instance");
 
             // Create seconds KVS instance.
-            let kvs2 = kvs_instance(params2.clone()).unwrap();
+            let kvs2 = kvs_instance(params2.clone()).expect("Failed to create KVS instance");
 
             // Set values to both KVS instances.
-            kvs1.set_value(&keyname, value1).unwrap();
-            kvs2.set_value(&keyname, value2).unwrap();
+            kvs1.set_value(&keyname, value1)
+                .expect("Failed to set value");
+            kvs2.set_value(&keyname, value2)
+                .expect("Failed to set value");
         }
 
         {
             // Second KVS run.
-            let kvs1 = kvs_instance(params1).unwrap();
-            let kvs2 = kvs_instance(params2).unwrap();
+            let kvs1 = kvs_instance(params1).expect("Failed to create KVS instance");
+            let kvs2 = kvs_instance(params2).expect("Failed to create KVS instance");
 
-            let value1 = kvs1.get_value_as::<f64>(&keyname).unwrap();
+            let value1 = kvs1
+                .get_value_as::<f64>(&keyname)
+                .expect("Failed to read value");
             info!(instance = "kvs1", key = keyname, value = value1);
-            let value2 = kvs2.get_value_as::<f64>(&keyname).unwrap();
+            let value2 = kvs2
+                .get_value_as::<f64>(&keyname)
+                .expect("Failed to read value");
             info!(instance = "kvs2", key = keyname, value = value2);
         }
 
@@ -61,27 +70,34 @@ impl Scenario for SameInstanceIdSameValue {
         let value = 111.1;
 
         // Parameters.
-        let params = KvsParameters::from_json(input.as_ref().unwrap()).unwrap();
+        let input_string = input.as_ref().expect("Test input is expected");
+        let params = KvsParameters::from_json(input_string).expect("Failed to parse parameters");
         {
             // Create first KVS instance.
-            let kvs1 = kvs_instance(params.clone()).unwrap();
+            let kvs1 = kvs_instance(params.clone()).expect("Failed to create KVS instance");
 
             // Create seconds KVS instance.
-            let kvs2 = kvs_instance(params.clone()).unwrap();
+            let kvs2 = kvs_instance(params.clone()).expect("Failed to create KVS instance");
 
             // Set values to both KVS instances.
-            kvs1.set_value(&keyname, value).unwrap();
-            kvs2.set_value(&keyname, value).unwrap();
+            kvs1.set_value(&keyname, value)
+                .expect("Failed to set value");
+            kvs2.set_value(&keyname, value)
+                .expect("Failed to set value");
         }
 
         {
             // Second KVS run.
-            let kvs1 = kvs_instance(params.clone()).unwrap();
-            let kvs2 = kvs_instance(params).unwrap();
+            let kvs1 = kvs_instance(params.clone()).expect("Failed to create KVS instance");
+            let kvs2 = kvs_instance(params).expect("Failed to create KVS instance");
 
-            let value1 = kvs1.get_value_as::<f64>(&keyname).unwrap();
+            let value1 = kvs1
+                .get_value_as::<f64>(&keyname)
+                .expect("Failed to read value");
             info!(instance = "kvs1", key = keyname, value = value1);
-            let value2 = kvs2.get_value_as::<f64>(&keyname).unwrap();
+            let value2 = kvs2
+                .get_value_as::<f64>(&keyname)
+                .expect("Failed to read value");
             info!(instance = "kvs2", key = keyname, value = value2);
         }
 
@@ -103,27 +119,34 @@ impl Scenario for SameInstanceIdDifferentValue {
         let value2 = 222.2;
 
         // Parameters.
-        let params = KvsParameters::from_json(input.as_ref().unwrap()).unwrap();
+        let input_string = input.as_ref().expect("Test input is expected");
+        let params = KvsParameters::from_json(input_string).expect("Failed to parse parameters");
         {
             // Create first KVS instance.
-            let kvs1 = kvs_instance(params.clone()).unwrap();
+            let kvs1 = kvs_instance(params.clone()).expect("Failed to create KVS instance");
 
             // Create seconds KVS instance.
-            let kvs2 = kvs_instance(params.clone()).unwrap();
+            let kvs2 = kvs_instance(params.clone()).expect("Failed to create KVS instance");
 
             // Set values to both KVS instances.
-            kvs1.set_value(&keyname, value1).unwrap();
-            kvs2.set_value(&keyname, value2).unwrap();
+            kvs1.set_value(&keyname, value1)
+                .expect("Failed to set value");
+            kvs2.set_value(&keyname, value2)
+                .expect("Failed to set value");
         }
 
         {
             // Second KVS run.
-            let kvs1 = kvs_instance(params.clone()).unwrap();
-            let kvs2 = kvs_instance(params).unwrap();
+            let kvs1 = kvs_instance(params.clone()).expect("Failed to create KVS instance");
+            let kvs2 = kvs_instance(params).expect("Failed to create KVS instance");
 
-            let value1 = kvs1.get_value_as::<f64>(&keyname).unwrap();
+            let value1 = kvs1
+                .get_value_as::<f64>(&keyname)
+                .expect("Failed to read value");
             info!(instance = "kvs1", key = keyname, value = value1);
-            let value2 = kvs2.get_value_as::<f64>(&keyname).unwrap();
+            let value2 = kvs2
+                .get_value_as::<f64>(&keyname)
+                .expect("Failed to read value");
             info!(instance = "kvs2", key = keyname, value = value2);
         }
 

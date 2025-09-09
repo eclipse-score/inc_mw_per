@@ -18,9 +18,10 @@ impl Scenario for DefaultValues {
         let key = "test_number";
 
         // Create KVS instance with provided params.
-        let params = KvsParameters::from_json(input.as_ref().unwrap()).unwrap();
+        let input_string = input.as_ref().expect("Test input is expected");
+        let params = KvsParameters::from_json(input_string).expect("Failed to parse parameters");
         {
-            let kvs = kvs_instance(params.clone()).unwrap();
+            let kvs = kvs_instance(params.clone()).expect("Failed to create KVS instance");
 
             // Get current value parameters.
             let value_is_default = to_str(&kvs.is_value_default(key));
@@ -30,12 +31,12 @@ impl Scenario for DefaultValues {
             info!(key, value_is_default, default_value, current_value);
 
             // Set value and check value parameters.
-            kvs.set_value(key, 432.1).unwrap();
+            kvs.set_value(key, 432.1).expect("Failed to set value");
         }
 
         // Flush and reopen KVS instance to ensure persistency.
         {
-            let kvs = kvs_instance(params).unwrap();
+            let kvs = kvs_instance(params).expect("Failed to create KVS instance");
 
             // Get current value parameters.
             let value_is_default = to_str(&kvs.is_value_default(key));
@@ -62,9 +63,10 @@ impl Scenario for RemoveKey {
         let key = "test_number";
 
         // Create KVS instance with provided params.
-        let params = KvsParameters::from_json(input.as_ref().unwrap()).unwrap();
+        let input_string = input.as_ref().expect("Test input is expected");
+        let params = KvsParameters::from_json(input_string).expect("Failed to parse parameters");
         {
-            let kvs = kvs_instance(params.clone()).unwrap();
+            let kvs = kvs_instance(params.clone()).expect("Failed to create KVS instance");
 
             // Get value parameters before set.
             let value_is_default = to_str(&kvs.is_value_default(key));
@@ -74,7 +76,7 @@ impl Scenario for RemoveKey {
             info!(key, value_is_default, default_value, current_value);
 
             // Get value parameters after set.
-            kvs.set_value(key, 432.1).unwrap();
+            kvs.set_value(key, 432.1).expect("Failed to set value");
 
             // Get current value parameters.
             let value_is_default = to_str(&kvs.is_value_default(key));
@@ -84,7 +86,7 @@ impl Scenario for RemoveKey {
             info!(key, value_is_default, default_value, current_value);
 
             // Get value parameters after remove.
-            kvs.remove_key(key).unwrap();
+            kvs.remove_key(key).expect("Failed to remove key");
             let value_is_default = to_str(&kvs.is_value_default(key));
             let default_value = to_str(&kvs.get_default_value(key));
             let current_value = to_str(&kvs.get_value(key));
@@ -108,9 +110,10 @@ impl Scenario for ResetAllKeys {
         let num_values = 5;
 
         // Create KVS instance with provided params.
-        let params = KvsParameters::from_json(input.as_ref().unwrap()).unwrap();
+        let input_string = input.as_ref().expect("Test input is expected");
+        let params = KvsParameters::from_json(input_string).expect("Failed to parse parameters");
         {
-            let kvs = kvs_instance(params.clone()).unwrap();
+            let kvs = kvs_instance(params.clone()).expect("Failed to create KVS instance");
 
             // List of keys and corresponding values.
             let mut key_values = Vec::new();
@@ -123,28 +126,35 @@ impl Scenario for ResetAllKeys {
             // Set non-default values.
             for (key, value) in key_values.iter() {
                 // Get value parameters before set.
-                let value_is_default = kvs.is_value_default(key).unwrap();
-                let current_value = kvs.get_value_as::<f64>(key).unwrap();
+                let value_is_default = kvs
+                    .is_value_default(key)
+                    .expect("Failed to check if default value");
+                let current_value = kvs.get_value_as::<f64>(key).expect("Failed to read value");
 
                 info!(key = key, value_is_default, current_value);
 
                 // Set value.
-                kvs.set_value(key.clone(), *value).unwrap();
+                kvs.set_value(key.clone(), *value)
+                    .expect("Failed to set value");
 
                 // Get value parameters after set.
-                let value_is_default = kvs.is_value_default(key).unwrap();
-                let current_value = kvs.get_value_as::<f64>(key).unwrap();
+                let value_is_default = kvs
+                    .is_value_default(key)
+                    .expect("Failed to check if default value");
+                let current_value = kvs.get_value_as::<f64>(key).expect("Failed to read value");
 
                 info!(key, value_is_default, current_value);
             }
 
             // Reset.
-            kvs.reset().unwrap();
+            kvs.reset().expect("Failed to reset KVS instance");
 
             // Get value parameters after reset.
             for (key, _) in key_values.iter() {
-                let value_is_default = kvs.is_value_default(key).unwrap();
-                let current_value = kvs.get_value_as::<f64>(key).unwrap();
+                let value_is_default = kvs
+                    .is_value_default(key)
+                    .expect("Failed to check if default value");
+                let current_value = kvs.get_value_as::<f64>(key).expect("Failed to read value");
 
                 info!(key, value_is_default, current_value);
             }
@@ -167,9 +177,10 @@ impl Scenario for ResetSingleKey {
         let reset_index = 2;
 
         // Create KVS instance with provided params.
-        let params = KvsParameters::from_json(input.as_ref().unwrap()).unwrap();
+        let input_string = input.as_ref().expect("Test input is expected");
+        let params = KvsParameters::from_json(input_string).expect("Failed to parse parameters");
         {
-            let kvs = kvs_instance(params.clone()).unwrap();
+            let kvs = kvs_instance(params.clone()).expect("Failed to create KVS instance");
 
             // List of keys and corresponding values.
             let mut key_values = Vec::new();
@@ -182,29 +193,36 @@ impl Scenario for ResetSingleKey {
             // Set non-default values.
             for (key, value) in key_values.iter() {
                 // Get value parameters before set.
-                let value_is_default = kvs.is_value_default(key).unwrap();
-                let current_value = kvs.get_value_as::<f64>(key).unwrap();
+                let value_is_default = kvs
+                    .is_value_default(key)
+                    .expect("Failed to check if default value");
+                let current_value = kvs.get_value_as::<f64>(key).expect("Failed to read value");
 
                 info!(key = key, value_is_default, current_value);
 
                 // Set value.
-                kvs.set_value(key.clone(), *value).unwrap();
+                kvs.set_value(key.clone(), *value)
+                    .expect("Failed to set value");
 
                 // Get value parameters after set.
-                let value_is_default = kvs.is_value_default(key).unwrap();
-                let current_value = kvs.get_value_as::<f64>(key).unwrap();
+                let value_is_default = kvs
+                    .is_value_default(key)
+                    .expect("Failed to check if default value");
+                let current_value = kvs.get_value_as::<f64>(key).expect("Failed to read value");
 
                 info!(key, value_is_default, current_value);
             }
 
             // Reset single key.
-            kvs.reset_key(&key_values.get(reset_index).unwrap().0)
-                .unwrap();
+            kvs.reset_key(&key_values.get(reset_index).expect("Failed to read value").0)
+                .expect("Failed to reset key");
 
             // Get value parameters after reset.
             for (key, _) in key_values.iter() {
-                let value_is_default = kvs.is_value_default(key).unwrap();
-                let current_value = kvs.get_value_as::<f64>(key).unwrap();
+                let value_is_default = kvs
+                    .is_value_default(key)
+                    .expect("Failed to check if default value");
+                let current_value = kvs.get_value_as::<f64>(key).expect("Failed to read value");
 
                 info!(key, value_is_default, current_value);
             }
@@ -224,15 +242,20 @@ impl Scenario for Checksum {
 
     fn run(&self, input: Option<String>) -> Result<(), String> {
         // Create KVS instance with provided params.
-        let params = KvsParameters::from_json(input.as_ref().unwrap()).unwrap();
+        let input_string = input.as_ref().expect("Test input is expected");
+        let params = KvsParameters::from_json(input_string).expect("Failed to parse parameters");
         let kvs_path;
         let hash_path;
         {
             // Create instance, flush, store paths to files, close instance.
-            let kvs = kvs_instance(params.clone()).unwrap();
-            kvs.flush().unwrap();
-            kvs_path = kvs.get_kvs_filename(SnapshotId(0)).unwrap();
-            hash_path = kvs.get_hash_filename(SnapshotId(0)).unwrap();
+            let kvs = kvs_instance(params.clone()).expect("Failed to create KVS instance");
+            kvs.flush().expect("Failed to flush KVS instance");
+            kvs_path = kvs
+                .get_kvs_filename(SnapshotId(0))
+                .expect("Failed to get KVS file path");
+            hash_path = kvs
+                .get_hash_filename(SnapshotId(0))
+                .expect("Failed to get hash file path");
         }
         info!(
             kvs_path = kvs_path.display().to_string(),

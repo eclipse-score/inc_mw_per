@@ -14,8 +14,9 @@ impl Scenario for SupportedDatatypesKeys {
     }
 
     fn run(&self, input: Option<String>) -> Result<(), String> {
-        let params = KvsParameters::from_json(input.as_ref().unwrap()).unwrap();
-        let kvs = kvs_instance(params).unwrap();
+        let input_string = input.as_ref().expect("Test input is expected");
+        let params = KvsParameters::from_json(input_string).expect("Failed to parse parameters");
+        let kvs = kvs_instance(params).expect("Failed to create KVS instance");
 
         // Set key-value pairs. Unit type is used for value - only key is used later on.
         let keys_to_check = vec![
@@ -24,11 +25,11 @@ impl Scenario for SupportedDatatypesKeys {
             String::from("greek ημα"),
         ];
         for key in keys_to_check {
-            kvs.set_value(key, ()).unwrap();
+            kvs.set_value(key, ()).expect("Failed to set value");
         }
 
         // Get and print all keys.
-        let keys_in_kvs = kvs.get_all_keys().unwrap();
+        let keys_in_kvs = kvs.get_all_keys().expect("Failed to read all keys");
         for key in keys_in_kvs {
             info!(key);
         }
@@ -59,14 +60,16 @@ impl Scenario for SupportedDatatypesValues {
     }
 
     fn run(&self, input: Option<String>) -> Result<(), String> {
-        let params = KvsParameters::from_json(input.as_ref().unwrap()).unwrap();
-        let kvs = kvs_instance(params).unwrap();
+        let input_string = input.as_ref().expect("Test input is expected");
+        let params = KvsParameters::from_json(input_string).expect("Failed to parse parameters");
+        let kvs = kvs_instance(params).expect("Failed to create KVS instance");
 
-        kvs.set_value(self.name(), self.value.clone()).unwrap();
+        kvs.set_value(self.name(), self.value.clone())
+            .expect("Failed to set value");
 
-        let kvs_value = kvs.get_value(self.name()).unwrap();
+        let kvs_value = kvs.get_value(self.name()).expect("Failed to read value");
         let json_value = JsonValue::from(kvs_value);
-        let json_str = json_value.stringify().unwrap();
+        let json_str = json_value.stringify().expect("Failed to stringify JSON");
 
         info!(key = self.name(), value = json_str);
 

@@ -15,20 +15,21 @@ impl Scenario for SnapshotCount {
     }
 
     fn run(&self, input: Option<String>) -> Result<(), String> {
-        let input_string = input.as_ref().unwrap();
-        let v: Value = serde_json::from_str(input_string).unwrap();
-        let count = serde_json::from_value(v["count"].clone()).unwrap();
-        let params = KvsParameters::from_value(&v).unwrap();
+        let input_string = input.as_ref().expect("Test input is expected");
+        let v: Value = serde_json::from_str(input_string).expect("Failed to parse input string");
+        let count =
+            serde_json::from_value(v["count"].clone()).expect("Failed to parse \"count\" field");
+        let params = KvsParameters::from_value(&v).expect("Failed to parse parameters");
 
         // Create snapshots.
         for i in 0..count {
-            let kvs = kvs_instance(params.clone()).unwrap();
-            kvs.set_value("counter", i).unwrap();
+            let kvs = kvs_instance(params.clone()).expect("Failed to create KVS instance");
+            kvs.set_value("counter", i).expect("Failed to set value");
             info!(snapshot_count = kvs.snapshot_count());
         }
 
         {
-            let kvs = kvs_instance(params).unwrap();
+            let kvs = kvs_instance(params).expect("Failed to create KVS instance");
             info!(snapshot_count = kvs.snapshot_count());
         }
 
@@ -57,25 +58,30 @@ impl Scenario for SnapshotRestore {
     }
 
     fn run(&self, input: Option<String>) -> Result<(), String> {
-        let input_string = input.as_ref().unwrap();
-        let v: Value = serde_json::from_str(input_string).unwrap();
-        let count = serde_json::from_value(v["count"].clone()).unwrap();
-        let snapshot_id = serde_json::from_value(v["snapshot_id"].clone()).unwrap();
-        let params = KvsParameters::from_value(&v).unwrap();
+        let input_string = input.as_ref().expect("Test input is expected");
+        let v: Value = serde_json::from_str(input_string).expect("Failed to parse input string");
+        let count =
+            serde_json::from_value(v["count"].clone()).expect("Failed to parse \"count\" field");
+        let snapshot_id = serde_json::from_value(v["snapshot_id"].clone())
+            .expect("Failed to parse \"snapshot_id\" field");
+        let params = KvsParameters::from_value(&v).expect("Failed to parse parameters");
 
         // Create snapshots.
         for i in 0..count {
-            let kvs = kvs_instance(params.clone()).unwrap();
-            kvs.set_value("counter", i).unwrap();
+            let kvs = kvs_instance(params.clone()).expect("Failed to create KVS instance");
+            kvs.set_value("counter", i).expect("Failed to set value");
         }
 
         {
-            let kvs = kvs_instance(params).unwrap();
+            let kvs = kvs_instance(params).expect("Failed to create KVS instance");
 
             let result = kvs.snapshot_restore(SnapshotId(snapshot_id));
             info!(result = format!("{result:?}"));
             if let Ok(()) = result {
-                info!(value = kvs.get_value_as::<i32>("counter").unwrap());
+                let value = kvs
+                    .get_value_as::<i32>("counter")
+                    .expect("Failed to read value");
+                info!(value);
             }
         }
 
@@ -91,20 +97,22 @@ impl Scenario for SnapshotPaths {
     }
 
     fn run(&self, input: Option<String>) -> Result<(), String> {
-        let input_string = input.as_ref().unwrap();
-        let v: Value = serde_json::from_str(input_string).unwrap();
-        let count = serde_json::from_value(v["count"].clone()).unwrap();
-        let snapshot_id = serde_json::from_value(v["snapshot_id"].clone()).unwrap();
-        let params = KvsParameters::from_value(&v).unwrap();
+        let input_string = input.as_ref().expect("Test input is expected");
+        let v: Value = serde_json::from_str(input_string).expect("Failed to parse input string");
+        let count =
+            serde_json::from_value(v["count"].clone()).expect("Failed to parse \"count\" field");
+        let snapshot_id = serde_json::from_value(v["snapshot_id"].clone())
+            .expect("Failed to parse \"snapshot_id\" field");
+        let params = KvsParameters::from_value(&v).expect("Failed to parse parameters");
 
         // Create snapshots.
         for i in 0..count {
-            let kvs = kvs_instance(params.clone()).unwrap();
-            kvs.set_value("counter", i).unwrap();
+            let kvs = kvs_instance(params.clone()).expect("Failed to create KVS instance");
+            kvs.set_value("counter", i).expect("Failed to set value");
         }
 
         {
-            let kvs = kvs_instance(params).unwrap();
+            let kvs = kvs_instance(params).expect("Failed to create KVS instance");
 
             let kvs_path_result = kvs.get_kvs_filename(SnapshotId(snapshot_id));
             let hash_path_result = kvs.get_hash_filename(SnapshotId(snapshot_id));

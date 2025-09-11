@@ -20,6 +20,7 @@ KvsBuilder::KvsBuilder(const InstanceId& instance_id)
     , need_defaults(false)
     , need_kvs(false)
     , directory("./data_folder/") /* Default Directory */
+    , storage_mode_(score::os::Stat::Mode::kReadUser|score::os::Stat::Mode::kWriteUser|score::os::Stat::Mode::kReadGroup|score::os::Stat::Mode::kReadOthers) /* Default storage mode */
 {}
 
 KvsBuilder& KvsBuilder::need_defaults_flag(bool flag) {
@@ -37,6 +38,10 @@ KvsBuilder& KvsBuilder::dir(std::string&& dir_path) {
     return *this;
 }
 
+KvsBuilder& KvsBuilder::storage_mode(score::os::Stat::Mode mode) {
+    storage_mode_ = mode;
+    return *this;
+}
 
 score::Result<Kvs> KvsBuilder::build() {
     score::Result<Kvs> result = score::MakeUnexpected(ErrorCode::UnmappedError);
@@ -50,7 +55,8 @@ score::Result<Kvs> KvsBuilder::build() {
         instance_id,
         need_defaults ? OpenNeedDefaults::Required : OpenNeedDefaults::Optional,
         need_kvs      ? OpenNeedKvs::Required      : OpenNeedKvs::Optional,
-        std::move(directory)
+        std::move(directory),
+        storage_mode_
     );
 
     return result;

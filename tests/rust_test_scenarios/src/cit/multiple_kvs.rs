@@ -36,6 +36,10 @@ impl Scenario for MultipleInstanceIds {
                 .expect("Failed to set value");
             kvs2.set_value(&keyname, value2)
                 .expect("Failed to set value");
+
+            // Flush KVS.
+            kvs1.flush().expect("Failed to flush first instance");
+            kvs2.flush().expect("Failed to flush second instance");
         }
 
         {
@@ -84,6 +88,10 @@ impl Scenario for SameInstanceIdSameValue {
                 .expect("Failed to set value");
             kvs2.set_value(&keyname, value)
                 .expect("Failed to set value");
+
+            // Flush KVS.
+            kvs1.flush().expect("Failed to flush first instance");
+            kvs2.flush().expect("Failed to flush second instance");
         }
 
         {
@@ -133,6 +141,10 @@ impl Scenario for SameInstanceIdDifferentValue {
                 .expect("Failed to set value");
             kvs2.set_value(&keyname, value2)
                 .expect("Failed to set value");
+
+            // Flush KVS.
+            kvs1.flush().expect("Failed to flush first instance");
+            kvs2.flush().expect("Failed to flush second instance");
         }
 
         {

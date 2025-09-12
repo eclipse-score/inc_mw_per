@@ -36,9 +36,6 @@ impl Scenario for BasicScenario {
 
         // Create KVS.
         let kvs: Kvs = builder.build().expect("Failed to build KVS instance");
-        if let Some(flag) = params.flush_on_exit {
-            kvs.set_flush_on_exit(flag);
-        }
 
         // Simple set/get.
         let key = "example_key";

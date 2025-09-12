@@ -34,7 +34,7 @@ This crate provides a Key-Value-Store using TinyJSON to persist the data. It use
 Introduction
 ------------
 
-The key-value store is initialized with `Kvs::open` and automatically flushed on exit. Flushing behavior can be managed via `Kvs::flush_on_exit` or `Kvs::flush`.
+The key-value store is initialized with `Kvs::open` and can be flushed with `Kvs::flush`.
 
 All TinyJSON-supported datatypes are available:
 

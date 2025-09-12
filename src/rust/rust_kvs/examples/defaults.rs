@@ -43,7 +43,7 @@ fn main() -> Result<(), ErrorCode> {
 
     // Build KVS instance for given instance ID and temporary directory.
     // `defaults` is set to `KvsDefaults::Required` - defaults are required.
-    let builder = KvsBuilder::<Kvs>::new(instance_id)
+    let builder = KvsBuilder::new(instance_id)
         .dir(dir_string)
         .defaults(KvsDefaults::Required);
     let kvs = builder.build()?;

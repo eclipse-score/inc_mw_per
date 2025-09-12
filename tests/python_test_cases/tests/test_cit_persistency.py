@@ -27,7 +27,6 @@ class TestExplicitFlush(CommonScenario):
             "kvs_parameters": {
                 "instance_id": 2,
                 "dir": str(temp_dir),
-                "flush_on_exit": False,
             }
         }
 
@@ -38,76 +37,3 @@ class TestExplicitFlush(CommonScenario):
             log = logs_info_level.find_log("key", value=f"test_number_{i}")
             assert log is not None
             assert log.value == f"Ok(F64({12.3 * i}))"
-
-
-@pytest.mark.PartiallyVerifies([])
-@pytest.mark.FullyVerifies(["comp_req__persistency__persist_data_store_com"])
-@pytest.mark.Description(
-    "Verifies that data is automatically flushed and persisted when the KVS instance is dropped, with flush on exit enabled."
-)
-@pytest.mark.TestType("requirements-based")
-@pytest.mark.DerivationTechnique("requirements-based")
-class TestFlushOnExitEnabled(CommonScenario):
-    NUM_VALUES = 5
-
-    @pytest.fixture(scope="class")
-    def scenario_name(self) -> str:
-        return "cit.persistency.flush_on_exit"
-
-    @pytest.fixture(scope="class")
-    def test_config(self, temp_dir: Path) -> dict[str, Any]:
-        return {
-            "kvs_parameters": {
-                "instance_id": 2,
-                "dir": str(temp_dir),
-                "flush_on_exit": True,
-            }
-        }
-
-    def test_data_stored(
-        self, temp_dir: Path, results: ScenarioResult, logs_info_level: LogContainer
-    ):
-        assert results.return_code == ResultCode.SUCCESS
-
-        paths_log = logs_info_level.find_log("kvs_path")
-        assert paths_log is not None
-        assert paths_log.kvs_path == f'Ok("{temp_dir}/kvs_2_0.json")'
-        assert paths_log.hash_path == f'Ok("{temp_dir}/kvs_2_0.hash")'
-
-        for i in range(self.NUM_VALUES):
-            log = logs_info_level.find_log("key", value=f"test_number_{i}")
-            assert log is not None
-            assert log.value == f"Ok(F64({12.3 * i}))"
-
-
-@pytest.mark.PartiallyVerifies([])
-@pytest.mark.FullyVerifies(["comp_req__persistency__persist_data_store_com"])
-@pytest.mark.Description(
-    "Checks that disabling flush on exit causes data to be dropped and not persisted after the KVS instance is dropped."
-)
-@pytest.mark.TestType("requirements-based")
-@pytest.mark.DerivationTechnique("requirements-based")
-class TestFlushOnExitDisabled(CommonScenario):
-    NUM_VALUES = 5
-
-    @pytest.fixture(scope="class")
-    def scenario_name(self) -> str:
-        return "cit.persistency.flush_on_exit"
-
-    @pytest.fixture(scope="class")
-    def test_config(self, temp_dir: Path) -> dict[str, Any]:
-        return {
-            "kvs_parameters": {
-                "instance_id": 2,
-                "dir": str(temp_dir),
-                "flush_on_exit": False,
-            }
-        }
-
-    def test_data_dropped(self, results: ScenarioResult, logs_info_level: LogContainer):
-        assert results.return_code == ResultCode.SUCCESS
-
-        paths_log = logs_info_level.find_log("kvs_path")
-        assert paths_log is not None
-        assert paths_log.kvs_path == "Err(FileNotFound)"
-        assert paths_log.hash_path == "Err(FileNotFound)"

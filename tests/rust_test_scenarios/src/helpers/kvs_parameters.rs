@@ -1,6 +1,6 @@
 //! KVS parameters test helpers.
 
-use rust_kvs::prelude::{FlushOnExit, InstanceId, KvsDefaults, KvsLoad};
+use rust_kvs::prelude::{InstanceId, KvsDefaults, KvsLoad};
 use serde::{de, Deserialize, Deserializer};
 use serde_json::Value;
 use std::path::PathBuf;
@@ -16,8 +16,6 @@ pub struct KvsParameters {
     #[serde(default, deserialize_with = "deserialize_kvs_load")]
     pub kvs_load: Option<KvsLoad>,
     pub dir: Option<PathBuf>,
-    #[serde(default, deserialize_with = "deserialize_flush_on_exit")]
-    pub flush_on_exit: Option<FlushOnExit>,
 }
 
 impl KvsParameters {
@@ -72,22 +70,6 @@ where
             "optional" => KvsLoad::Optional,
             "required" => KvsLoad::Required,
             _ => return Err(de::Error::custom("Invalid \"kvs_load\" mode")),
-        };
-        return Ok(Some(value));
-    }
-
-    Ok(None)
-}
-
-fn deserialize_flush_on_exit<'de, D>(deserializer: D) -> Result<Option<FlushOnExit>, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let value_opt: Option<bool> = Option::deserialize(deserializer)?;
-    if let Some(value_bool) = value_opt {
-        let value = match value_bool {
-            true => FlushOnExit::Yes,
-            false => FlushOnExit::No,
         };
         return Ok(Some(value));
     }

@@ -110,7 +110,7 @@ impl<T: KvsApi> KvsBuilder<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::kvs_api::{FlushOnExit, KvsDefaults, KvsLoad, SnapshotId};
+    use crate::kvs_api::{KvsDefaults, KvsLoad, SnapshotId};
     use crate::kvs_value::KvsValue;
     use std::path::PathBuf;
 
@@ -203,14 +203,6 @@ mod tests {
         }
 
         fn remove_key(&self, _key: &str) -> Result<(), ErrorCode> {
-            unimplemented!()
-        }
-
-        fn flush_on_exit(&self) -> FlushOnExit {
-            unimplemented!()
-        }
-
-        fn set_flush_on_exit(&self, _flush_on_exit: FlushOnExit) {
             unimplemented!()
         }
 

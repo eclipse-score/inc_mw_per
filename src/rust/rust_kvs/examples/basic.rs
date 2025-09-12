@@ -57,8 +57,8 @@ fn main() -> Result<(), ErrorCode> {
 
         println!();
 
-        // Flush happens on `kvs` going out of scope.
-        // `flush_on_exit` is true by default.
+        // Flush KVS.
+        kvs.flush()?;
     }
 
     {

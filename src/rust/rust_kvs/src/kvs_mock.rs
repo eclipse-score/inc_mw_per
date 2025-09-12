@@ -10,7 +10,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::error_code::ErrorCode;
-use crate::kvs_api::{FlushOnExit, InstanceId, KvsApi, KvsDefaults, KvsLoad, SnapshotId};
+use crate::kvs_api::{InstanceId, KvsApi, KvsDefaults, KvsLoad, SnapshotId};
 use crate::kvs_value::{KvsMap, KvsValue};
 use std::sync::{Arc, Mutex};
 
@@ -41,10 +41,6 @@ impl KvsApi for MockKvs {
             fail: false,
         })
     }
-    fn flush_on_exit(&self) -> FlushOnExit {
-        FlushOnExit::No
-    }
-    fn set_flush_on_exit(&self, _flush_on_exit: FlushOnExit) {}
     fn reset(&self) -> Result<(), ErrorCode> {
         if self.fail {
             return Err(ErrorCode::UnmappedError);

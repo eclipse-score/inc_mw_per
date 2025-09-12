@@ -9,14 +9,13 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 use std::sync::Mutex;
 
 use crate::error_code::ErrorCode;
-use crate::kvs_api::{FlushOnExit, InstanceId, KvsApi, KvsDefaults, KvsLoad, SnapshotId};
+use crate::kvs_api::{InstanceId, KvsApi, KvsDefaults, KvsLoad, SnapshotId};
 use crate::kvs_backend::KvsBackend;
 use crate::kvs_value::{KvsMap, KvsValue};
 
@@ -39,9 +38,6 @@ pub struct GenericKvs<J: KvsBackend> {
 
     /// Filename prefix
     filename_prefix: PathBuf,
-
-    /// Flush on exit flag
-    flush_on_exit: RefCell<FlushOnExit>,
 
     _backend: std::marker::PhantomData<J>,
 }
@@ -187,11 +183,6 @@ impl<J: KvsBackend> GenericKvs<J> {
 impl<J: KvsBackend> KvsApi for GenericKvs<J> {
     /// Open the key-value-storage
     ///
-    /// Checks and opens a key-value-storage.
-    ///
-    /// Flush on exit is enabled by default.
-    /// It can be controlled with [`flush_on_exit`](Self::flush_on_exit) and [`set_flush_on_exit`](Self::set_flush_on_exit).
-    ///
     /// # Features
     ///   * `FEAT_REQ__KVS__default_values`
     ///   * `FEAT_REQ__KVS__multiple_kvs`
@@ -244,25 +235,8 @@ impl<J: KvsBackend> KvsApi for GenericKvs<J> {
             kvs: Mutex::new(kvs),
             default,
             filename_prefix,
-            flush_on_exit: RefCell::new(FlushOnExit::Yes),
             _backend: std::marker::PhantomData,
         })
-    }
-
-    /// Get current flush on exit behavior.
-    ///
-    /// # Return Values
-    ///    * `FlushOnExit`: Current flush on exit behavior.
-    fn flush_on_exit(&self) -> FlushOnExit {
-        self.flush_on_exit.borrow().clone()
-    }
-
-    /// Control the flush on exit behavior
-    ///
-    /// # Parameters
-    ///   * `flush_on_exit`: Flag to control flush-on-exit behavior
-    fn set_flush_on_exit(&self, flush_on_exit: FlushOnExit) {
-        *self.flush_on_exit.borrow_mut() = flush_on_exit
     }
 
     /// Resets a key-value-storage to its initial state
@@ -612,22 +586,12 @@ impl<J: KvsBackend> KvsApi for GenericKvs<J> {
     }
 }
 
-impl<J: KvsBackend> Drop for GenericKvs<J> {
-    fn drop(&mut self) {
-        if self.flush_on_exit() == FlushOnExit::Yes {
-            if let Err(e) = self.flush() {
-                eprintln!("GenericKvs::flush() failed in Drop: {e:?}");
-            }
-        }
-    }
-}
-
 #[cfg(test)]
 mod kvs_tests {
     use crate::error_code::ErrorCode;
     use crate::json_backend::JsonBackend;
     use crate::kvs::{GenericKvs, KVS_MAX_SNAPSHOTS};
-    use crate::kvs_api::{FlushOnExit, InstanceId, KvsApi, KvsDefaults, KvsLoad, SnapshotId};
+    use crate::kvs_api::{InstanceId, KvsApi, KvsDefaults, KvsLoad, SnapshotId};
     use crate::kvs_backend::KvsBackend;
     use crate::kvs_value::{KvsMap, KvsValue};
     use std::path::PathBuf;
@@ -1018,23 +982,6 @@ mod kvs_tests {
     }
 
     #[test]
-    fn test_flush_on_exit() {
-        let kvs = get_kvs::<MockBackend>(PathBuf::new(), KvsMap::new(), KvsMap::new());
-
-        assert_eq!(kvs.flush_on_exit(), FlushOnExit::Yes);
-    }
-
-    #[test]
-    fn test_set_flush_on_exit() {
-        let kvs = get_kvs::<MockBackend>(PathBuf::new(), KvsMap::new(), KvsMap::new());
-
-        kvs.set_flush_on_exit(FlushOnExit::Yes);
-        assert_eq!(kvs.flush_on_exit(), FlushOnExit::Yes);
-        kvs.set_flush_on_exit(FlushOnExit::No);
-        assert_eq!(kvs.flush_on_exit(), FlushOnExit::No);
-    }
-
-    #[test]
     fn test_flush() {
         let dir = tempdir().unwrap();
         let dir_path = dir.path().to_path_buf();
@@ -1195,21 +1142,5 @@ mod kvs_tests {
         assert!(kvs
             .get_hash_filename(SnapshotId(1))
             .is_err_and(|e| e == ErrorCode::FileNotFound));
-    }
-
-    #[test]
-    fn test_drop() {
-        let dir = tempdir().unwrap();
-        let dir_path = dir.path().to_path_buf();
-        {
-            let kvs = get_kvs::<JsonBackend>(dir_path.clone(), KvsMap::new(), KvsMap::new());
-            kvs.set_flush_on_exit(FlushOnExit::Yes);
-            kvs.set_value("key", "value").unwrap();
-        }
-
-        let kvs_path = dir_path.join(format!("kvs_{}_{}.json", InstanceId(1), SnapshotId(0)));
-        assert!(kvs_path.exists());
-        let hash_path = dir_path.join(format!("kvs_{}_{}.hash", InstanceId(1), SnapshotId(0)));
-        assert!(hash_path.exists());
     }
 }

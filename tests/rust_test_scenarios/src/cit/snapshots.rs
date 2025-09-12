@@ -26,6 +26,9 @@ impl Scenario for SnapshotCount {
             let kvs = kvs_instance(params.clone()).expect("Failed to create KVS instance");
             kvs.set_value("counter", i).expect("Failed to set value");
             info!(snapshot_count = kvs.snapshot_count());
+
+            // Flush KVS.
+            kvs.flush().expect("Failed to flush");
         }
 
         {
@@ -70,6 +73,9 @@ impl Scenario for SnapshotRestore {
         for i in 0..count {
             let kvs = kvs_instance(params.clone()).expect("Failed to create KVS instance");
             kvs.set_value("counter", i).expect("Failed to set value");
+
+            // Flush KVS.
+            kvs.flush().expect("Failed to flush");
         }
 
         {
@@ -109,6 +115,9 @@ impl Scenario for SnapshotPaths {
         for i in 0..count {
             let kvs = kvs_instance(params.clone()).expect("Failed to create KVS instance");
             kvs.set_value("counter", i).expect("Failed to set value");
+
+            // Flush KVS.
+            kvs.flush().expect("Failed to flush");
         }
 
         {

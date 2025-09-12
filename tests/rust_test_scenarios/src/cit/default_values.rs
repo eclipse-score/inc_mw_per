@@ -32,6 +32,9 @@ impl Scenario for DefaultValues {
 
             // Set value and check value parameters.
             kvs.set_value(key, 432.1).expect("Failed to set value");
+
+            // Flush KVS.
+            kvs.flush().expect("Failed to flush");
         }
 
         // Flush and reopen KVS instance to ensure persistency.

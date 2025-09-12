@@ -94,13 +94,13 @@ cargo run -- --name <TEST_GROUP>.<TEST_SCENARIO> --input <TEST_INPUT>
 Example:
 
 ```bash
-cargo run -- --name basic.basic --input '{"kvs_parameters":{"instance_id":0,"flush_on_exit":false}}'
+cargo run -- --name basic.basic --input '{"kvs_parameters":{"instance_id":0}}'
 ```
 
 Run test scenario executable directly:
 
 ```bash
-<REPO_ROOT>/target/debug/rust_test_scenarios --name basic.basic --input '{"kvs_parameters":{"instance_id":0,"flush_on_exit":false}}'
+<REPO_ROOT>/target/debug/rust_test_scenarios --name basic.basic --input '{"kvs_parameters":{"instance_id":0}}'
 ```
 
 ### C++
@@ -126,18 +126,18 @@ bazel run //tests/cpp_test_scenarios:cpp_test_scenarios -- --name <TEST_GROUP>.<
 Example:
 
 ```bash
-bazel run //tests/cpp_test_scenarios:cpp_test_scenarios -- --name basic.basic --input '{"kvs_parameters":{"instance_id":0,"flush_on_exit":false}}'
+bazel run //tests/cpp_test_scenarios:cpp_test_scenarios -- --name basic.basic --input '{"kvs_parameters":{"instance_id":0}}'
 ```
 
 Run test scenario executable directly:
 
 ```bash
-<REPO_ROOT>/bazel-bin/tests/cpp_test_scenarios/cpp_test_scenarios --name basic.basic --input '{"kvs_parameters":{"instance_id":0,"flush_on_exit":false}}'
+<REPO_ROOT>/bazel-bin/tests/cpp_test_scenarios/cpp_test_scenarios --name basic.basic --input '{"kvs_parameters":{"instance_id":0}}'
 ```
 
 Run with GDB:
 
 ```bash
 bazel build //tests/cpp_test_scenarios:cpp_test_scenarios -c dbg --strip never
-gdb --args <REPO_ROOT>/bazel-bin/tests/cpp_test_scenarios/cpp_test_scenarios --name <TEST_GROUP>.<TEST_SCENARIO> --input '{"kvs_parameters":{"instance_id":0,"flush_on_exit":false}}'
+gdb --args <REPO_ROOT>/bazel-bin/tests/cpp_test_scenarios/cpp_test_scenarios --name <TEST_GROUP>.<TEST_SCENARIO> --input '{"kvs_parameters":{"instance_id":0}}'
 ```

@@ -75,16 +75,6 @@ pub enum KvsLoad {
     Required,
 }
 
-/// Flush on exit mode.
-#[derive(Clone, Debug, PartialEq)]
-pub enum FlushOnExit {
-    /// Do not flush on exit.
-    No,
-
-    /// Flush on exit.
-    Yes,
-}
-
 pub trait KvsApi {
     fn open(
         instance_id: InstanceId,
@@ -112,8 +102,6 @@ pub trait KvsApi {
         value: J,
     ) -> Result<(), ErrorCode>;
     fn remove_key(&self, key: &str) -> Result<(), ErrorCode>;
-    fn flush_on_exit(&self) -> FlushOnExit;
-    fn set_flush_on_exit(&self, flush_on_exit: FlushOnExit);
     fn flush(&self) -> Result<(), ErrorCode>;
     fn snapshot_count(&self) -> usize;
     fn snapshot_max_count() -> usize

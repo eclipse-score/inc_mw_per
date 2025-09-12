@@ -120,7 +120,6 @@ fn from_tinyjson(value: &JsonValue) -> KvsValue {
 /// It also prints the default value.
 fn _getkey(kvs: Kvs, mut args: Arguments) -> Result<(), ErrorCode> {
     println!("----------------------");
-    kvs.set_flush_on_exit(FlushOnExit::No);
 
     let key: String = match args.opt_value_from_str("--key") {
         Ok(Some(val)) => val,
@@ -185,7 +184,6 @@ fn _getkey(kvs: Kvs, mut args: Arguments) -> Result<(), ErrorCode> {
 fn _setkey(kvs: Kvs, mut args: Arguments) -> Result<(), ErrorCode> {
     println!("----------------------");
     println!("Set Key");
-    kvs.set_flush_on_exit(FlushOnExit::Yes);
     let key: String = match args.opt_value_from_str("--key") {
         Ok(Some(val)) => val,
         Ok(None) | Err(_) => match args.opt_value_from_str("-k") {
@@ -229,6 +227,7 @@ fn _setkey(kvs: Kvs, mut args: Arguments) -> Result<(), ErrorCode> {
             })?;
         }
     }
+    kvs.flush()?;
     println!("----------------------");
     Ok(())
 }
@@ -236,7 +235,6 @@ fn _setkey(kvs: Kvs, mut args: Arguments) -> Result<(), ErrorCode> {
 /// Removes a key-value pair from the KVS.
 fn _removekey(kvs: Kvs, mut args: Arguments) -> Result<(), ErrorCode> {
     println!("----------------------");
-    kvs.set_flush_on_exit(FlushOnExit::Yes);
     let key: String = match args.opt_value_from_str("--key") {
         Ok(Some(val)) => val,
         Ok(None) | Err(_) => match args.opt_value_from_str("-k") {
@@ -252,6 +250,7 @@ fn _removekey(kvs: Kvs, mut args: Arguments) -> Result<(), ErrorCode> {
         eprintln!("KVS remove failed: {e:?}");
         e
     })?;
+    kvs.flush()?;
     println!("----------------------");
     Ok(())
 }
@@ -261,7 +260,6 @@ fn _removekey(kvs: Kvs, mut args: Arguments) -> Result<(), ErrorCode> {
 fn _listkeys(kvs: Kvs) -> Result<(), ErrorCode> {
     println!("----------------------");
     println!("List Keys");
-    kvs.set_flush_on_exit(FlushOnExit::No);
     let keys = kvs.get_all_keys().map_err(|e| {
         eprintln!("KVS list failed: {e:?}");
         e
@@ -279,11 +277,11 @@ fn _listkeys(kvs: Kvs) -> Result<(), ErrorCode> {
 fn _reset(kvs: Kvs) -> Result<(), ErrorCode> {
     println!("----------------------");
     println!("Reset KVS");
-    kvs.set_flush_on_exit(FlushOnExit::Yes);
     kvs.reset().map_err(|e| {
         eprintln!("KVS set failed: {e:?}");
         e
     })?;
+    kvs.flush()?;
     println!("----------------------");
     Ok(())
 }
@@ -292,7 +290,6 @@ fn _reset(kvs: Kvs) -> Result<(), ErrorCode> {
 fn _snapshotcount(kvs: Kvs) -> Result<(), ErrorCode> {
     println!("----------------------");
     println!("Snapshot Count");
-    kvs.set_flush_on_exit(FlushOnExit::No);
     let count = kvs.snapshot_count();
     println!("Snapshot Count: {count}");
     println!("----------------------");
@@ -300,10 +297,9 @@ fn _snapshotcount(kvs: Kvs) -> Result<(), ErrorCode> {
 }
 
 /// Retrieves the maximum snapshot count from the KVS.
-fn _snapshotmaxcount(kvs: Kvs) -> Result<(), ErrorCode> {
+fn _snapshotmaxcount(_kvs: Kvs) -> Result<(), ErrorCode> {
     println!("----------------------");
     println!("Snapshots Max Count");
-    kvs.set_flush_on_exit(FlushOnExit::No);
     let max = Kvs::snapshot_max_count();
     println!("Snapshots Maximum Count: {max}");
     println!("----------------------");
@@ -315,7 +311,6 @@ fn _snapshotmaxcount(kvs: Kvs) -> Result<(), ErrorCode> {
 fn _snapshotrestore(kvs: Kvs, mut args: Arguments) -> Result<(), ErrorCode> {
     println!("----------------------");
     println!("Snapshot Restore");
-    kvs.set_flush_on_exit(FlushOnExit::Yes);
 
     let snapshot_id: u32 = match args.opt_value_from_str("--snapshotid") {
         Ok(Some(val)) => val,
@@ -333,6 +328,7 @@ fn _snapshotrestore(kvs: Kvs, mut args: Arguments) -> Result<(), ErrorCode> {
         eprintln!("KVS restore failed: {e:?}");
         e
     })?;
+    kvs.flush()?;
     println!("----------------------");
     Ok(())
 }
@@ -341,7 +337,6 @@ fn _snapshotrestore(kvs: Kvs, mut args: Arguments) -> Result<(), ErrorCode> {
 fn _getkvsfilename(kvs: Kvs, mut args: Arguments) -> Result<(), ErrorCode> {
     println!("----------------------");
     println!("Get KVS Filename");
-    kvs.set_flush_on_exit(FlushOnExit::No);
     let snapshot_id: u32 = match args.opt_value_from_str("--snapshotid") {
         Ok(Some(val)) => val,
         Ok(None) | Err(_) => match args.opt_value_from_str("-s") {
@@ -363,7 +358,6 @@ fn _getkvsfilename(kvs: Kvs, mut args: Arguments) -> Result<(), ErrorCode> {
 fn _gethashfilename(kvs: Kvs, mut args: Arguments) -> Result<(), ErrorCode> {
     println!("----------------------");
     println!("Get Hash Filename");
-    kvs.set_flush_on_exit(FlushOnExit::No);
 
     let snapshot_id: u32 = match args.opt_value_from_str("--snapshotid") {
         Ok(Some(val)) => val,
@@ -386,7 +380,6 @@ fn _gethashfilename(kvs: Kvs, mut args: Arguments) -> Result<(), ErrorCode> {
 fn _createtestdata(kvs: Kvs) -> Result<(), ErrorCode> {
     println!("----------------------");
     println!("Create Test Data");
-    kvs.set_flush_on_exit(FlushOnExit::Yes);
 
     kvs.set_value("number", 123.0).map_err(|e| {
         eprintln!("KVS Create Test Data Error (number): {e:?}");
@@ -437,6 +430,7 @@ fn _createtestdata(kvs: Kvs) -> Result<(), ErrorCode> {
         eprintln!("KVS Create Test Data Error (object): {e:?}");
         e
     })?;
+    kvs.flush()?;
     println!("Done!");
     println!("----------------------");
     Ok(())

@@ -16,7 +16,7 @@ class TestBasic(CommonScenario):
 
     @pytest.fixture(scope="class")
     def test_config(self, *_, **__) -> dict[str, Any]:
-        return {"kvs_parameters": {"instance_id": 2, "flush_on_exit": False}}
+        return {"kvs_parameters": {"instance_id": 2}}
 
     def test_returncode_ok(self, results: ScenarioResult):
         assert results.return_code == ResultCode.SUCCESS

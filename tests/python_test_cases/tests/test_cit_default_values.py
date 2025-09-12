@@ -502,7 +502,6 @@ class TestChecksumOnProvidedDefaults(DefaultValuesScenario):
                 "instance_id": self.instance_id(),
                 "dir": str(temp_dir),
                 "defaults": defaults,
-                "flush_on_exit": False,
             }
         }
 

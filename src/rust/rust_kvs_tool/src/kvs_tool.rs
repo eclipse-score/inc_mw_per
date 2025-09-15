@@ -347,8 +347,21 @@ fn _getkvsfilename(kvs: Kvs, mut args: Arguments) -> Result<(), ErrorCode> {
             }
         },
     };
+    let instance_id = kvs.parameters().instance_id;
     let snapshot_id = SnapshotId(snapshot_id as usize);
-    let filename = kvs.get_kvs_filename(snapshot_id)?;
+    let backend = match kvs
+        .parameters()
+        .backend
+        .as_any()
+        .downcast_ref::<JsonBackend>()
+    {
+        Some(b) => b,
+        None => {
+            eprintln!("Failed to cast backend object!");
+            return Err(ErrorCode::UnmappedError);
+        }
+    };
+    let filename = backend.kvs_file_path(instance_id, snapshot_id);
     println!("KVS Filename: {}", filename.display());
     println!("----------------------");
     Ok(())
@@ -369,9 +382,22 @@ fn _gethashfilename(kvs: Kvs, mut args: Arguments) -> Result<(), ErrorCode> {
             }
         },
     };
+    let instance_id = kvs.parameters().instance_id;
     let snapshot_id = SnapshotId(snapshot_id as usize);
-    let filename = kvs.get_hash_filename(snapshot_id);
-    println!("Hash Filename: {}", filename?.display());
+    let backend = match kvs
+        .parameters()
+        .backend
+        .as_any()
+        .downcast_ref::<JsonBackend>()
+    {
+        Some(b) => b,
+        None => {
+            eprintln!("Failed to cast backend object!");
+            return Err(ErrorCode::UnmappedError);
+        }
+    };
+    let filename = backend.hash_file_path(instance_id, snapshot_id);
+    println!("Hash Filename: {}", filename.display());
     println!("----------------------");
     Ok(())
 }
@@ -453,8 +479,8 @@ fn main() -> Result<(), ErrorCode> {
 
         Options:
         -h, --help          Show this help message and exit
-        -o, --operation     Specify the operation to perform (setkey, getkey, removekey, 
-                            listkeys, reset, snapshotcount, snapshotmaxcount, snapshotrestore, 
+        -o, --operation     Specify the operation to perform (setkey, getkey, removekey,
+                            listkeys, reset, snapshotcount, snapshotmaxcount, snapshotrestore,
                             getkvsfilename, gethashfilename, createtestdata)
         -k, --key           Specify the key to operate on (for key operations)
         -p, --payload       Specify the value to write (for set operations)
@@ -521,7 +547,8 @@ fn main() -> Result<(), ErrorCode> {
         .kvs_load(KvsLoad::Optional);
 
     let builder = if let Some(dir) = directory {
-        builder.dir(dir)
+        let backend = Box::new(JsonBackendBuilder::new().working_dir(dir.into()).build());
+        builder.backend(backend)
     } else {
         builder
     };

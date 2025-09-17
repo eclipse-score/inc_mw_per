@@ -19,6 +19,10 @@ pub fn kvs_instance(kvs_parameters: KvsParameters) -> Result<Kvs, ErrorCode> {
         builder = builder.dir(dir.to_string_lossy().to_string());
     }
 
+    if let Some(snapshot_max_count) = kvs_parameters.snapshot_max_count {
+        builder = builder.snapshot_max_count(snapshot_max_count);
+    }
+
     let kvs: Kvs = builder.build()?;
 
     Ok(kvs)

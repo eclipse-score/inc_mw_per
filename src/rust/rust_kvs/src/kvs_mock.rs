@@ -130,7 +130,7 @@ impl KvsApi for MockKvs {
         }
         0
     }
-    fn snapshot_max_count() -> usize {
+    fn snapshot_max_count(&self) -> usize {
         0
     }
     fn snapshot_restore(&self, _id: SnapshotId) -> Result<(), ErrorCode> {

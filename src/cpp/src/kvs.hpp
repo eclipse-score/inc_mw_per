@@ -157,7 +157,7 @@ class Kvs final {
          * IMPORTANT: Instead of using the Kvs::open method directly, it is recommended to use the KvsBuilder class.
          *
          */
-        static score::Result<Kvs> open(const InstanceId& instance_id, OpenNeedDefaults need_defaults, OpenNeedKvs need_kvs, const std::string&& dir);
+        static score::Result<Kvs> open(const InstanceId& instance_id, OpenNeedDefaults need_defaults, OpenNeedKvs need_kvs, const std::string&& dir, score::os::Stat::Mode storage_mode);
 
         /**
          * @brief Sets whether the key-value store should flush its contents to
@@ -383,12 +383,14 @@ class Kvs final {
 
         /* Logging */
         std::unique_ptr<score::mw::log::Logger> logger;
+        score::os::Stat::Mode storage_mode_;
 
         /* Private Methods */
         score::ResultBlank snapshot_rotate();
         score::Result<std::unordered_map<std::string, KvsValue>> parse_json_data(const std::string& data);
         score::Result<std::unordered_map<std::string, KvsValue>> open_json(const score::filesystem::Path& prefix, OpenJsonNeedFile need_file);
         score::ResultBlank write_json_data(const std::string& buf);
+        score::Result<bool> create_file_if_not_exist(const std::string& path);
 
 };
 

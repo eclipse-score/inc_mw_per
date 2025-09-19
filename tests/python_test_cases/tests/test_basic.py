@@ -3,12 +3,21 @@ Smoke test for Rust-C++ tests.
 """
 
 from typing import Any
+
 import pytest
 from testing_utils import LogContainer, ScenarioResult
-from common import CommonScenario, ResultCode
+
+from tests.python_test_cases.tests.common import CommonScenario, ResultCode
 
 
-@pytest.mark.parametrize("version", ["cpp", "rust"], scope="class")
+@pytest.mark.parametrize(
+    "version",
+    [
+        pytest.param("cpp", marks=pytest.mark.cpp),
+        pytest.param("rust", marks=pytest.mark.rust),
+    ],
+    scope="class",
+)
 class TestBasic(CommonScenario):
     @pytest.fixture(scope="class")
     def scenario_name(self, *_, **__) -> str:

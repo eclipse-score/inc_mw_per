@@ -1,5 +1,6 @@
 import json
 import os
+from pathlib import Path
 
 import pytest
 from testing_utils import BazelTools
@@ -31,6 +32,16 @@ def pytest_addoption(parser):
         help="Rust test scenario executable target.",
     )
     parser.addoption(
+        "--cpp-target-path",
+        type=Path,
+        help="C++ test scenario executable target.",
+    )
+    parser.addoption(
+        "--rust-target-path",
+        type=Path,
+        help="Rust test scenario executable target.",
+    )
+    parser.addoption(
         "--build-scenarios",
         action="store_true",
         help="Build test scenarios executables.",
@@ -52,6 +63,10 @@ def pytest_addoption(parser):
 # Hooks
 @pytest.hookimpl(tryfirst=True)
 def pytest_sessionstart(session):
+    print("=================================")
+    print(Path().resolve())
+    print(session.config.option)
+    print("=================================")
     try:
         # Build scenarios.
         if session.config.getoption("--build-scenarios"):

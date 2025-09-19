@@ -1,8 +1,9 @@
-from pathlib import Path
 import shutil
+from pathlib import Path
 from typing import Generator
+
 import pytest
-from testing_utils import Scenario, LogContainer, BuildTools, BazelTools
+from testing_utils import BazelTools, BuildTools, LogContainer, Scenario
 
 
 class ResultCode:

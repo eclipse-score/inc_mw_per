@@ -19,11 +19,6 @@ use std::marker::PhantomData;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
-/// Maximum number of snapshots
-///
-/// Feature: `FEAT_REQ__KVS__snapshots`
-const KVS_MAX_SNAPSHOTS: usize = 3;
-
 /// KVS instance parameters.
 #[derive(Clone, PartialEq)]
 pub struct KvsParameters {
@@ -38,6 +33,9 @@ pub struct KvsParameters {
 
     /// Working directory.
     pub working_dir: PathBuf,
+
+    /// Maximum number of snapshots to store.
+    pub snapshot_max_count: usize,
 }
 
 /// Key-value-storage data
@@ -78,7 +76,7 @@ impl<Backend: KvsBackend, PathResolver: KvsPathResolver> GenericKvs<Backend, Pat
     ///   * Ok: Rotation successful, also if no rotation was needed
     ///   * `ErrorCode::UnmappedError`: Unmapped error
     fn snapshot_rotate(&self) -> Result<(), ErrorCode> {
-        for idx in (1..=KVS_MAX_SNAPSHOTS).rev() {
+        for idx in (1..=self.snapshot_max_count()).rev() {
             let old_snapshot_id = SnapshotId(idx - 1);
             let new_snapshot_id = SnapshotId(idx);
 
@@ -361,7 +359,11 @@ impl<Backend: KvsBackend, PathResolver: KvsPathResolver> KvsApi
     ///   * `ErrorCode::ConversionFailed`: JSON could not serialize into String
     ///   * `ErrorCode::UnmappedError`: Unmapped error
     fn flush(&self) -> Result<(), ErrorCode> {
-        let data = self.data.lock()?;
+        if self.snapshot_max_count() == 0 {
+            eprintln!("warn: snapshot_max_count == 0, flush ignored");
+            return Ok(());
+        }
+
         self.snapshot_rotate().map_err(|e| {
             eprintln!("error: snapshot_rotate failed: {e:?}");
             e
@@ -377,6 +379,8 @@ impl<Backend: KvsBackend, PathResolver: KvsPathResolver> KvsApi
             self.parameters.instance_id,
             snapshot_id,
         );
+
+        let data = self.data.lock()?;
         Backend::save_kvs(&data.kvs_map, &kvs_path, Some(&hash_path)).map_err(|e| {
             eprintln!("error: save_kvs failed: {e:?}");
             e
@@ -391,7 +395,7 @@ impl<Backend: KvsBackend, PathResolver: KvsPathResolver> KvsApi
     fn snapshot_count(&self) -> usize {
         let mut count = 0;
 
-        for idx in 0..KVS_MAX_SNAPSHOTS {
+        for idx in 0..self.snapshot_max_count() {
             let snapshot_id = SnapshotId(idx);
             let snapshot_path = PathResolver::kvs_file_path(
                 &self.parameters.working_dir,
@@ -408,12 +412,12 @@ impl<Backend: KvsBackend, PathResolver: KvsPathResolver> KvsApi
         count
     }
 
-    /// Return maximum snapshot count
+    /// Return maximum number of snapshots to store.
     ///
     /// # Return Values
-    ///   * usize: Maximum count of snapshots
-    fn snapshot_max_count() -> usize {
-        KVS_MAX_SNAPSHOTS
+    ///   * usize: Maximum number of snapshots to store.
+    fn snapshot_max_count(&self) -> usize {
+        self.parameters().snapshot_max_count
     }
 
     /// Recover key-value-storage from snapshot
@@ -509,7 +513,7 @@ impl<Backend: KvsBackend, PathResolver: KvsPathResolver> KvsApi
 mod kvs_tests {
     use crate::error_code::ErrorCode;
     use crate::json_backend::JsonBackend;
-    use crate::kvs::{GenericKvs, KvsParameters, KVS_MAX_SNAPSHOTS};
+    use crate::kvs::{GenericKvs, KvsParameters};
     use crate::kvs_api::{InstanceId, KvsApi, KvsDefaults, KvsLoad, SnapshotId};
     use crate::kvs_backend::{KvsBackend, KvsPathResolver};
     use crate::kvs_builder::KvsData;
@@ -588,6 +592,7 @@ mod kvs_tests {
             defaults: KvsDefaults::Optional,
             kvs_load: KvsLoad::Optional,
             working_dir,
+            snapshot_max_count: 3,
         };
         GenericKvs::<B>::new(data, parameters)
     }
@@ -982,21 +987,21 @@ mod kvs_tests {
         let dir = tempdir().unwrap();
         let dir_path = dir.path().to_path_buf();
         let kvs = get_kvs::<JsonBackend>(dir_path, KvsMap::new(), KvsMap::new());
-        for i in 1..=KVS_MAX_SNAPSHOTS {
+        for i in 1..=kvs.snapshot_max_count() {
             kvs.flush().unwrap();
             assert_eq!(kvs.snapshot_count(), i);
         }
         kvs.flush().unwrap();
         kvs.flush().unwrap();
-        assert_eq!(kvs.snapshot_count(), KVS_MAX_SNAPSHOTS);
+        assert_eq!(kvs.snapshot_count(), kvs.snapshot_max_count());
     }
 
     #[test]
     fn test_snapshot_max_count() {
-        assert_eq!(
-            GenericKvs::<MockBackend>::snapshot_max_count(),
-            KVS_MAX_SNAPSHOTS
-        );
+        let dir = tempdir().unwrap();
+        let dir_path = dir.path().to_path_buf();
+        let kvs = get_kvs::<JsonBackend>(dir_path, KvsMap::new(), KvsMap::new());
+        assert_eq!(kvs.snapshot_max_count(), 3);
     }
 
     #[test]
@@ -1004,7 +1009,7 @@ mod kvs_tests {
         let dir = tempdir().unwrap();
         let dir_path = dir.path().to_path_buf();
         let kvs = get_kvs::<JsonBackend>(dir_path, KvsMap::new(), KvsMap::new());
-        for i in 1..=KVS_MAX_SNAPSHOTS {
+        for i in 1..=kvs.snapshot_max_count() {
             kvs.set_value("counter", KvsValue::I32(i as i32)).unwrap();
             kvs.flush().unwrap();
         }
@@ -1018,7 +1023,7 @@ mod kvs_tests {
         let dir = tempdir().unwrap();
         let dir_path = dir.path().to_path_buf();
         let kvs = get_kvs::<JsonBackend>(dir_path, KvsMap::new(), KvsMap::new());
-        for i in 1..=KVS_MAX_SNAPSHOTS {
+        for i in 1..=kvs.snapshot_max_count() {
             kvs.set_value("counter", KvsValue::I32(i as i32)).unwrap();
             kvs.flush().unwrap();
         }
@@ -1033,7 +1038,7 @@ mod kvs_tests {
         let dir = tempdir().unwrap();
         let dir_path = dir.path().to_path_buf();
         let kvs = get_kvs::<JsonBackend>(dir_path, KvsMap::new(), KvsMap::new());
-        for i in 1..=KVS_MAX_SNAPSHOTS {
+        for i in 1..=kvs.snapshot_max_count() {
             kvs.set_value("counter", KvsValue::I32(i as i32)).unwrap();
             kvs.flush().unwrap();
         }

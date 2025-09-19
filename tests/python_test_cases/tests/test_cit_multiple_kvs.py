@@ -84,9 +84,6 @@ class TestSameInstanceIdSameValue(CommonScenario):
         assert log1.value == log2.value
 
 
-@pytest.mark.skip(
-    reason="Race condition between set values - to be fixed with instance pool"
-)
 @pytest.mark.PartiallyVerifies(
     ["comp_req__persistency__multi_instance", "comp_req__persistency__concurrency"]
 )

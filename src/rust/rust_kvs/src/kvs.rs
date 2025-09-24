@@ -14,6 +14,7 @@ use crate::kvs_api::{InstanceId, KvsApi, KvsDefaults, KvsLoad, SnapshotId};
 use crate::kvs_backend::{KvsBackend, KvsPathResolver};
 use crate::kvs_builder::KvsData;
 use crate::kvs_value::{KvsMap, KvsValue};
+use crate::log::{debug, error};
 use std::fs;
 use std::marker::PhantomData;
 use std::path::PathBuf;
@@ -25,7 +26,7 @@ use std::sync::{Arc, Mutex};
 const KVS_MAX_SNAPSHOTS: usize = 3;
 
 /// KVS instance parameters.
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Debug)]
 pub struct KvsParameters {
     /// Instance ID.
     pub instance_id: InstanceId,
@@ -107,7 +108,7 @@ impl<Backend: KvsBackend, PathResolver: KvsPathResolver> GenericKvs<Backend, Pat
                 new_snapshot_id,
             );
 
-            println!("rotating: {snap_name_old} -> {snap_name_new}");
+            debug!("Rotating snapshots: {snap_name_old} -> {snap_name_new}");
 
             // Check snapshot and hash files exist.
             let snap_old_exists = snap_path_old.exists();
@@ -125,6 +126,7 @@ impl<Backend: KvsBackend, PathResolver: KvsPathResolver> GenericKvs<Backend, Pat
             // In other case - this is erroneous scenario.
             // Either snapshot or hash file got removed.
             else {
+                error!("KVS or hash file not found");
                 return Err(ErrorCode::IntegrityCorrupted);
             }
         }
@@ -159,7 +161,7 @@ impl<Backend: KvsBackend, PathResolver: KvsPathResolver> KvsApi
     fn reset_key(&self, key: &str) -> Result<(), ErrorCode> {
         let mut data = self.data.lock()?;
         if !data.defaults_map.contains_key(key) {
-            eprintln!("error: resetting key without a default value");
+            error!("Resetting key without a default value: {key}");
             return Err(ErrorCode::KeyDefaultNotFound);
         }
 
@@ -210,7 +212,7 @@ impl<Backend: KvsBackend, PathResolver: KvsPathResolver> KvsApi
         } else if let Some(value) = data.defaults_map.get(key) {
             Ok(value.clone())
         } else {
-            eprintln!("error: get_value could not find key: {key}");
+            error!("Key not found: {key}");
             Err(ErrorCode::KeyNotFound)
         }
     }
@@ -241,9 +243,7 @@ impl<Backend: KvsBackend, PathResolver: KvsPathResolver> KvsApi
             match T::try_from(value) {
                 Ok(value) => Ok(value),
                 Err(err) => {
-                    eprintln!(
-                        "error: get_value could not convert KvsValue from KVS store: {err:#?}"
-                    );
+                    error!("Failed to convert KVS value: {err:#?}");
                     Err(ErrorCode::ConversionFailed)
                 }
             }
@@ -252,15 +252,12 @@ impl<Backend: KvsBackend, PathResolver: KvsPathResolver> KvsApi
             match T::try_from(value) {
                 Ok(value) => Ok(value),
                 Err(err) => {
-                    eprintln!(
-                        "error: get_value could not convert KvsValue from default store: {err:#?}"
-                    );
+                    error!("Failed to convert default value: {err:#?}");
                     Err(ErrorCode::ConversionFailed)
                 }
             }
         } else {
-            eprintln!("error: get_value could not find key: {key}");
-
+            error!("Key not found: {key}");
             Err(ErrorCode::KeyNotFound)
         }
     }
@@ -282,6 +279,7 @@ impl<Backend: KvsBackend, PathResolver: KvsPathResolver> KvsApi
         if let Some(value) = data.defaults_map.get(key) {
             Ok(value.clone())
         } else {
+            error!("Key not found: {key}");
             Err(ErrorCode::KeyNotFound)
         }
     }
@@ -306,6 +304,7 @@ impl<Backend: KvsBackend, PathResolver: KvsPathResolver> KvsApi
         } else if data.defaults_map.contains_key(key) {
             Ok(true)
         } else {
+            error!("Key not found: {key}");
             Err(ErrorCode::KeyNotFound)
         }
     }
@@ -343,6 +342,7 @@ impl<Backend: KvsBackend, PathResolver: KvsPathResolver> KvsApi
         if data.kvs_map.remove(key).is_some() {
             Ok(())
         } else {
+            error!("Key not found: {key}");
             Err(ErrorCode::KeyNotFound)
         }
     }
@@ -363,7 +363,7 @@ impl<Backend: KvsBackend, PathResolver: KvsPathResolver> KvsApi
     fn flush(&self) -> Result<(), ErrorCode> {
         let data = self.data.lock()?;
         self.snapshot_rotate().map_err(|e| {
-            eprintln!("error: snapshot_rotate failed: {e:?}");
+            error!("Failed to rotate snapshots: {e:?}");
             e
         })?;
         let snapshot_id = SnapshotId(0);
@@ -378,7 +378,7 @@ impl<Backend: KvsBackend, PathResolver: KvsPathResolver> KvsApi
             snapshot_id,
         );
         Backend::save_kvs(&data.kvs_map, &kvs_path, Some(&hash_path)).map_err(|e| {
-            eprintln!("error: save_kvs failed: {e:?}");
+            error!("Failed to save snapshot: {e:?}");
             e
         })?;
         Ok(())
@@ -438,12 +438,12 @@ impl<Backend: KvsBackend, PathResolver: KvsPathResolver> KvsApi
         let mut data = self.data.lock()?;
         // fail if the snapshot ID is the current KVS
         if snapshot_id == SnapshotId(0) {
-            eprintln!("error: tried to restore current KVS as snapshot");
+            error!("Restoring current KVS snapshot is not allowed");
             return Err(ErrorCode::InvalidSnapshotId);
         }
 
         if self.snapshot_count() < snapshot_id.0 {
-            eprintln!("error: tried to restore a non-existing snapshot");
+            error!("Unable to restore non-existing snapshot");
             return Err(ErrorCode::InvalidSnapshotId);
         }
 
@@ -457,7 +457,10 @@ impl<Backend: KvsBackend, PathResolver: KvsPathResolver> KvsApi
             self.parameters.instance_id,
             snapshot_id,
         );
-        data.kvs_map = Backend::load_kvs(&kvs_path, Some(&hash_path))?;
+        data.kvs_map = Backend::load_kvs(&kvs_path, Some(&hash_path)).map_err(|e| {
+            error!("Failed to load snapshot: {e:?}");
+            e
+        })?;
 
         Ok(())
     }
@@ -477,6 +480,7 @@ impl<Backend: KvsBackend, PathResolver: KvsPathResolver> KvsApi
             snapshot_id,
         );
         if !path.exists() {
+            error!("File not found: {}", path.display());
             Err(ErrorCode::FileNotFound)
         } else {
             Ok(path)
@@ -498,6 +502,7 @@ impl<Backend: KvsBackend, PathResolver: KvsPathResolver> KvsApi
             snapshot_id,
         );
         if !path.exists() {
+            error!("File not found: {}", path.display());
             Err(ErrorCode::FileNotFound)
         } else {
             Ok(path)

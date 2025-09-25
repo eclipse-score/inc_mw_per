@@ -84,6 +84,7 @@ impl<Backend: KvsBackend, PathResolver: KvsPathResolver> GenericKvsBuilder<Backe
             defaults: KvsDefaults::Optional,
             kvs_load: KvsLoad::Optional,
             working_dir: PathBuf::new(),
+            snapshot_max_count: 3,
         };
 
         Self {
@@ -131,8 +132,21 @@ impl<Backend: KvsBackend, PathResolver: KvsPathResolver> GenericKvsBuilder<Backe
     ///   * `dir`: Path to permanent storage
     ///
     /// # Return Values
+    ///   * KvsBuilder instance
     pub fn dir<P: Into<String>>(mut self, dir: P) -> Self {
         self.parameters.working_dir = PathBuf::from(dir.into());
+        self
+    }
+
+    /// Set the maximum number of snapshots to store.
+    ///
+    /// # Parameters
+    ///   * `snapshot_max_count`: Maximum number of snapshots to store.
+    ///
+    /// # Return Values
+    ///   * KvsBuilder instance
+    pub fn snapshot_max_count(mut self, snapshot_max_count: usize) -> Self {
+        self.parameters.snapshot_max_count = snapshot_max_count;
         self
     }
 
@@ -245,7 +259,7 @@ impl<Backend: KvsBackend, PathResolver: KvsPathResolver> GenericKvsBuilder<Backe
 mod kvs_builder_tests {
     use crate::error_code::ErrorCode;
     use crate::json_backend::JsonBackend;
-    use crate::kvs_api::{InstanceId, KvsDefaults, KvsLoad, SnapshotId};
+    use crate::kvs_api::{InstanceId, KvsApi, KvsDefaults, KvsLoad, SnapshotId};
     use crate::kvs_backend::{KvsBackend, KvsPathResolver};
     use crate::kvs_builder::{GenericKvsBuilder, KVS_MAX_INSTANCES, KVS_POOL};
     use crate::kvs_value::{KvsMap, KvsValue};
@@ -302,6 +316,7 @@ mod kvs_builder_tests {
         assert_eq!(kvs.parameters().defaults, KvsDefaults::Optional);
         assert_eq!(kvs.parameters().kvs_load, KvsLoad::Optional);
         assert_eq!(kvs.parameters().working_dir, PathBuf::new());
+        assert_eq!(kvs.snapshot_max_count(), 3);
     }
 
     #[test]
@@ -315,6 +330,7 @@ mod kvs_builder_tests {
         assert_eq!(kvs.parameters().defaults, KvsDefaults::Ignored);
         assert_eq!(kvs.parameters().kvs_load, KvsLoad::Optional);
         assert_eq!(kvs.parameters().working_dir, PathBuf::new());
+        assert_eq!(kvs.snapshot_max_count(), 3);
     }
 
     #[test]
@@ -328,6 +344,7 @@ mod kvs_builder_tests {
         assert_eq!(kvs.parameters().defaults, KvsDefaults::Optional);
         assert_eq!(kvs.parameters().kvs_load, KvsLoad::Ignored);
         assert_eq!(kvs.parameters().working_dir, PathBuf::new());
+        assert_eq!(kvs.snapshot_max_count(), 3);
     }
 
     #[test]
@@ -344,6 +361,21 @@ mod kvs_builder_tests {
         assert_eq!(kvs.parameters().defaults, KvsDefaults::Optional);
         assert_eq!(kvs.parameters().kvs_load, KvsLoad::Optional);
         assert_eq!(kvs.parameters().working_dir, dir.path());
+        assert_eq!(kvs.snapshot_max_count(), 3);
+    }
+
+    #[test]
+    fn test_parameters_snapshot_max_count() {
+        let _lock = lock_and_reset();
+
+        let instance_id = InstanceId(1);
+        let builder = TestKvsBuilder::new(instance_id).snapshot_max_count(1234);
+        let kvs = builder.build().unwrap();
+        assert_eq!(kvs.parameters().instance_id, instance_id);
+        assert_eq!(kvs.parameters().defaults, KvsDefaults::Optional);
+        assert_eq!(kvs.parameters().kvs_load, KvsLoad::Optional);
+        assert_eq!(kvs.parameters().working_dir, PathBuf::new());
+        assert_eq!(kvs.snapshot_max_count(), 1234);
     }
 
     #[test]
@@ -357,12 +389,14 @@ mod kvs_builder_tests {
         let builder = TestKvsBuilder::new(instance_id)
             .defaults(KvsDefaults::Ignored)
             .kvs_load(KvsLoad::Ignored)
-            .dir(dir_string);
+            .dir(dir_string)
+            .snapshot_max_count(1234);
         let kvs = builder.build().unwrap();
         assert_eq!(kvs.parameters().instance_id, instance_id);
         assert_eq!(kvs.parameters().defaults, KvsDefaults::Ignored);
         assert_eq!(kvs.parameters().kvs_load, KvsLoad::Ignored);
         assert_eq!(kvs.parameters().working_dir, dir.path());
+        assert_eq!(kvs.snapshot_max_count(), 1234);
     }
 
     #[test]

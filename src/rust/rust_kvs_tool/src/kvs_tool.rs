@@ -297,10 +297,10 @@ fn _snapshotcount(kvs: Kvs) -> Result<(), ErrorCode> {
 }
 
 /// Retrieves the maximum snapshot count from the KVS.
-fn _snapshotmaxcount(_kvs: Kvs) -> Result<(), ErrorCode> {
+fn _snapshotmaxcount(kvs: Kvs) -> Result<(), ErrorCode> {
     println!("----------------------");
     println!("Snapshots Max Count");
-    let max = Kvs::snapshot_max_count();
+    let max = kvs.snapshot_max_count();
     println!("Snapshots Maximum Count: {max}");
     println!("----------------------");
     Ok(())

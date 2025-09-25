@@ -20,7 +20,7 @@ fn main() -> Result<(), ErrorCode> {
         let builder = KvsBuilder::new(instance_id).dir(dir_string.clone());
         let kvs = builder.build()?;
 
-        let max_count = Kvs::snapshot_max_count() as u32;
+        let max_count = kvs.snapshot_max_count() as u32;
         println!("Max snapshot count: {max_count:?}");
 
         // Snapshots are created and rotated on flush.
@@ -41,7 +41,7 @@ fn main() -> Result<(), ErrorCode> {
         let builder = KvsBuilder::new(instance_id).dir(dir_string.clone());
         let kvs = builder.build()?;
 
-        let max_count = Kvs::snapshot_max_count() as u32;
+        let max_count = kvs.snapshot_max_count() as u32;
         let counter_key = "counter";
         for index in 0..max_count {
             kvs.set_value(counter_key, index)?;

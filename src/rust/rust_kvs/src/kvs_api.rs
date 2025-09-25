@@ -92,9 +92,7 @@ pub trait KvsApi {
     fn remove_key(&self, key: &str) -> Result<(), ErrorCode>;
     fn flush(&self) -> Result<(), ErrorCode>;
     fn snapshot_count(&self) -> usize;
-    fn snapshot_max_count() -> usize
-    where
-        Self: Sized;
+    fn snapshot_max_count(&self) -> usize;
     fn snapshot_restore(&self, snapshot_id: SnapshotId) -> Result<(), ErrorCode>;
     fn get_kvs_filename(&self, snapshot_id: SnapshotId) -> Result<PathBuf, ErrorCode>;
     fn get_hash_filename(&self, snapshot_id: SnapshotId) -> Result<PathBuf, ErrorCode>;

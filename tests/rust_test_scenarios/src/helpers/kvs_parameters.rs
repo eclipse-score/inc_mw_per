@@ -16,6 +16,7 @@ pub struct KvsParameters {
     #[serde(default, deserialize_with = "deserialize_kvs_load")]
     pub kvs_load: Option<KvsLoad>,
     pub dir: Option<PathBuf>,
+    pub snapshot_max_count: Option<usize>,
 }
 
 impl KvsParameters {

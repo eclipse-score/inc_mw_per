@@ -1,8 +1,5 @@
 use crate::helpers::{kvs_instance::kvs_instance, kvs_parameters::KvsParameters};
-use rust_kvs::{
-    prelude::{KvsApi, SnapshotId},
-    Kvs,
-};
+use rust_kvs::prelude::{KvsApi, SnapshotId};
 use serde_json::Value;
 use test_scenarios_rust::scenario::{Scenario, ScenarioGroup, ScenarioGroupImpl};
 use tracing::info;
@@ -47,8 +44,13 @@ impl Scenario for SnapshotMaxCount {
         "max_count"
     }
 
-    fn run(&self, _input: Option<String>) -> Result<(), String> {
-        info!(max_count = Kvs::snapshot_max_count());
+    fn run(&self, input: Option<String>) -> Result<(), String> {
+        let input_string = input.as_ref().expect("Test input is expected");
+        let v: Value = serde_json::from_str(input_string).expect("Failed to parse input string");
+        let params = KvsParameters::from_value(&v).expect("Failed to parse parameters");
+
+        let kvs = kvs_instance(params.clone()).expect("Failed to create KVS instance");
+        info!(max_count = kvs.snapshot_max_count());
         Ok(())
     }
 }

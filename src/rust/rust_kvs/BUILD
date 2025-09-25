@@ -16,15 +16,17 @@ load("@score_persistency_crates//:defs.bzl", "all_crate_deps")
 rust_library(
     name = "rust_kvs",
     srcs = glob(["src/**/*.rs"]),
+    crate_features = ["score-log"],
     visibility = ["//visibility:public"],
-    deps = all_crate_deps(
-        normal = True,
-    ),
+    deps = [
+        "@score-mw-log//src/mw_log",
+    ] + all_crate_deps(normal = True),
 )
 
 rust_test(
     name = "tests",
     crate = "rust_kvs",
+    crate_features = ["score-log"],
     tags = [
         "unit_tests",
         "ut",

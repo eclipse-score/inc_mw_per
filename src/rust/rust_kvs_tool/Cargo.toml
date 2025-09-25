@@ -3,7 +3,6 @@ name = "rust_kvs_tool"
 version.workspace = true
 edition.workspace = true
 
-
 [[bin]]
 name = "kvs_tool"
 path = "src/kvs_tool.rs"
@@ -12,3 +11,10 @@ path = "src/kvs_tool.rs"
 rust_kvs.workspace = true
 tinyjson.workspace = true
 pico-args.workspace = true
+log = { version = "0.4.27", optional = true }
+simple_logger = { version = "5.0.0", optional = true }
+
+[features]
+default = ["logging"]
+score-log = []
+logging = ["log", "simple_logger"]

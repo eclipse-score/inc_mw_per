@@ -1,8 +1,10 @@
 from pathlib import Path
 from typing import Any
+
 import pytest
-from common import CommonScenario, ResultCode
-from testing_utils import ScenarioResult, LogContainer
+from testing_utils import LogContainer, ScenarioResult
+
+from .common import CommonScenario, ResultCode
 
 pytestmark = pytest.mark.parametrize("version", ["rust"], scope="class")
 

@@ -54,9 +54,11 @@ styles/
 .venv
 __pycache__/
 /.coverage
+**/*.egg-info/*
 
 
 .devenv*
 devenv.local.nix
 .direnv
 target
+

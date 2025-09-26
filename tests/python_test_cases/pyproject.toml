@@ -1,0 +1,8 @@
+[project]
+name = "python_test_cases"
+version = "0.1.0"
+description = "Component integration tests for cpp/rust via pytest"
+dependencies = [
+    "pytest-env==1.1.5",
+    "testing-utils @ git+https://github.com/qorix-group/testing_tools.git@v0.2.4"
+]

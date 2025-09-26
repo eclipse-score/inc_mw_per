@@ -4,7 +4,7 @@ load("@score_persistency_crates//:defs.bzl", "all_crate_deps")
 rust_binary(
     name = "rust_test_scenarios",
     srcs = glob(["src/**/*.rs"]),
-    visibility = ["//visibility:private"],
+    visibility = ["//tests/python_test_cases:__pkg__"],
     deps =
         [
             "//src/rust/rust_kvs",

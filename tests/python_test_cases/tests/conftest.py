@@ -1,5 +1,6 @@
 import json
 import os
+from pathlib import Path
 
 import pytest
 from testing_utils import BazelTools
@@ -28,6 +29,16 @@ def pytest_addoption(parser):
         "--rust-target-name",
         type=str,
         default="//tests/rust_test_scenarios:rust_test_scenarios",
+        help="Rust test scenario executable target.",
+    )
+    parser.addoption(
+        "--cpp-target-path",
+        type=Path,
+        help="C++ test scenario executable target.",
+    )
+    parser.addoption(
+        "--rust-target-path",
+        type=Path,
         help="Rust test scenario executable target.",
     )
     parser.addoption(
@@ -150,6 +161,17 @@ def pytest_terminal_summary(terminalreporter):
 
 def pytest_collection_modifyitems(items: list[pytest.Function]):
     for item in items:
+        # Automatically mark tests parametrized with 'version' as 'cpp' or 'rust'
+        if hasattr(item, "callspec") and "version" in getattr(
+            item.callspec, "params", {}
+        ):
+            version = item.callspec.params["version"]
+            if version == "cpp":
+                item.add_marker(pytest.mark.cpp)
+            elif version == "rust":
+                item.add_marker(pytest.mark.rust)
+
+        # Add custom markers info to XML report
         for marker in item.iter_markers():
             markers_to_process = (
                 "PartiallyVerifies",

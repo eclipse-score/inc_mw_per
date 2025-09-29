@@ -43,7 +43,6 @@ TEST(kvs_kvsbuilder, kvsbuilder_build) {
     builder.need_kvs_flag(false);
     result_build = builder.build();
     EXPECT_TRUE(result_build);
-    result_build.value().flush_on_exit = false;
     EXPECT_EQ(result_build.value().filename_prefix.CStr(), "./kvsbuilder/kvs_"+std::to_string(instance_id.id));
 }
 

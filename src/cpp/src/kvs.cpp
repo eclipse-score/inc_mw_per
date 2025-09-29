@@ -26,15 +26,8 @@ using namespace std;
 namespace score::mw::per::kvs {
 
 /*********************** KVS Implementation *********************/
-Kvs::~Kvs(){
-    if (flush_on_exit.load(std::memory_order_relaxed)) {
-        (void)flush();
-    }
-}
-
 Kvs::Kvs()
-    : flush_on_exit(false)
-    , filesystem(std::make_unique<score::filesystem::Filesystem>(score::filesystem::FilesystemFactory{}.CreateInstance())) /* Create Filesystem instance, noexcept call */
+    : filesystem(std::make_unique<score::filesystem::Filesystem>(score::filesystem::FilesystemFactory{}.CreateInstance())) /* Create Filesystem instance, noexcept call */
     , parser(std::make_unique<score::json::JsonParser>())
     , writer(std::make_unique<score::json::JsonWriter>())
     , logger(std::make_unique<score::mw::log::Logger>("SKVS"))
@@ -43,7 +36,6 @@ Kvs::Kvs()
 
 Kvs::Kvs(Kvs&& other) noexcept
     : filename_prefix(std::move(other.filename_prefix))
-    , flush_on_exit(other.flush_on_exit.load(std::memory_order_relaxed))
     , filesystem(std::move(other.filesystem))
     , parser(std::move(other.parser)) /* Not absolutely necessary, because a new JSON writer/parser object would also be okay*/
     , writer(std::move(other.writer))
@@ -56,8 +48,6 @@ Kvs::Kvs(Kvs&& other) noexcept
 
     default_values = std::move(other.default_values);
 
-    /* Disable flush in source to avoid double flush on destruction */
-    other.flush_on_exit.store(false, std::memory_order_relaxed);
 }
 
 Kvs& Kvs::operator=(Kvs&& other) noexcept
@@ -69,11 +59,6 @@ Kvs& Kvs::operator=(Kvs&& other) noexcept
         }
         default_values.clear();
         filename_prefix = std::move(other.filename_prefix);
-
-        /* Disable flush in source to avoid double flush on destruction */
-        bool flag = other.flush_on_exit.load(std::memory_order_relaxed);
-        flush_on_exit.store(flag, std::memory_order_relaxed);
-        other.flush_on_exit.store(false, std::memory_order_relaxed);
 
         {
             std::lock_guard<std::mutex> lock_other(other.kvs_mutex);
@@ -220,7 +205,6 @@ score::Result<Kvs> Kvs::open(const InstanceId& instance_id, OpenNeedDefaults nee
             kvs.kvs = std::move(kvs_res.value());
             kvs.default_values = std::move(default_res.value());
             kvs.filename_prefix = filename_prefix;
-            kvs.flush_on_exit.store(true, std::memory_order_relaxed);
             kvs.logger->LogInfo() << "opened KVS: instance '" << instance_id.id << "'";
             kvs.logger->LogInfo() << "max snapshot count: " << KVS_MAX_SNAPSHOTS;
             result = std::move(kvs);
@@ -228,12 +212,6 @@ score::Result<Kvs> Kvs::open(const InstanceId& instance_id, OpenNeedDefaults nee
     }
 
     return result;
-}
-
-/* Set flush on exit flag*/
-void Kvs::set_flush_on_exit(bool flush) {
-    flush_on_exit.store(flush, std::memory_order_relaxed);
-    return;
 }
 
 /* Reset KVS to initial state*/

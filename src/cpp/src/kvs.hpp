@@ -73,12 +73,10 @@ enum class OpenJsonNeedFile {
  * The Kvs class provides an interface for managing a key-value store with features such as:
  * - Support for default values.
  * - Snapshot management for persistence and restoration.
- * - Configurable flush-on-exit behavior.
  *
  *
  * Public Methods:
  * - `open`: Opens the KVS with a specified instance ID and flags.
- * - `set_flush_on_exit`: Configures whether the KVS should flush to storage on exit.
  * - `reset`: Resets the KVS to its initial state.
  * - `get_all_keys`: Retrieves all keys stored in the KVS (only written keys, not defaults).
  * - `key_exists`: Checks if a specific key exists in the KVS (only written keys).
@@ -108,7 +106,6 @@ enum class OpenJsonNeedFile {
  * - `default_mutex`: A mutex for default value operations.
  * - `default_values`: An unordered map for storing optional default values.
  * - `filename_prefix`: A path prefix for filenames associated with snapshots.
- * - `flush_on_exit`: An atomic boolean flag indicating whether to flush on exit.
  * - `filesystem`: A unique pointer to a filesystem handler for file operations.
  * - `parser`: A unique pointer to a JSON parser for reading KVS data.
  * - `writer`: A unique pointer to a JSON writer for writing KVS data.
@@ -122,8 +119,6 @@ enum class OpenJsonNeedFile {
 
 class Kvs final {
     public:
-
-        ~Kvs();
 
         // Deleted copy constructor and assignment operator to prevent copying
         Kvs(const Kvs&) = delete;
@@ -159,16 +154,6 @@ class Kvs final {
          */
         static score::Result<Kvs> open(const InstanceId& instance_id, OpenNeedDefaults need_defaults, OpenNeedKvs need_kvs, const std::string&& dir);
 
-        /**
-         * @brief Sets whether the key-value store should flush its contents to
-         *        persistent storage upon program exit.
-         *
-         * @param flush A boolean value indicating whether to enable or disable
-         *              flushing on exit. If true, the store will flush its
-         *              contents to persistent storage when the program exits.
-         *              If false, the store will not perform this operation.
-         */
-        void set_flush_on_exit(bool flush);
 
         /**
          * @brief Resets a key-value-storage to its initial state
@@ -370,9 +355,6 @@ class Kvs final {
 
         /* Filename prefix */
         score::filesystem::Path filename_prefix;
-
-        /* Flush on exit flag for written Keys */
-        std::atomic<bool> flush_on_exit;
 
         /* Filesystem handling */
         std::unique_ptr<score::filesystem::Filesystem> filesystem;

@@ -282,8 +282,10 @@ class TestSnapshotPathsExist(CommonScenario):
 
         paths_log = logs_info_level.find_log("kvs_path")
         assert paths_log is not None
-        assert paths_log.kvs_path == f'Ok("{temp_dir}/kvs_1_1.json")'
-        assert paths_log.hash_path == f'Ok("{temp_dir}/kvs_1_1.hash")'
+        assert paths_log.kvs_path == f'"{temp_dir}/kvs_1_1.json"'
+        assert paths_log.kvs_path_exists
+        assert paths_log.hash_path == f'"{temp_dir}/kvs_1_1.hash"'
+        assert paths_log.hash_path_exists
 
 
 @pytest.mark.PartiallyVerifies(["comp_req__persistency__snapshot_creation"])
@@ -308,6 +310,7 @@ class TestSnapshotPathsNonexistent(CommonScenario):
 
     def test_error(
         self,
+        temp_dir: Path,
         results: ScenarioResult,
         logs_info_level: LogContainer,
     ):
@@ -315,5 +318,7 @@ class TestSnapshotPathsNonexistent(CommonScenario):
 
         paths_log = logs_info_level.find_log("kvs_path")
         assert paths_log is not None
-        assert paths_log.kvs_path == "Err(FileNotFound)"
-        assert paths_log.hash_path == "Err(FileNotFound)"
+        assert paths_log.kvs_path == f'"{temp_dir}/kvs_1_2.json"'
+        assert not paths_log.kvs_path_exists
+        assert paths_log.hash_path == f'"{temp_dir}/kvs_1_2.hash"'
+        assert not paths_log.hash_path_exists

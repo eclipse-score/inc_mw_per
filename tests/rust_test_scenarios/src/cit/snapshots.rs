@@ -1,4 +1,6 @@
-use crate::helpers::{kvs_instance::kvs_instance, kvs_parameters::KvsParameters};
+use crate::helpers::kvs_instance::kvs_instance;
+use crate::helpers::kvs_parameters::KvsParameters;
+use crate::helpers::{kvs_hash_paths, to_str};
 use rust_kvs::prelude::{KvsApi, SnapshotId};
 use serde_json::Value;
 use test_scenarios_rust::scenario::{Scenario, ScenarioGroup, ScenarioGroupImpl};
@@ -124,12 +126,12 @@ impl Scenario for SnapshotPaths {
 
         {
             let kvs = kvs_instance(params).expect("Failed to create KVS instance");
-
-            let kvs_path_result = kvs.get_kvs_filename(SnapshotId(snapshot_id));
-            let hash_path_result = kvs.get_hash_filename(SnapshotId(snapshot_id));
+            let (kvs_path, hash_path) = kvs_hash_paths(&kvs, SnapshotId(snapshot_id));
             info!(
-                kvs_path = format!("{kvs_path_result:?}"),
-                hash_path = format!("{hash_path_result:?}")
+                kvs_path = to_str(&kvs_path),
+                kvs_path_exists = kvs_path.exists(),
+                hash_path = to_str(&hash_path),
+                hash_path_exists = hash_path.exists(),
             );
         }
 

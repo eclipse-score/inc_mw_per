@@ -90,7 +90,7 @@ macro_rules! impl_tryfrom_kvs_value_to_t {
         impl std::convert::TryFrom<&KvsValue> for $to {
             type Error = String;
             fn try_from(value: &KvsValue) -> Result<Self, Self::Error> {
-                if let KvsValue::$variant(ref n) = value {
+                if let KvsValue::$variant(n) = value {
                     Ok(n.clone())
                 } else {
                     Err(format!("KvsValue is not a {}", stringify!($to)))

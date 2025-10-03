@@ -38,6 +38,7 @@ Kvs::Kvs()
     , parser(std::make_unique<score::json::JsonParser>())
     , writer(std::make_unique<score::json::JsonWriter>())
     , logger(std::make_unique<score::mw::log::Logger>("SKVS"))
+    , storage_mode_(score::os::Stat::Mode::kReadUser|score::os::Stat::Mode::kWriteUser|score::os::Stat::Mode::kReadGroup|score::os::Stat::Mode::kReadOthers) /* Default storage mode */
 {
 }
 
@@ -48,6 +49,7 @@ Kvs::Kvs(Kvs&& other) noexcept
     , parser(std::move(other.parser)) /* Not absolutely necessary, because a new JSON writer/parser object would also be okay*/
     , writer(std::move(other.writer))
     , logger(std::move(other.logger))
+    , storage_mode_(other.storage_mode_)
 {
     {
         std::lock_guard<std::mutex> lock(other.kvs_mutex);
@@ -88,6 +90,7 @@ Kvs& Kvs::operator=(Kvs&& other) noexcept
         parser = std::move(other.parser);
         writer = std::move(other.writer);
         logger = std::move(other.logger);
+        storage_mode_ = other.storage_mode_;
     }
     return *this;
 }
@@ -194,7 +197,7 @@ score::Result<std::unordered_map<string, KvsValue>> Kvs::open_json(const score::
 }
 
 /* Open KVS Instance */
-score::Result<Kvs> Kvs::open(const InstanceId& instance_id, OpenNeedDefaults need_defaults, OpenNeedKvs need_kvs, const std::string&& dir)
+score::Result<Kvs> Kvs::open(const InstanceId& instance_id, OpenNeedDefaults need_defaults, OpenNeedKvs need_kvs, const std::string&& dir, score::os::Stat::Mode storage_mode)
 {
     score::Result<Kvs> result = score::MakeUnexpected(ErrorCode::UnmappedError); /* Redundant initialization needed, since Resul<KVS> would call the implicitly-deleted default constructor of KVS */
 
@@ -221,6 +224,7 @@ score::Result<Kvs> Kvs::open(const InstanceId& instance_id, OpenNeedDefaults nee
             kvs.default_values = std::move(default_res.value());
             kvs.filename_prefix = filename_prefix;
             kvs.flush_on_exit.store(true, std::memory_order_relaxed);
+            kvs.storage_mode_ = storage_mode;
             kvs.logger->LogInfo() << "opened KVS: instance '" << instance_id.id << "'";
             kvs.logger->LogInfo() << "max snapshot count: " << KVS_MAX_SNAPSHOTS;
             result = std::move(kvs);
@@ -397,6 +401,33 @@ score::ResultBlank Kvs::remove_key(const std::string_view key) {
     return result;
 }
 
+score::Result<bool> Kvs::create_file_if_not_exist(const std::string& path)
+{
+    score::Result<bool> result = score::MakeUnexpected(ErrorCode::UnmappedError);
+    std::unique_lock<std::mutex> lock(kvs_mutex, std::try_to_lock);
+    if (lock.owns_lock()) {
+        auto isFileExist = filesystem->standard->Exists(path);
+        if (!isFileExist.value()) {
+            std::ofstream out(path, std::ios::binary);
+            if (out) {
+                out.close();
+                filesystem->standard->Permissions(path, this->storage_mode_);
+                result = true;
+            } else {
+                logger->LogError() << "Failed to create file '" << path << "'";
+                result = score::MakeUnexpected(ErrorCode::PhysicalStorageFailure);
+            }
+        } else {
+            logger->LogInfo() << "File '" << path << "' already exists. Skipping creation.";
+            result = false;
+        }
+    } else {
+        result = score::MakeUnexpected(ErrorCode::MutexLockFailed);
+    }
+    return result;
+}
+
+
 /* Helper Function to write JSON data to a file for flush process (also adds Hash file)*/
 score::ResultBlank Kvs::write_json_data(const std::string& buf)
 {
@@ -408,6 +439,15 @@ score::ResultBlank Kvs::write_json_data(const std::string& buf)
         if(!create_path_res.has_value()) {
             result = score::MakeUnexpected(ErrorCode::PhysicalStorageFailure);
         } else {
+            auto create_file_res = create_file_if_not_exist(json_path.Native());
+            if (!create_file_res) {
+                logger->LogError() << "Failed to create KVS file '" << json_path << "'";
+                result = score::MakeUnexpected(static_cast<ErrorCode>(*create_file_res.error()));
+            } else {
+                if (create_file_res.value()) {
+                    logger->LogInfo() << "Created new KVS file '" << json_path << "'";
+                }
+            }
             std::ofstream out(json_path.CStr(), std::ios::binary);
             if (!out.write(buf.data(), buf.size())) {
                 result = score::MakeUnexpected(ErrorCode::PhysicalStorageFailure);
@@ -415,6 +455,16 @@ score::ResultBlank Kvs::write_json_data(const std::string& buf)
                 /* Write Hash File */
                 std::array<uint8_t, 4> hash_bytes = get_hash_bytes(buf);
                 score::filesystem::Path fn_hash = filename_prefix.Native() + "_0.hash";
+                auto create_hash_file_res = create_file_if_not_exist(fn_hash.Native());
+                if(!create_hash_file_res) {
+                    logger->LogError() << "Failed to create KVS hash file '" << fn_hash << "'";
+                    result = score::MakeUnexpected(static_cast<ErrorCode>(*create_hash_file_res.error()));
+                }
+                else {
+                    if (create_hash_file_res.value()) {
+                        logger->LogInfo() << "Created new KVS hash file '" << fn_hash << "'";
+                    }
+                }
                 std::ofstream hout(fn_hash.CStr(), std::ios::binary);
                 if (!hout.write(reinterpret_cast<const char*>(hash_bytes.data()), hash_bytes.size())) {
                     result = score::MakeUnexpected(ErrorCode::PhysicalStorageFailure);

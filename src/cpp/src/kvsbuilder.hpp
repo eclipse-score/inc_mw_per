@@ -88,6 +88,13 @@ public:
     KvsBuilder& dir(std::string&& dir_path);
 
     /**
+     * @brief Specify the storage mode for the KVS files.
+     * @param mode The storage mode to use (storage file permissions).
+     * @return Reference to this builder (for chaining).
+     */
+    KvsBuilder& storage_mode(score::os::Stat::Mode mode);
+
+    /**
      * @brief Builds and opens the Kvs instance with the configured options.
      *
      * Internally calls Kvs::open() with the selected flags and directory.
@@ -101,6 +108,7 @@ private:
     bool                               need_defaults; ///< Whether default values are required
     bool                               need_kvs;      ///< Whether an existing KVS is required
     std::string                        directory;     ///< Directory where to store the KVS Files
+    score::os::Stat::Mode              storage_mode_; ///< Storage mode for the KVS files
 };
 
 } /* namespace score::mw::per::kvs */

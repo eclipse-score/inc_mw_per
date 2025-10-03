@@ -436,9 +436,23 @@ fn _createtestdata(kvs: Kvs) -> Result<(), ErrorCode> {
     Ok(())
 }
 
+fn init_logging() {
+    #[cfg(feature = "logging")]
+    simple_logger::SimpleLogger::new()
+        .with_level(log::LevelFilter::Warn)
+        .env()
+        .init()
+        .unwrap();
+
+    #[cfg(feature = "score-log")]
+    mw_log_subscriber::MwLoggerBuilder::new().set_as_default_logger::<false, true, false>();
+}
+
 /// Main function to run the KVS tool command line interface.
 fn main() -> Result<(), ErrorCode> {
     let mut args = Arguments::from_env();
+
+    init_logging();
 
     if args.contains(["-h", "--help"]) {
         const HELP: &str = r#"

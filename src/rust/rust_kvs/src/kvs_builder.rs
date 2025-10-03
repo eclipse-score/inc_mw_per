@@ -14,6 +14,7 @@ use crate::kvs::{GenericKvs, KvsParameters};
 use crate::kvs_api::{InstanceId, KvsDefaults, KvsLoad, SnapshotId};
 use crate::kvs_backend::{KvsBackend, KvsPathResolver};
 use crate::kvs_value::KvsMap;
+use crate::log::{debug, error, info, trace};
 use std::marker::PhantomData;
 use std::path::PathBuf;
 use std::sync::{Arc, LazyLock, Mutex, MutexGuard, PoisonError};
@@ -32,7 +33,8 @@ pub(crate) struct KvsData {
 }
 
 impl From<PoisonError<MutexGuard<'_, KvsData>>> for ErrorCode {
-    fn from(_cause: PoisonError<MutexGuard<'_, KvsData>>) -> Self {
+    fn from(cause: PoisonError<MutexGuard<'_, KvsData>>) -> Self {
+        error!("KVS data lock failed: {cause:?}");
         ErrorCode::MutexLockFailed
     }
 }
@@ -50,7 +52,8 @@ static KVS_POOL: LazyLock<Mutex<[Option<KvsInner>; KVS_MAX_INSTANCES]>> =
     LazyLock::new(|| Mutex::new([const { None }; KVS_MAX_INSTANCES]));
 
 impl From<PoisonError<MutexGuard<'_, [Option<KvsInner>; KVS_MAX_INSTANCES]>>> for ErrorCode {
-    fn from(_cause: PoisonError<MutexGuard<'_, [Option<KvsInner>; KVS_MAX_INSTANCES]>>) -> Self {
+    fn from(cause: PoisonError<MutexGuard<'_, [Option<KvsInner>; KVS_MAX_INSTANCES]>>) -> Self {
+        error!("KVS instance pool lock failed: {cause:?}");
         ErrorCode::MutexLockFailed
     }
 }
@@ -110,6 +113,7 @@ impl<Backend: KvsBackend, PathResolver: KvsPathResolver> GenericKvsBuilder<Backe
     /// # Return Values
     ///   * KvsBuilder instance
     pub fn defaults(mut self, mode: KvsDefaults) -> Self {
+        trace!("\"defaults\" set to {mode:?}");
         self.parameters.defaults = mode;
         self
     }
@@ -122,6 +126,7 @@ impl<Backend: KvsBackend, PathResolver: KvsPathResolver> GenericKvsBuilder<Backe
     /// # Return Values
     ///   * KvsBuilder instance
     pub fn kvs_load(mut self, mode: KvsLoad) -> Self {
+        trace!("\"kvs_load\" set to {mode:?}");
         self.parameters.kvs_load = mode;
         self
     }
@@ -134,7 +139,9 @@ impl<Backend: KvsBackend, PathResolver: KvsPathResolver> GenericKvsBuilder<Backe
     /// # Return Values
     ///   * KvsBuilder instance
     pub fn dir<P: Into<String>>(mut self, dir: P) -> Self {
-        self.parameters.working_dir = PathBuf::from(dir.into());
+        let working_dir = PathBuf::from(dir.into());
+        trace!("\"dir\" set to {working_dir:?}");
+        self.parameters.working_dir = working_dir;
         self
     }
 
@@ -171,28 +178,40 @@ impl<Backend: KvsBackend, PathResolver: KvsPathResolver> GenericKvsBuilder<Backe
         let instance_id_index: usize = instance_id.into();
         let working_dir = self.parameters.clone().working_dir;
 
+        debug!("Requested KVS instance: {:?}", self.parameters);
+
         // Check if instance already exists.
         {
+            debug!("Checking for existing KVS instance in instance pool");
             let kvs_pool = KVS_POOL.lock()?;
             let kvs_inner_option = match kvs_pool.get(instance_id_index) {
                 Some(kvs_pool_entry) => match kvs_pool_entry {
                     // If instance exists then parameters must match.
                     Some(kvs_inner) => {
                         if kvs_inner.parameters == self.parameters {
+                            debug!("Using KVS instance from instance pool");
                             Ok(Some(kvs_inner))
                         } else {
+                            error!("Requested KVS instance parameters mismatch, provided: {:?}, available: {:?}", self.parameters.clone(), kvs_inner.parameters);
                             Err(ErrorCode::InstanceParametersMismatch)
                         }
                     }
                     // Instance not found - not an error, will initialize later.
-                    None => Ok(None),
+                    None => {
+                        debug!("KVS instance not found in instance pool");
+                        Ok(None)
+                    }
                 },
                 // Instance ID out of range.
-                None => Err(ErrorCode::InvalidInstanceId),
+                None => {
+                    error!("Provided instance ID is out of range: {instance_id}");
+                    Err(ErrorCode::InvalidInstanceId)
+                }
             }?;
 
             // Return existing instance if initialized.
             if let Some(kvs_inner) = kvs_inner_option {
+                info!("Existing KVS instance: {:?}", self.parameters.clone());
                 return Ok(GenericKvs::<Backend, PathResolver>::new(
                     kvs_inner.data.clone(),
                     kvs_inner.parameters.clone(),
@@ -202,6 +221,7 @@ impl<Backend: KvsBackend, PathResolver: KvsPathResolver> GenericKvsBuilder<Backe
 
         // Initialize KVS instance with provided parameters.
         // Load file containing defaults.
+        debug!("Loading defaults");
         let defaults_path = PathResolver::defaults_file_path(&working_dir, instance_id);
         let defaults_map = match self.parameters.defaults {
             KvsDefaults::Ignored => KvsMap::new(),
@@ -216,6 +236,7 @@ impl<Backend: KvsBackend, PathResolver: KvsPathResolver> GenericKvsBuilder<Backe
         };
 
         // Load KVS and hash files.
+        debug!("Loading KVS data");
         let snapshot_id = SnapshotId(0);
         let kvs_path = PathResolver::kvs_file_path(&working_dir, instance_id, snapshot_id);
         let hash_path = PathResolver::hash_file_path(&working_dir, instance_id, snapshot_id);
@@ -239,10 +260,15 @@ impl<Backend: KvsBackend, PathResolver: KvsPathResolver> GenericKvsBuilder<Backe
 
         // Initialize entry in pool and return new KVS instance.
         {
+            debug!("Initializing instance pool entry");
             let mut kvs_pool = KVS_POOL.lock()?;
             let kvs_pool_entry = match kvs_pool.get_mut(instance_id_index) {
                 Some(entry) => entry,
-                None => return Err(ErrorCode::InvalidInstanceId),
+                None => {
+                    // Unlikely - this was checked previously.
+                    error!("Provided instance ID is out of range: {instance_id}");
+                    return Err(ErrorCode::InvalidInstanceId);
+                }
             };
 
             let _ = kvs_pool_entry.insert(KvsInner {
@@ -251,6 +277,7 @@ impl<Backend: KvsBackend, PathResolver: KvsPathResolver> GenericKvsBuilder<Backe
             });
         }
 
+        info!("KVS instance initialized: {:?}", self.parameters.clone());
         Ok(GenericKvs::new(data, self.parameters))
     }
 }

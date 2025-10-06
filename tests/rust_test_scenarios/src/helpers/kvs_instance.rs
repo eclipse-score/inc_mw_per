@@ -1,7 +1,7 @@
 //! KVS instance test helpers.
 
 use crate::helpers::kvs_parameters::KvsParameters;
-use rust_kvs::prelude::{ErrorCode, Kvs, KvsApi, KvsBuilder};
+use rust_kvs::prelude::{ErrorCode, Kvs, KvsBuilder};
 
 /// Create KVS instance based on provided parameters.
 pub fn kvs_instance(kvs_parameters: KvsParameters) -> Result<Kvs, ErrorCode> {
@@ -19,11 +19,11 @@ pub fn kvs_instance(kvs_parameters: KvsParameters) -> Result<Kvs, ErrorCode> {
         builder = builder.dir(dir.to_string_lossy().to_string());
     }
 
-    let kvs: Kvs = builder.build()?;
-
-    if let Some(flag) = kvs_parameters.flush_on_exit {
-        kvs.set_flush_on_exit(flag);
+    if let Some(snapshot_max_count) = kvs_parameters.snapshot_max_count {
+        builder = builder.snapshot_max_count(snapshot_max_count);
     }
+
+    let kvs: Kvs = builder.build()?;
 
     Ok(kvs)
 }

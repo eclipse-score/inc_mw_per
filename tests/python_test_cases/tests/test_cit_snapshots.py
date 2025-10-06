@@ -1,10 +1,30 @@
 from pathlib import Path
-from typing import Any
+from typing import Any, Generator
 import pytest
-from common import CommonScenario, ResultCode
+from .common import CommonScenario, ResultCode, temp_dir_common
 from testing_utils import ScenarioResult, LogContainer
 
 pytestmark = pytest.mark.parametrize("version", ["rust"], scope="class")
+
+
+class MaxSnapshotsScenario(CommonScenario):
+    """
+    Common base implementation for snapshots tests.
+    """
+
+    @pytest.fixture(scope="class")
+    def temp_dir(
+        self,
+        tmp_path_factory: pytest.TempPathFactory,
+        version: str,
+        snapshot_max_count: int,
+    ) -> Generator[Path, None, None]:
+        """
+        Create temporary directory and remove it after test.
+        """
+        yield from temp_dir_common(
+            tmp_path_factory, self.__class__.__name__, version, str(snapshot_max_count)
+        )
 
 
 @pytest.mark.PartiallyVerifies(["comp_req__persistency__snapshot_creation"])
@@ -14,32 +34,40 @@ pytestmark = pytest.mark.parametrize("version", ["rust"], scope="class")
 )
 @pytest.mark.TestType("requirements-based")
 @pytest.mark.DerivationTechnique("requirements-based")
-class TestSnapshotCountFirstFlush(CommonScenario):
+@pytest.mark.parametrize("snapshot_max_count", [0, 1, 3, 10], scope="class")
+class TestSnapshotCountFirstFlush(MaxSnapshotsScenario):
     @pytest.fixture(scope="class")
     def scenario_name(self) -> str:
         return "cit.snapshots.count"
 
     @pytest.fixture(scope="class")
-    def test_config(self, temp_dir: Path) -> dict[str, Any]:
-        return {"kvs_parameters": {"instance_id": 1, "dir": str(temp_dir)}, "count": 1}
+    def test_config(self, temp_dir: Path, snapshot_max_count: int) -> dict[str, Any]:
+        return {
+            "kvs_parameters": {
+                "instance_id": 1,
+                "dir": str(temp_dir),
+                "snapshot_max_count": snapshot_max_count,
+            },
+            "count": 1,
+        }
 
     def test_ok(
         self,
         test_config: dict[str, Any],
         results: ScenarioResult,
         logs_info_level: LogContainer,
+        snapshot_max_count: int,
     ):
-        max_count = 3
         assert results.return_code == ResultCode.SUCCESS
 
         count = test_config["count"]
         logs = logs_info_level.get_logs("snapshot_count")
         assert len(logs) == count + 1
         for i in range(count):
-            expected = min(i, max_count)
+            expected = min(i, snapshot_max_count)
             assert logs[i].snapshot_count == expected
 
-        assert logs[-1].snapshot_count == min(count, max_count)
+        assert logs[-1].snapshot_count == min(count, snapshot_max_count)
 
 
 @pytest.mark.PartiallyVerifies(["comp_req__persistency__snapshot_creation"])
@@ -51,8 +79,15 @@ class TestSnapshotCountFirstFlush(CommonScenario):
 @pytest.mark.DerivationTechnique("requirements-based")
 class TestSnapshotCountFull(TestSnapshotCountFirstFlush):
     @pytest.fixture(scope="class")
-    def test_config(self, temp_dir: Path) -> dict[str, Any]:
-        return {"kvs_parameters": {"instance_id": 1, "dir": str(temp_dir)}, "count": 4}
+    def test_config(self, temp_dir: Path, snapshot_max_count: int) -> dict[str, Any]:
+        return {
+            "kvs_parameters": {
+                "instance_id": 1,
+                "dir": str(temp_dir),
+                "snapshot_max_count": snapshot_max_count,
+            },
+            "count": snapshot_max_count + 1,
+        }
 
 
 @pytest.mark.PartiallyVerifies(["comp_req__persistency__snapshot_max_num"])
@@ -62,18 +97,32 @@ class TestSnapshotCountFull(TestSnapshotCountFirstFlush):
 )
 @pytest.mark.TestType("requirements-based")
 @pytest.mark.DerivationTechnique("inspection")
-class TestSnapshotMaxCount(CommonScenario):
+@pytest.mark.parametrize("snapshot_max_count", [0, 1, 3, 10], scope="class")
+class TestSnapshotMaxCount(MaxSnapshotsScenario):
     @pytest.fixture(scope="class")
     def scenario_name(self) -> str:
         return "cit.snapshots.max_count"
 
     @pytest.fixture(scope="class")
-    def test_config(self, temp_dir: Path) -> dict[str, Any]:
-        return {"kvs_parameters": {"instance_id": 1, "dir": str(temp_dir)}}
+    def test_config(self, temp_dir: Path, snapshot_max_count: int) -> dict[str, Any]:
+        return {
+            "kvs_parameters": {
+                "instance_id": 1,
+                "dir": str(temp_dir),
+                "snapshot_max_count": snapshot_max_count,
+            }
+        }
 
-    def test_ok(self, results: ScenarioResult, logs_info_level: LogContainer):
+    def test_ok(
+        self,
+        results: ScenarioResult,
+        logs_info_level: LogContainer,
+        snapshot_max_count: int,
+    ):
         assert results.return_code == ResultCode.SUCCESS
-        assert logs_info_level.find_log("max_count", value=3) is not None
+        assert (
+            logs_info_level.find_log("max_count", value=snapshot_max_count) is not None
+        )
 
 
 @pytest.mark.PartiallyVerifies(
@@ -88,15 +137,20 @@ class TestSnapshotMaxCount(CommonScenario):
 )
 @pytest.mark.TestType("requirements-based")
 @pytest.mark.DerivationTechnique("control-flow-analysis")
-class TestSnapshotRestorePrevious(CommonScenario):
+@pytest.mark.parametrize("snapshot_max_count", [1, 3, 10], scope="class")
+class TestSnapshotRestorePrevious(MaxSnapshotsScenario):
     @pytest.fixture(scope="class")
     def scenario_name(self) -> str:
         return "cit.snapshots.restore"
 
     @pytest.fixture(scope="class")
-    def test_config(self, temp_dir: Path) -> dict[str, Any]:
+    def test_config(self, temp_dir: Path, snapshot_max_count: int) -> dict[str, Any]:
         return {
-            "kvs_parameters": {"instance_id": 1, "dir": str(temp_dir)},
+            "kvs_parameters": {
+                "instance_id": 1,
+                "dir": str(temp_dir),
+                "snapshot_max_count": snapshot_max_count,
+            },
             "snapshot_id": 1,
             "count": 3,
         }

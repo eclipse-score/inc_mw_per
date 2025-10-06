@@ -32,6 +32,9 @@ impl Scenario for DefaultValues {
 
             // Set value and check value parameters.
             kvs.set_value(key, 432.1).expect("Failed to set value");
+
+            // Flush KVS.
+            kvs.flush().expect("Failed to flush");
         }
 
         // Flush and reopen KVS instance to ensure persistency.
@@ -249,7 +252,7 @@ impl Scenario for Checksum {
         {
             // Create instance, flush, store paths to files, close instance.
             let kvs = kvs_instance(params.clone()).expect("Failed to create KVS instance");
-            kvs.flush().expect("Failed to flush KVS instance");
+            kvs.flush().expect("Failed to flush");
             kvs_path = kvs
                 .get_kvs_filename(SnapshotId(0))
                 .expect("Failed to get KVS file path");

@@ -1,10 +1,12 @@
 import json
-from pathlib import Path
 import re
+from pathlib import Path
 from typing import Any, Generator
+
 import pytest
-from common import CommonScenario, ResultCode, temp_dir_common
-from testing_utils import ScenarioResult, LogContainer
+from testing_utils import LogContainer, ScenarioResult
+
+from .common import CommonScenario, ResultCode, temp_dir_common
 
 pytestmark = pytest.mark.parametrize("version", ["rust"], scope="class")
 
@@ -502,7 +504,6 @@ class TestChecksumOnProvidedDefaults(DefaultValuesScenario):
                 "instance_id": self.instance_id(),
                 "dir": str(temp_dir),
                 "defaults": defaults,
-                "flush_on_exit": False,
             }
         }
 

@@ -3,8 +3,9 @@ from abc import abstractmethod
 from typing import Any
 
 import pytest
-from common import CommonScenario, ResultCode
-from testing_utils import ScenarioResult, LogContainer
+from testing_utils import LogContainer, ScenarioResult
+
+from .common import CommonScenario, ResultCode
 
 pytestmark = pytest.mark.parametrize("version", ["rust"], scope="class")
 
@@ -25,7 +26,7 @@ class TestSupportedDatatypesKeys(CommonScenario):
 
     @pytest.fixture(scope="class")
     def test_config(self) -> dict[str, Any]:
-        return {"kvs_parameters": {"instance_id": 1, "flush_on_exit": False}}
+        return {"kvs_parameters": {"instance_id": 1}}
 
     def test_ok(self, results: ScenarioResult, logs_info_level: LogContainer) -> None:
         assert results.return_code == ResultCode.SUCCESS
@@ -65,7 +66,7 @@ class TestSupportedDatatypesValues(CommonScenario):
 
     @pytest.fixture(scope="class")
     def test_config(self) -> dict[str, Any]:
-        return {"kvs_parameters": {"instance_id": 1, "flush_on_exit": False}}
+        return {"kvs_parameters": {"instance_id": 1}}
 
     def test_ok(self, results: ScenarioResult, logs_info_level: LogContainer) -> None:
         assert results.return_code == ResultCode.SUCCESS

@@ -18,7 +18,6 @@ struct KvsParameters {
     std::optional<bool> need_defaults;
     std::optional<bool> need_kvs;
     std::optional<std::string> dir;
-    std::optional<bool> flush_on_exit;
 };
 
 KvsParameters map_to_params(const std::string& data) {
@@ -42,9 +41,6 @@ KvsParameters map_to_params(const std::string& data) {
     }
     if (obj_root.find("dir") != obj_root.end()) {
         params.dir = obj_root.at("dir").As<std::string>().value();
-    }
-    if (obj_root.find("flush_on_exit") != obj_root.end()) {
-        params.flush_on_exit = obj_root.at("flush_on_exit").As<bool>().value();
     }
 
     return params;
@@ -77,9 +73,6 @@ void BasicScenario::run(const std::optional<std::string>& input) const {
 
     // Create KVS.
     Kvs kvs{*builder.build()};
-    if (params.flush_on_exit.has_value()) {
-        kvs.set_flush_on_exit(*params.flush_on_exit);
-    }
 
     // Simple set/get.
     std::string key{"example_key"};

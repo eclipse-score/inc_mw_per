@@ -1,10 +1,10 @@
 from pathlib import Path
 from typing import Any
+
 import pytest
+from testing_utils import LogContainer, ScenarioResult
 
-from common import CommonScenario, ResultCode
-from testing_utils import ScenarioResult, LogContainer
-
+from .common import CommonScenario, ResultCode
 
 pytestmark = pytest.mark.parametrize("version", ["rust"], scope="class")
 
@@ -84,9 +84,6 @@ class TestSameInstanceIdSameValue(CommonScenario):
         assert log1.value == log2.value
 
 
-@pytest.mark.skip(
-    reason="Race condition between set values - to be fixed with instance pool"
-)
 @pytest.mark.PartiallyVerifies(
     ["comp_req__persistency__multi_instance", "comp_req__persistency__concurrency"]
 )

@@ -8,10 +8,13 @@ use std::collections::HashMap;
 use tempfile::tempdir;
 
 fn main() -> Result<(), ErrorCode> {
-    // Temporary directory and common backend.
+    // Temporary directory.
     let dir = tempdir()?;
-    let dir_path = dir.path().to_path_buf();
-    let backend = Box::new(JsonBackendBuilder::new().working_dir(dir_path).build());
+    let dir_string = dir.path().to_string_lossy().to_string();
+    let backend_parameters = KvsMap::from([
+        ("name".to_string(), KvsValue::String("json".to_string())),
+        ("working_dir".to_string(), KvsValue::String(dir_string)),
+    ]);
 
     // Instance ID for KVS object instances.
     let instance_id = InstanceId(0);
@@ -21,7 +24,7 @@ fn main() -> Result<(), ErrorCode> {
         // `kvs_load` is explicitly set to `KvsLoad::Optional`, but this is the default value.
         // KVS files are not required.
         let builder = KvsBuilder::new(instance_id)
-            .backend(backend.clone())
+            .backend_parameters(backend_parameters.clone())
             .kvs_load(KvsLoad::Optional);
         let kvs = builder.build()?;
 
@@ -66,7 +69,7 @@ fn main() -> Result<(), ErrorCode> {
         // Build KVS instance for given instance ID and temporary directory.
         // `kvs_load` is set to `KvsLoad::Required` - KVS files must already exist from previous KVS instance.
         let builder = KvsBuilder::new(instance_id)
-            .backend(backend)
+            .backend_parameters(backend_parameters)
             .kvs_load(KvsLoad::Required);
         let kvs = builder.build()?;
 

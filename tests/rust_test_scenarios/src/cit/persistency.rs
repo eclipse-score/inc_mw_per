@@ -25,6 +25,7 @@ impl Scenario for ExplicitFlush {
         // Check parameters.
         let input_string = input.as_ref().expect("Test input is expected");
         let params = KvsParameters::from_json(input_string).expect("Failed to parse parameters");
+        let working_dir = params.dir.clone().expect("Working directory must be set");
         {
             // First KVS instance object - used for setting and flushing data.
             let kvs = kvs_instance(params.clone()).expect("Failed to create KVS instance");
@@ -41,7 +42,8 @@ impl Scenario for ExplicitFlush {
         {
             // Second KVS instance object - used for flush check.
             let kvs = kvs_instance(params).expect("Failed to create KVS instance");
-            let (kvs_path, hash_path) = kvs_hash_paths(&kvs, SnapshotId(0));
+            let (kvs_path, hash_path) =
+                kvs_hash_paths(&working_dir, kvs.parameters().instance_id, SnapshotId(0));
             info!(
                 kvs_path = to_str(&kvs_path),
                 kvs_path_exists = kvs_path.exists(),

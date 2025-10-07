@@ -247,13 +247,15 @@ impl Scenario for Checksum {
         // Create KVS instance with provided params.
         let input_string = input.as_ref().expect("Test input is expected");
         let params = KvsParameters::from_json(input_string).expect("Failed to parse parameters");
+        let working_dir = params.dir.clone().expect("Working directory must be set");
         let kvs_path;
         let hash_path;
         {
             // Create instance, flush, store paths to files, close instance.
             let kvs = kvs_instance(params.clone()).expect("Failed to create KVS instance");
             kvs.flush().expect("Failed to flush");
-            (kvs_path, hash_path) = kvs_hash_paths(&kvs, SnapshotId(0));
+            (kvs_path, hash_path) =
+                kvs_hash_paths(&working_dir, kvs.parameters().instance_id, SnapshotId(0));
         }
         info!(
             kvs_path = kvs_path.display().to_string(),

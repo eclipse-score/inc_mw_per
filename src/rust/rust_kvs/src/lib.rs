@@ -132,10 +132,11 @@
 #![cfg_attr(coverage_nightly, feature(coverage_attribute))]
 
 pub mod error_code;
-pub mod json_backend;
+mod json_backend;
 pub mod kvs;
 pub mod kvs_api;
 pub mod kvs_backend;
+pub mod kvs_backend_registry;
 pub mod kvs_builder;
 pub mod kvs_mock;
 pub mod kvs_value;
@@ -143,10 +144,10 @@ pub mod kvs_value;
 /// Prelude module for convenient imports
 pub mod prelude {
     pub use crate::error_code::ErrorCode;
-    pub use crate::json_backend::{JsonBackend, JsonBackendBuilder};
     pub use crate::kvs::Kvs;
     pub use crate::kvs_api::{InstanceId, KvsApi, KvsDefaults, KvsLoad, SnapshotId};
-    pub use crate::kvs_backend::KvsBackend;
+    pub use crate::kvs_backend::{KvsBackend, KvsBackendFactory};
+    pub use crate::kvs_backend_registry::KvsBackendRegistry;
     pub use crate::kvs_builder::KvsBuilder;
     pub use crate::kvs_value::{KvsMap, KvsValue};
 }

@@ -17,6 +17,7 @@ use crate::kvs_value::{KvsMap, KvsValue};
 use std::sync::{Arc, Mutex};
 
 /// KVS instance parameters.
+#[derive(Debug, PartialEq)]
 pub struct KvsParameters {
     /// Instance ID.
     pub instance_id: InstanceId,
@@ -27,17 +28,8 @@ pub struct KvsParameters {
     /// KVS load mode.
     pub kvs_load: KvsLoad,
 
-    /// Backend.
-    pub backend: Box<dyn KvsBackend>,
-}
-
-impl PartialEq for KvsParameters {
-    fn eq(&self, other: &Self) -> bool {
-        self.instance_id == other.instance_id
-            && self.defaults == other.defaults
-            && self.kvs_load == other.kvs_load
-            && self.backend.dyn_eq(other.backend.as_any())
-    }
+    /// Backend parameters.
+    pub backend_parameters: KvsMap,
 }
 
 /// Key-value-storage data
@@ -47,13 +39,25 @@ pub struct Kvs {
 
     /// KVS instance parameters.
     parameters: Arc<KvsParameters>,
+
+    /// Backend.
+    backend: Box<dyn KvsBackend>,
 }
 
 impl Kvs {
-    pub(crate) fn new(data: Arc<Mutex<KvsData>>, parameters: Arc<KvsParameters>) -> Self {
-        Self { data, parameters }
+    pub(crate) fn new(
+        data: Arc<Mutex<KvsData>>,
+        parameters: Arc<KvsParameters>,
+        backend: Box<dyn KvsBackend>,
+    ) -> Self {
+        Self {
+            data,
+            parameters,
+            backend,
+        }
     }
 
+    /// KVS instance parameters.
     pub fn parameters(&self) -> &KvsParameters {
         &self.parameters
     }
@@ -291,8 +295,7 @@ impl KvsApi for Kvs {
         }
 
         let data = self.data.lock()?;
-        self.parameters
-            .backend
+        self.backend
             .flush(self.parameters.instance_id, &data.kvs_map)
     }
 
@@ -301,9 +304,7 @@ impl KvsApi for Kvs {
     /// # Return Values
     ///   * usize: Count of found snapshots
     fn snapshot_count(&self) -> usize {
-        self.parameters
-            .backend
-            .snapshot_count(self.parameters.instance_id)
+        self.backend.snapshot_count(self.parameters.instance_id)
     }
 
     /// Return maximum number of snapshots to store.
@@ -311,7 +312,7 @@ impl KvsApi for Kvs {
     /// # Return Values
     ///   * usize: Maximum count of snapshots
     fn snapshot_max_count(&self) -> usize {
-        self.parameters.backend.snapshot_max_count()
+        self.backend.snapshot_max_count()
     }
 
     /// Recover key-value-storage from snapshot
@@ -335,73 +336,9 @@ impl KvsApi for Kvs {
     fn snapshot_restore(&self, snapshot_id: SnapshotId) -> Result<(), ErrorCode> {
         let mut data = self.data.lock()?;
         data.kvs_map = self
-            .parameters
             .backend
             .snapshot_restore(self.parameters.instance_id, snapshot_id)?;
         Ok(())
-    }
-}
-
-#[cfg(test)]
-mod kvs_parameters_tests {
-    use crate::json_backend::JsonBackendBuilder;
-    use crate::kvs::KvsParameters;
-    use crate::kvs_api::{InstanceId, KvsDefaults, KvsLoad};
-    use std::path::PathBuf;
-
-    #[test]
-    fn test_eq_same() {
-        let instance_id = InstanceId(0);
-        let defaults = KvsDefaults::Optional;
-        let kvs_load = KvsLoad::Optional;
-        let backend = Box::new(
-            JsonBackendBuilder::new()
-                .working_dir(PathBuf::from("/tmp"))
-                .build(),
-        );
-
-        let first = KvsParameters {
-            instance_id,
-            defaults: defaults.clone(),
-            kvs_load: kvs_load.clone(),
-            backend: backend.clone(),
-        };
-        let second = KvsParameters {
-            instance_id,
-            defaults,
-            kvs_load,
-            backend,
-        };
-        assert!(first.eq(&second));
-    }
-
-    #[test]
-    fn test_eq_diff() {
-        let instance_id = InstanceId(0);
-        let defaults = KvsDefaults::Optional;
-        let kvs_load = KvsLoad::Optional;
-
-        let first = KvsParameters {
-            instance_id,
-            defaults: defaults.clone(),
-            kvs_load: kvs_load.clone(),
-            backend: Box::new(
-                JsonBackendBuilder::new()
-                    .working_dir(PathBuf::from("/tmp/x"))
-                    .build(),
-            ),
-        };
-        let second = KvsParameters {
-            instance_id,
-            defaults,
-            kvs_load,
-            backend: Box::new(
-                JsonBackendBuilder::new()
-                    .working_dir(PathBuf::from("/tmp/y"))
-                    .build(),
-            ),
-        };
-        assert!(first.ne(&second));
     }
 }
 
@@ -466,9 +403,9 @@ mod kvs_tests {
             instance_id,
             defaults: KvsDefaults::Optional,
             kvs_load: KvsLoad::Optional,
-            backend,
+            backend_parameters: KvsMap::new(),
         });
-        Kvs::new(data, parameters)
+        Kvs::new(data, parameters, backend)
     }
 
     #[test]
@@ -480,10 +417,16 @@ mod kvs_tests {
     #[test]
     fn test_parameters_ok() {
         let kvs = get_kvs(Box::new(MockBackend), KvsMap::new(), KvsMap::new());
-        assert_eq!(kvs.parameters().instance_id, InstanceId(1));
-        assert_eq!(kvs.parameters().defaults, KvsDefaults::Optional);
-        assert_eq!(kvs.parameters().kvs_load, KvsLoad::Optional);
-        assert!(kvs.parameters().backend.dyn_eq(&MockBackend));
+
+        // Assert params as expected.
+        let expected_parameters = KvsParameters {
+            instance_id: InstanceId(1),
+            defaults: KvsDefaults::Optional,
+            kvs_load: KvsLoad::Optional,
+            backend_parameters: KvsMap::new(),
+        };
+
+        assert_eq!(*kvs.parameters(), expected_parameters);
     }
 
     #[test]

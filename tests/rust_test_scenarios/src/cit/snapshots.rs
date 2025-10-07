@@ -114,6 +114,7 @@ impl Scenario for SnapshotPaths {
         let snapshot_id = serde_json::from_value(v["snapshot_id"].clone())
             .expect("Failed to parse \"snapshot_id\" field");
         let params = KvsParameters::from_value(&v).expect("Failed to parse parameters");
+        let working_dir = params.dir.clone().expect("Working directory must be set");
 
         // Create snapshots.
         for i in 0..count {
@@ -126,7 +127,11 @@ impl Scenario for SnapshotPaths {
 
         {
             let kvs = kvs_instance(params).expect("Failed to create KVS instance");
-            let (kvs_path, hash_path) = kvs_hash_paths(&kvs, SnapshotId(snapshot_id));
+            let (kvs_path, hash_path) = kvs_hash_paths(
+                &working_dir,
+                kvs.parameters().instance_id,
+                SnapshotId(snapshot_id),
+            );
             info!(
                 kvs_path = to_str(&kvs_path),
                 kvs_path_exists = kvs_path.exists(),

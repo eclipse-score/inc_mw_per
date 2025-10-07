@@ -11,7 +11,7 @@
 
 use crate::error_code::ErrorCode;
 use crate::kvs_api::{InstanceId, SnapshotId};
-use crate::kvs_backend::KvsBackend;
+use crate::kvs_backend::{KvsBackend, KvsBackendFactory};
 use crate::kvs_value::{KvsMap, KvsValue};
 use std::collections::HashMap;
 use std::fs;
@@ -151,7 +151,7 @@ impl From<JsonGenerateError> for ErrorCode {
 }
 
 /// Builder for `JsonBackend`.
-pub struct JsonBackendBuilder {
+pub(crate) struct JsonBackendBuilder {
     working_dir: PathBuf,
     snapshot_max_count: usize,
 }
@@ -190,7 +190,7 @@ impl Default for JsonBackendBuilder {
 
 /// KVS backend implementation based on TinyJSON.
 #[derive(Clone, PartialEq)]
-pub struct JsonBackend {
+pub(crate) struct JsonBackend {
     working_dir: PathBuf,
     snapshot_max_count: usize,
 }
@@ -255,7 +255,7 @@ impl JsonBackend {
         ext.is_some_and(|ep| ep.to_str().is_some_and(|es| es == extension))
     }
 
-    pub(super) fn load(kvs_path: &Path, hash_path: Option<&PathBuf>) -> Result<KvsMap, ErrorCode> {
+    pub(crate) fn load(kvs_path: &Path, hash_path: Option<&PathBuf>) -> Result<KvsMap, ErrorCode> {
         if !Self::check_extension(kvs_path, "json") {
             return Err(ErrorCode::KvsFileReadError);
         }
@@ -299,7 +299,7 @@ impl JsonBackend {
         }
     }
 
-    pub(super) fn save(
+    pub(crate) fn save(
         kvs_map: &KvsMap,
         kvs_path: &Path,
         hash_path: Option<&PathBuf>,
@@ -433,12 +433,40 @@ impl KvsBackend for JsonBackend {
     }
 }
 
+/// `JsonBackend` factory.
+pub(crate) struct JsonBackendFactory;
+
+impl KvsBackendFactory for JsonBackendFactory {
+    fn create(&self, parameters: &KvsMap) -> Result<Box<dyn KvsBackend>, ErrorCode> {
+        let mut builder = JsonBackendBuilder::new();
+
+        // Set working directory.
+        if let Some(working_dir) = parameters.get("working_dir") {
+            if let KvsValue::String(working_dir) = working_dir {
+                builder = builder.working_dir(PathBuf::from(working_dir));
+            } else {
+                return Err(ErrorCode::InvalidBackendParameters);
+            }
+        }
+
+        // Set snapshot max count.
+        if let Some(snapshot_max_count) = parameters.get("snapshot_max_count") {
+            if let KvsValue::U64(snapshot_max_count) = snapshot_max_count {
+                builder = builder.snapshot_max_count(*snapshot_max_count as usize);
+            } else {
+                return Err(ErrorCode::InvalidBackendParameters);
+            }
+        }
+
+        Ok(Box::new(builder.build()))
+    }
+}
+
 #[cfg(test)]
 mod json_value_to_kvs_value_conversion_tests {
+    use crate::kvs_value::{KvsMap, KvsValue};
     use std::collections::HashMap;
     use tinyjson::JsonValue;
-
-    use crate::prelude::{KvsMap, KvsValue};
 
     #[test]
     fn test_i32_ok() {
@@ -1354,5 +1382,61 @@ mod kvs_backend_tests {
 
         let result = backend.snapshot_restore(instance_id, SnapshotId(0));
         assert!(result.is_err_and(|e| e == ErrorCode::InvalidSnapshotId));
+    }
+}
+
+#[cfg(test)]
+mod kvs_backend_factory_tests {
+    use crate::error_code::ErrorCode;
+    use crate::json_backend::JsonBackendFactory;
+    use crate::kvs_backend::KvsBackendFactory;
+    use crate::kvs_value::{KvsMap, KvsValue};
+
+    #[test]
+    fn test_create_default_ok() {
+        let factory = JsonBackendFactory;
+        let params = KvsMap::new();
+        let backend = factory.create(&params).unwrap();
+        // `working_dir` is not exposed in the API.
+        assert_eq!(backend.snapshot_max_count(), 3);
+    }
+
+    #[test]
+    fn test_create_params_ok() {
+        let factory = JsonBackendFactory;
+        let params = KvsMap::from([
+            (
+                "working_dir".to_string(),
+                KvsValue::String("/some/path/".to_string()),
+            ),
+            ("snapshot_max_count".to_string(), KvsValue::U64(1234)),
+        ]);
+        let backend = factory.create(&params).unwrap();
+        // `working_dir` is not exposed in the API.
+        assert_eq!(backend.snapshot_max_count(), 1234);
+    }
+
+    #[test]
+    fn test_create_working_dir_invalid_type() {
+        let factory = JsonBackendFactory;
+        let params = KvsMap::from([("working_dir".to_string(), KvsValue::Boolean(true))]);
+        let result = factory.create(&params);
+        assert!(result.is_err_and(|e| e == ErrorCode::InvalidBackendParameters));
+    }
+
+    #[test]
+    fn test_create_snapshot_max_count_invalid_type() {
+        let factory = JsonBackendFactory;
+        let params = KvsMap::from([("snapshot_max_count".to_string(), KvsValue::I32(-123))]);
+        let result = factory.create(&params);
+        assert!(result.is_err_and(|e| e == ErrorCode::InvalidBackendParameters));
+    }
+
+    #[test]
+    fn test_create_unknown_param_ok() {
+        let factory = JsonBackendFactory;
+        let params = KvsMap::from([("unknown_param".to_string(), KvsValue::I32(12345))]);
+        let result = factory.create(&params);
+        assert!(result.is_ok());
     }
 }

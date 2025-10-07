@@ -12,32 +12,9 @@
 use crate::error_code::ErrorCode;
 use crate::kvs_api::{InstanceId, SnapshotId};
 use crate::kvs_value::KvsMap;
-use std::any::Any;
-
-pub trait DynEq: Any {
-    fn dyn_eq(&self, other: &dyn Any) -> bool;
-    fn as_any(&self) -> &dyn Any;
-}
-
-impl<T: PartialEq + Any> DynEq for T
-where
-    T: KvsBackend,
-{
-    fn dyn_eq(&self, other: &dyn Any) -> bool {
-        if let Some(other) = other.downcast_ref::<T>() {
-            self == other
-        } else {
-            false
-        }
-    }
-
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-}
 
 /// KVS backend interface.
-pub trait KvsBackend: DynEq + Sync + Send {
+pub trait KvsBackend {
     /// Load KVS content.
     fn load_kvs(
         &self,
@@ -64,4 +41,11 @@ pub trait KvsBackend: DynEq + Sync + Send {
         instance_id: InstanceId,
         snapshot_id: SnapshotId,
     ) -> Result<KvsMap, ErrorCode>;
+}
+
+/// KVS backend factory interface.
+/// New backends must be registered using [`KvsBackendRegistry`](crate::kvs_backend_registry::KvsBackendRegistry).
+pub trait KvsBackendFactory {
+    /// Create backend.
+    fn create(&self, parameters: &KvsMap) -> Result<Box<dyn KvsBackend>, ErrorCode>;
 }

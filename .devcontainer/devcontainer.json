@@ -1,17 +1,4 @@
 {
     "name": "eclipse-s-core",
-    "image": "ghcr.io/eclipse-score/devcontainer:latest",
-    "features": {
-        "ghcr.io/devcontainers/features/rust:1.5.0": {
-            "version": "1.83.0",
-            "components": [
-                "cargo",
-                "clippy",
-                // "miri", // only available at nightly
-                // "rust-analyzer", // already provided by the image
-                "rust-src",
-                "rustfmt"
-            ]
-        }
-    }
+    "image": "ghcr.io/eclipse-score/devcontainer:latest"
 }

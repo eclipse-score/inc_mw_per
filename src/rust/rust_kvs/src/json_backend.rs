@@ -13,6 +13,7 @@ use crate::error_code::ErrorCode;
 use crate::kvs_api::{InstanceId, SnapshotId};
 use crate::kvs_backend::{KvsBackend, KvsPathResolver};
 use crate::kvs_value::{KvsMap, KvsValue};
+use crate::log::{debug, error};
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -133,8 +134,8 @@ impl From<KvsValue> for JsonValue {
 /// tinyjson::JsonParseError -> ErrorCode::JsonParseError
 impl From<JsonParseError> for ErrorCode {
     fn from(cause: JsonParseError) -> Self {
-        eprintln!(
-            "error: JSON parser error: line = {}, column = {}",
+        error!(
+            "JSON parser error: line = {}, column = {}",
             cause.line(),
             cause.column()
         );
@@ -145,7 +146,7 @@ impl From<JsonParseError> for ErrorCode {
 /// tinyjson::JsonGenerateError -> ErrorCode::JsonGenerateError
 impl From<JsonGenerateError> for ErrorCode {
     fn from(cause: JsonGenerateError) -> Self {
-        eprintln!("error: JSON generator error: msg = {}", cause.message());
+        error!("JSON generator error: msg = {}", cause.message());
         ErrorCode::JsonGeneratorError
     }
 }
@@ -171,45 +172,70 @@ impl JsonBackend {
 
 impl KvsBackend for JsonBackend {
     fn load_kvs(kvs_path: &Path, hash_path: Option<&PathBuf>) -> Result<KvsMap, ErrorCode> {
+        // Check file path extensions.
+        debug!("Checking KVS file path: {kvs_path:?}");
         if !Self::check_extension(kvs_path, "json") {
+            error!("Invalid KVS file path extension: {kvs_path:?}");
             return Err(ErrorCode::KvsFileReadError);
         }
-        if hash_path.is_some_and(|p| !Self::check_extension(p, "hash")) {
-            return Err(ErrorCode::KvsHashFileReadError);
+
+        if let Some(hash_path) = hash_path {
+            debug!("Checking hash file path: {hash_path:?}");
+            if !Self::check_extension(hash_path, "hash") {
+                error!("Invalid hash file path extension: {hash_path:?}");
+                return Err(ErrorCode::KvsHashFileReadError);
+            }
         }
 
         // Load KVS file and parse from string to `JsonValue`.
-        let json_str = fs::read_to_string(kvs_path)?;
-        let json_value = Self::parse(&json_str)?;
+        debug!("Loading KVS file: {kvs_path:?}");
+        let json_str = fs::read_to_string(kvs_path).inspect_err(|_e| {
+            error!("Failed to load KVS file: {kvs_path:?}");
+        })?;
+
+        debug!("Parsing KVS file: {kvs_path:?}");
+        let json_value = Self::parse(&json_str).inspect_err(|_e| {
+            error!("Failed to parse KVS file: {kvs_path:?}");
+        })?;
 
         // Perform hash check.
+        debug!("Performing hash check, KVS file: {kvs_path:?}, hash file: {hash_path:?}");
         if let Some(hash_path) = hash_path {
+            debug!("Loading hash file: {hash_path:?}");
             match fs::read(hash_path) {
                 Ok(hash_bytes) => {
+                    // Check number of hash bytes.
+                    if hash_bytes.len() != 4 {
+                        error!("Invalid hash length: {hash_path:?}");
+                        return Err(ErrorCode::ValidationFailed);
+                    }
+
                     let hash_kvs = adler32::RollingAdler32::from_buffer(json_str.as_bytes()).hash();
-                    if hash_bytes.len() == 4 {
-                        let file_hash = u32::from_be_bytes([
-                            hash_bytes[0],
-                            hash_bytes[1],
-                            hash_bytes[2],
-                            hash_bytes[3],
-                        ]);
-                        if hash_kvs != file_hash {
-                            return Err(ErrorCode::ValidationFailed);
-                        }
-                    } else {
+                    let file_hash = u32::from_be_bytes([
+                        hash_bytes[0],
+                        hash_bytes[1],
+                        hash_bytes[2],
+                        hash_bytes[3],
+                    ]);
+                    if hash_kvs != file_hash {
+                        error!("Hash mismatch, KVS file: {kvs_path:?}, hash file: {hash_path:?}");
                         return Err(ErrorCode::ValidationFailed);
                     }
                 }
-                Err(_) => return Err(ErrorCode::KvsHashFileReadError),
+                Err(_) => {
+                    error!("Failed to load hash file: {hash_path:?}");
+                    return Err(ErrorCode::KvsHashFileReadError);
+                }
             };
         }
 
         // Cast from `JsonValue` to `KvsValue`.
+        debug!("Converting JSON values to KVS values");
         let kvs_value = KvsValue::from(json_value);
         if let KvsValue::Object(kvs_map) = kvs_value {
             Ok(kvs_map)
         } else {
+            error!("Conversion from JSON to KVS failed");
             Err(ErrorCode::JsonParserError)
         }
     }
@@ -219,26 +245,44 @@ impl KvsBackend for JsonBackend {
         kvs_path: &Path,
         hash_path: Option<&PathBuf>,
     ) -> Result<(), ErrorCode> {
-        // Validate extensions.
+        // Check file path extensions.
+        debug!("Checking KVS file path: {kvs_path:?}");
         if !Self::check_extension(kvs_path, "json") {
+            error!("Invalid KVS file path extension: {kvs_path:?}");
             return Err(ErrorCode::KvsFileReadError);
         }
-        if hash_path.is_some_and(|p| !Self::check_extension(p, "hash")) {
-            return Err(ErrorCode::KvsHashFileReadError);
+
+        if let Some(hash_path) = hash_path {
+            debug!("Checking hash file path: {hash_path:?}");
+            if !Self::check_extension(hash_path, "hash") {
+                error!("Invalid hash file path extension: {hash_path:?}");
+                return Err(ErrorCode::KvsHashFileReadError);
+            }
         }
 
         // Cast from `KvsValue` to `JsonValue`.
+        debug!("Converting KVS values to JSON values");
         let kvs_value = KvsValue::Object(kvs_map.clone());
         let json_value = JsonValue::from(kvs_value);
 
         // Stringify `JsonValue` and save to KVS file.
-        let json_str = Self::stringify(&json_value)?;
-        fs::write(kvs_path, &json_str)?;
+        debug!("Stringifying KVS file: {kvs_path:?}");
+        let json_str = Self::stringify(&json_value).inspect_err(|_e| {
+            error!("Failed to stringify KVS file content: {kvs_path:?}");
+        })?;
+
+        debug!("Saving KVS file: {kvs_path:?}");
+        fs::write(kvs_path, &json_str).inspect_err(|_e| {
+            error!("Failed to save KVS file: {kvs_path:?}");
+        })?;
 
         // Generate hash and save to hash file.
         if let Some(hash_path) = hash_path {
+            debug!("Generating KVS hash, KVS file: {kvs_path:?}, hash file: {hash_path:?}");
             let hash = adler32::RollingAdler32::from_buffer(json_str.as_bytes()).hash();
-            fs::write(hash_path, hash.to_be_bytes())?
+            fs::write(hash_path, hash.to_be_bytes()).inspect_err(|_e| {
+                error!("Failed to save hash file: {hash_path:?}");
+            })?
         }
 
         Ok(())

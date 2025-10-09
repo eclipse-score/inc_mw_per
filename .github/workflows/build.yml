@@ -1,0 +1,38 @@
+name: QNX Rust Build Test
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+
+jobs:
+  qnx-rust-build:
+    runs-on: ubuntu-latest
+    environment: workflow-approval
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4.2.2
+
+      - name: Setup Bazel
+        uses: bazel-contrib/setup-bazel@0.14.0
+
+      - name: Setup QNX License
+        env:
+          SCORE_QNX_LICENSE: ${{ secrets.SCORE_QNX_LICENSE }}
+        run: |
+          mkdir -p /opt/score_qnx/license
+          echo "${SCORE_QNX_LICENSE}" | base64 --decode > /opt/score_qnx/license/licenses
+
+      - name: Build Rust targets for QNX aarch64
+        env:
+          SCORE_QNX_USER: ${{ secrets.SCORE_QNX_USER }}
+          SCORE_QNX_PASSWORD: ${{ secrets.SCORE_QNX_PASSWORD }}
+        run: |
+          bazel build \
+            //src/rust/rust_kvs:rust_kvs \
+            //src/rust/rust_kvs_tool:kvs_tool \
+            --platforms=@score_toolchains_rust//platforms:aarch64-unknown-qnx8_0 \
+            --features=-dependency_file \
+            --credential_helper=*.qnx.com=${{ github.workspace }}/tools/qnx_credential_helper.py
+
+      - name: Cleanup QNX License
+        if: always()
+        run: rm -rf /opt/score_qnx

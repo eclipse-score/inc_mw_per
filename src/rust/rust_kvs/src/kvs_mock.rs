@@ -139,18 +139,6 @@ impl KvsApi for MockKvs {
         }
         Ok(())
     }
-    fn get_kvs_filename(&self, _id: SnapshotId) -> Result<std::path::PathBuf, ErrorCode> {
-        if self.fail {
-            return Err(ErrorCode::UnmappedError);
-        }
-        Err(ErrorCode::FileNotFound)
-    }
-    fn get_hash_filename(&self, _id: SnapshotId) -> Result<std::path::PathBuf, ErrorCode> {
-        if self.fail {
-            return Err(ErrorCode::UnmappedError);
-        }
-        Err(ErrorCode::FileNotFound)
-    }
 }
 
 #[cfg(test)]
@@ -190,8 +178,6 @@ mod tests {
         assert!(kvs_fail.reset_key("a").is_err());
         assert!(kvs_fail.get_default_value("a").is_err());
         assert!(kvs_fail.is_value_default("a").is_err());
-        assert!(kvs_fail.get_kvs_filename(SnapshotId(0)).is_err());
-        assert!(kvs_fail.get_hash_filename(SnapshotId(0)).is_err());
         assert!(kvs_fail.snapshot_restore(SnapshotId(0)).is_err());
     }
 }

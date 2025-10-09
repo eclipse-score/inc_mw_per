@@ -1,6 +1,6 @@
 use crate::helpers::kvs_instance::kvs_instance;
 use crate::helpers::kvs_parameters::KvsParameters;
-use crate::helpers::to_str;
+use crate::helpers::{kvs_hash_paths, to_str};
 use rust_kvs::prelude::*;
 use test_scenarios_rust::scenario::{Scenario, ScenarioGroup, ScenarioGroupImpl};
 use tracing::info;
@@ -247,18 +247,15 @@ impl Scenario for Checksum {
         // Create KVS instance with provided params.
         let input_string = input.as_ref().expect("Test input is expected");
         let params = KvsParameters::from_json(input_string).expect("Failed to parse parameters");
+        let working_dir = params.dir.clone().expect("Working directory must be set");
         let kvs_path;
         let hash_path;
         {
             // Create instance, flush, store paths to files, close instance.
             let kvs = kvs_instance(params.clone()).expect("Failed to create KVS instance");
             kvs.flush().expect("Failed to flush");
-            kvs_path = kvs
-                .get_kvs_filename(SnapshotId(0))
-                .expect("Failed to get KVS file path");
-            hash_path = kvs
-                .get_hash_filename(SnapshotId(0))
-                .expect("Failed to get hash file path");
+            (kvs_path, hash_path) =
+                kvs_hash_paths(&working_dir, kvs.parameters().instance_id, SnapshotId(0));
         }
         info!(
             kvs_path = kvs_path.display().to_string(),

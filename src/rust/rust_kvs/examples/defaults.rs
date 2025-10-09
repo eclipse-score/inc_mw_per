@@ -34,6 +34,10 @@ fn main() -> Result<(), ErrorCode> {
     // Temporary directory.
     let dir = tempdir()?;
     let dir_string = dir.path().to_string_lossy().to_string();
+    let backend_parameters = KvsMap::from([
+        ("name".to_string(), KvsValue::String("json".to_string())),
+        ("working_dir".to_string(), KvsValue::String(dir_string)),
+    ]);
 
     // Instance ID for KVS object instances.
     let instance_id = InstanceId(0);
@@ -44,7 +48,7 @@ fn main() -> Result<(), ErrorCode> {
     // Build KVS instance for given instance ID and temporary directory.
     // `defaults` is set to `KvsDefaults::Required` - defaults are required.
     let builder = KvsBuilder::new(instance_id)
-        .dir(dir_string)
+        .backend_parameters(backend_parameters)
         .defaults(KvsDefaults::Required);
     let kvs = builder.build()?;
 

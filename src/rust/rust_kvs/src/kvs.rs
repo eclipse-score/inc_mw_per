@@ -76,7 +76,7 @@ impl<Backend: KvsBackend, PathResolver: KvsPathResolver> GenericKvs<Backend, Pat
     ///   * Ok: Rotation successful, also if no rotation was needed
     ///   * `ErrorCode::UnmappedError`: Unmapped error
     fn snapshot_rotate(&self) -> Result<(), ErrorCode> {
-        for idx in (1..=self.snapshot_max_count()).rev() {
+        for idx in (1..self.snapshot_max_count()).rev() {
             let old_snapshot_id = SnapshotId(idx - 1);
             let new_snapshot_id = SnapshotId(idx);
 
@@ -577,10 +577,11 @@ mod kvs_tests {
         }
     }
 
-    fn get_kvs<B: KvsBackend + KvsPathResolver>(
+    fn get_kvs_snapshot_max_count<B: KvsBackend + KvsPathResolver>(
         working_dir: PathBuf,
         kvs_map: KvsMap,
         defaults_map: KvsMap,
+        snapshot_max_count: usize,
     ) -> GenericKvs<B> {
         let instance_id = InstanceId(1);
         let data = Arc::new(Mutex::new(KvsData {
@@ -592,9 +593,17 @@ mod kvs_tests {
             defaults: KvsDefaults::Optional,
             kvs_load: KvsLoad::Optional,
             working_dir,
-            snapshot_max_count: 3,
+            snapshot_max_count,
         };
         GenericKvs::<B>::new(data, parameters)
+    }
+
+    fn get_kvs<B: KvsBackend + KvsPathResolver>(
+        working_dir: PathBuf,
+        kvs_map: KvsMap,
+        defaults_map: KvsMap,
+    ) -> GenericKvs<B> {
+        get_kvs_snapshot_max_count(working_dir, kvs_map, defaults_map, 3)
     }
 
     #[test]
@@ -963,6 +972,61 @@ mod kvs_tests {
         // Functions below check if file exist.
         kvs.get_kvs_filename(snapshot_id).unwrap();
         kvs.get_hash_filename(snapshot_id).unwrap();
+    }
+
+    #[test]
+    fn test_flush_snapshot_max_count_zero() {
+        let dir = tempdir().unwrap();
+        let dir_path = dir.path().to_path_buf();
+        const MAX_COUNT: usize = 0;
+        let kvs = get_kvs_snapshot_max_count::<JsonBackend>(
+            dir_path,
+            KvsMap::new(),
+            KvsMap::new(),
+            MAX_COUNT,
+        );
+
+        // Flush several times.
+        for _ in 0..MAX_COUNT + 1 {
+            kvs.flush().unwrap();
+        }
+
+        assert_eq!(kvs.snapshot_count(), MAX_COUNT);
+    }
+
+    #[test]
+    fn test_flush_snapshot_max_count_one() {
+        let dir = tempdir().unwrap();
+        let dir_path = dir.path().to_path_buf();
+        const MAX_COUNT: usize = 1;
+        let kvs = get_kvs_snapshot_max_count::<JsonBackend>(
+            dir_path,
+            KvsMap::new(),
+            KvsMap::new(),
+            MAX_COUNT,
+        );
+
+        // Flush several times.
+        for _ in 0..MAX_COUNT + 1 {
+            kvs.flush().unwrap();
+        }
+
+        assert_eq!(kvs.snapshot_count(), MAX_COUNT);
+    }
+
+    #[test]
+    fn test_flush_snapshot_max_count_default() {
+        let dir = tempdir().unwrap();
+        let dir_path = dir.path().to_path_buf();
+        const EXPECTED_MAX_COUNT: usize = 3;
+        let kvs = get_kvs::<JsonBackend>(dir_path, KvsMap::new(), KvsMap::new());
+
+        // Flush several times.
+        for _ in 0..EXPECTED_MAX_COUNT + 1 {
+            kvs.flush().unwrap();
+        }
+
+        assert_eq!(kvs.snapshot_count(), EXPECTED_MAX_COUNT);
     }
 
     #[test]

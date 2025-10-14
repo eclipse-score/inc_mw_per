@@ -137,7 +137,7 @@ class TestSnapshotMaxCount(MaxSnapshotsScenario):
 )
 @pytest.mark.TestType("requirements-based")
 @pytest.mark.DerivationTechnique("control-flow-analysis")
-@pytest.mark.parametrize("snapshot_max_count", [1, 3, 10], scope="class")
+@pytest.mark.parametrize("snapshot_max_count", [3, 10], scope="class")
 class TestSnapshotRestorePrevious(MaxSnapshotsScenario):
     @pytest.fixture(scope="class")
     def scenario_name(self) -> str:

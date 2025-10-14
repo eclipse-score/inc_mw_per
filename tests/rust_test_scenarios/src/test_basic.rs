@@ -1,3 +1,4 @@
+use crate::helpers::kvs_instance::kvs_instance;
 use crate::helpers::kvs_parameters::KvsParameters;
 use rust_kvs::prelude::*;
 use test_scenarios_rust::scenario::Scenario;
@@ -22,20 +23,8 @@ impl Scenario for BasicScenario {
 
         let params = KvsParameters::from_json(input_string).expect("Failed to parse parameters");
 
-        // Set builder parameters.
-        let mut builder = KvsBuilder::new(params.instance_id);
-        if let Some(flag) = params.defaults {
-            builder = builder.defaults(flag);
-        }
-        if let Some(flag) = params.kvs_load {
-            builder = builder.kvs_load(flag);
-        }
-        if let Some(dir) = params.dir {
-            builder = builder.dir(dir.to_string_lossy().to_string());
-        }
-
         // Create KVS.
-        let kvs: Kvs = builder.build().expect("Failed to build KVS instance");
+        let kvs = kvs_instance(params).expect("Failed to create KVS instance");
 
         // Simple set/get.
         let key = "example_key";

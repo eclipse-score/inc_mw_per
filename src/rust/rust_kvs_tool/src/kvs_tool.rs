@@ -59,12 +59,6 @@
 //!    Snapshot Restore:
 //!        kvs_tool -o snapshotrestore -s 1
 //!
-//!    Get KVS Filename:
-//!        kvs_tool -o getkvsfilename -s 1
-//!
-//!    Get Hash Filename:
-//!        kvs_tool -o gethashfilename -s 1
-//!
 //!    ---------------------------------------
 //!
 //!    Create Test Data:
@@ -89,8 +83,6 @@ enum OperationMode {
     SnapshotCount,
     SnapshotMaxCount,
     SnapshotRestore,
-    GetKvsFilename,
-    GetHashFilename,
     CreateTestData,
 }
 
@@ -333,49 +325,6 @@ fn _snapshotrestore(kvs: Kvs, mut args: Arguments) -> Result<(), ErrorCode> {
     Ok(())
 }
 
-/// Retrieves the KVS filename for a given snapshot ID.
-fn _getkvsfilename(kvs: Kvs, mut args: Arguments) -> Result<(), ErrorCode> {
-    println!("----------------------");
-    println!("Get KVS Filename");
-    let snapshot_id: u32 = match args.opt_value_from_str("--snapshotid") {
-        Ok(Some(val)) => val,
-        Ok(None) | Err(_) => match args.opt_value_from_str("-s") {
-            Ok(Some(val)) => val,
-            _ => {
-                eprintln!("Error: Snapshot ID (-s or --snapshotid) needs to be specified!");
-                return Err(ErrorCode::UnmappedError);
-            }
-        },
-    };
-    let snapshot_id = SnapshotId(snapshot_id as usize);
-    let filename = kvs.get_kvs_filename(snapshot_id)?;
-    println!("KVS Filename: {}", filename.display());
-    println!("----------------------");
-    Ok(())
-}
-
-/// Retrieves the hash filename for a given snapshot ID.
-fn _gethashfilename(kvs: Kvs, mut args: Arguments) -> Result<(), ErrorCode> {
-    println!("----------------------");
-    println!("Get Hash Filename");
-
-    let snapshot_id: u32 = match args.opt_value_from_str("--snapshotid") {
-        Ok(Some(val)) => val,
-        Ok(None) | Err(_) => match args.opt_value_from_str("-s") {
-            Ok(Some(val)) => val,
-            _ => {
-                eprintln!("Error: Snapshot ID (-s or --snapshotid) needs to be specified!");
-                return Err(ErrorCode::UnmappedError);
-            }
-        },
-    };
-    let snapshot_id = SnapshotId(snapshot_id as usize);
-    let filename = kvs.get_hash_filename(snapshot_id);
-    println!("Hash Filename: {}", filename?.display());
-    println!("----------------------");
-    Ok(())
-}
-
 /// Creates test data in the KVS based on the example code from the KVS.
 fn _createtestdata(kvs: Kvs) -> Result<(), ErrorCode> {
     println!("----------------------");
@@ -453,8 +402,8 @@ fn main() -> Result<(), ErrorCode> {
 
         Options:
         -h, --help          Show this help message and exit
-        -o, --operation     Specify the operation to perform (setkey, getkey, removekey, 
-                            listkeys, reset, snapshotcount, snapshotmaxcount, snapshotrestore, 
+        -o, --operation     Specify the operation to perform (setkey, getkey, removekey,
+                            listkeys, reset, snapshotcount, snapshotmaxcount, snapshotrestore,
                             getkvsfilename, gethashfilename, createtestdata)
         -k, --key           Specify the key to operate on (for key operations)
         -p, --payload       Specify the value to write (for set operations)
@@ -491,12 +440,6 @@ fn main() -> Result<(), ErrorCode> {
         Snapshot Restore:
             kvs_tool -o snapshotrestore -s 1
 
-        Get KVS Filename:
-            kvs_tool -o getkvsfilename -s 1
-
-        Get Hash Filename:
-            kvs_tool -o gethashfilename -s 1
-
         ---------------------------------------
 
         Create Test Data:
@@ -521,7 +464,11 @@ fn main() -> Result<(), ErrorCode> {
         .kvs_load(KvsLoad::Optional);
 
     let builder = if let Some(dir) = directory {
-        builder.dir(dir)
+        let backend_parameters = KvsMap::from([
+            ("name".to_string(), KvsValue::String("json".to_string())),
+            ("name".to_string(), KvsValue::String(dir)),
+        ]);
+        builder.backend_parameters(backend_parameters)
     } else {
         builder
     };
@@ -557,8 +504,6 @@ fn main() -> Result<(), ErrorCode> {
             "snapshotcount" => OperationMode::SnapshotCount,
             "snapshotmaxcount" => OperationMode::SnapshotMaxCount,
             "snapshotrestore" => OperationMode::SnapshotRestore,
-            "getkvsfilename" => OperationMode::GetKvsFilename,
-            "gethashfilename" => OperationMode::GetHashFilename,
             _ => OperationMode::Invalid,
         },
         None => OperationMode::Invalid,
@@ -595,14 +540,6 @@ fn main() -> Result<(), ErrorCode> {
         }
         OperationMode::SnapshotRestore => {
             _snapshotrestore(kvs, args)?;
-            Ok(())
-        }
-        OperationMode::GetKvsFilename => {
-            _getkvsfilename(kvs, args)?;
-            Ok(())
-        }
-        OperationMode::GetHashFilename => {
-            _gethashfilename(kvs, args)?;
             Ok(())
         }
         OperationMode::CreateTestData => {

@@ -1,10 +1,6 @@
 name: QNX Rust Build Test
 on:
-  pull_request:
-    types: [opened, reopened, synchronize]
-  push:
-    branches:
-      - main
+  workflow_dispatch:
 jobs:
   qnx-rust-build:
     runs-on: ubuntu-latest

@@ -1,0 +1,42 @@
+name: QNX Integration Test
+
+on:
+  workflow_dispatch:
+
+jobs:
+  qnx-kvs-test:
+    name: Build & Run QNX Integration Scenario
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Bazel
+        uses: bazel-contrib/setup-bazel@0.14.0
+
+      - name: Setup QNX License
+        env:
+          SCORE_QNX_LICENSE: ${{ secrets.SCORE_QNX_LICENSE }}
+        run: |
+          mkdir -p /opt/score_qnx/license
+          echo "${SCORE_QNX_LICENSE}" | base64 --decode > /opt/score_qnx/license/licenses
+
+      - name: Build QNX Integration Image
+        env:
+          SCORE_QNX_USER: ${{ secrets.SCORE_QNX_USER }}
+          SCORE_QNX_PASSWORD: ${{ secrets.SCORE_QNX_PASSWORD }}
+        run: |
+          bazel build //tests/integration_test_scenarios:init \
+            --platforms=@score_toolchains_rust//platforms:aarch64-unknown-qnx8_0 \
+            --features=-dependency_file \
+            --credential_helper=*.qnx.com=${{ github.workspace }}/tools/qnx_credential_helper.py
+
+      - name: Run QEMU Integration Test
+        run: |
+          bazel run //tests/integration_test_scenarios:run_qemu \
+            --platforms=@score_toolchains_rust//platforms:aarch64-unknown-qnx8_0
+
+      - name: Cleanup QNX License
+        if: always()
+        run: rm -rf /opt/score_qnx

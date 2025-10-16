@@ -1,0 +1,810 @@
+################################################################################################
+##
+## Build file for a QNX operating system
+##
+################################################################################################
+
+[-optional]
+[+keeplinked]
+[image=0x80000]
+[virtual=aarch64le,raw -compress] boot = {
+    startup-bcm2711-rpi4 -v -D pl011-1 -u reg -r 0,4096,1
+    PATH=/proc/boot:/sbin:/bin:/usr/bin:/usr/sbin:/usr/libexec LD_LIBRARY_PATH=/proc/boot:/lib:/usr/lib:/lib/dll:/lib/dll/pci procnto-smp-instr -v
+}
+
+[+script] startup-script = {
+    SYSNAME=nto
+    TERM=qansi
+    ENV=/etc/profile
+
+    procmgr_symlink ../../proc/boot/ldqnx-64.so.2 /usr/lib/ldqnx-64.so.2
+
+    ## Needed for ksh to run the echo command below
+    pipe
+
+    display_msg " "
+    ksh -c "echo Welcome to QNX $(uname -r) on $(uname -m) !"
+    display_msg " "
+
+    slogger2
+    dumper
+    mqueue
+    random 
+
+
+    ############################################################################################
+    ## WatchDog utility
+    ## If startup is given -W parameter then the wdtkick utility MUST be uncommented below
+    ############################################################################################
+    display_msg "Starting wdtkick ..."
+    wdtkick -W0x24:0x5A028E4C -W0x1c:0x5A000020
+
+
+    ############################################################################################
+    ## I2C driver
+    ############################################################################################
+    display_msg "Starting I2C driver ..."
+    i2c-bcm2711 -p0xfe804000 --b100000 --u1
+
+
+    ############################################################################################
+    ## PCIe driver
+    ############################################################################################
+    display_msg "Starting PCI Server ..."
+    PCI_HW_MODULE=/lib/dll/pci/pci_hw-bcm2711-rpi4.so
+    PCI_BKWD_COMPAT_MODULE=/lib/dll/pci/pci_bkwd_compat.so
+    PCI_SLOG_MODULE=/lib/dll/pci/pci_slog2.so
+    PCI_DEBUG_MODULE=/lib/dll/pci/pci_debug2.so
+
+    pci-server --bus-scan-limit=1 -c &
+    waitfor /dev/pci
+
+
+    #######################################################################
+    ## Console SERIAL driver
+    #######################################################################
+    display_msg "Starting serial driver (/dev/ser1)"
+    #devc-serminiuart -b115200 -c500000000 -e -F -u1 0xfe215000,125
+
+    #display_msg "Starting serial driver (/dev/ser1)"
+    devc-serpl011 -b115200 -c48000000 -e -F -u1 0xfe201000,153
+    
+
+    ############################################################################################
+    ## SPI driver
+    ############################################################################################
+    #display_msg "Starting SPI master driver ..."
+    #spi-bcm2711 
+    #waitfor /dev/io-spi
+
+
+
+    #######################################################################
+    ## SD memory card / eMMC driver
+    ## Note: "bmstr_base" option is required for busmaster memory
+    ## address translation
+    #######################################################################
+    display_msg "Starting SDMMC driver (/dev/sd0)"
+    #devb-sdmmc-bcm2711 dos exe=all mem sdio addr=0xfe340000,irq=158 disk name=sd
+    #devb-sdmmc-bcm2711 sdio addr=0xfe300000,irq=152 disk name=sd
+    #waitfor /dev/sd0
+     # The first partition on your SD image is FAT32 (t12 = DOS)
+     #mount -tdos /dev/sd0t12 /dos
+     #waitfor /dos
+
+
+
+    #######################################################################
+    ## USB OTG Host Controller driver
+    #######################################################################
+    sh /proc/boot/usb_start.sh
+
+
+    ############################################################################################
+    ## Storage service
+    ############################################################################################
+    /proc/boot/.storage-server.sh
+
+
+    ############################################################################################
+    ## Network driver
+    ############################################################################################
+    display_msg "Starting networking ..."
+    io-sock  -m phy -m fdt -m phy_fdt -d genet -m pci -d em -d ix -d re -d igc -m usb -d axe -d axge -d cdce -d smsc 
+
+
+    ############################################################################################
+    ## DHCP client
+    ############################################################################################
+    display_msg "Starting DHCP client ..."
+    dhcpcd -bqq
+
+    ############################################################################################
+    ## SSH daemon
+    ############################################################################################
+    /proc/boot/.ssh-server.sh
+
+    ############################################################################################
+    ## REMOTE_DEBUG: gdb or Momentics
+    ##  - refer to the help documentation for the gdb, qconn and the IDE
+    ##    for more information on remote debugging
+    ##  - the commands shown require that NETWORK is enabled too
+    ############################################################################################
+    display_msg "Starting devc-pty manager ..."
+    devc-pty
+
+    display_msg "Starting qconn daemon ..."
+    qconn
+
+
+    ############################################################################################
+    ## Customize startup components
+    ############################################################################################
+    ksh /proc/boot/customize_startup.sh
+
+
+    ############################################################################################
+    ## KVS integration test (runs once, then powers off)
+    ############################################################################################
+    display_msg "Running kvs_tool integration test ..."
+    PATH=/usr/bin:/sbin:/bin
+    /usr/bin/kvs_test.sh >/var/log/kvs_test.log 2>&1
+
+    ## TODO: enable when rust_test_scenarios is built for QNX
+
+    # power off so the Bazel test wrapper can detect completion
+    /sbin/shutdown -f
+
+
+    ############################################################################################
+    ## Start the main shell
+    ############################################################################################
+    #reopen /dev/ser1
+    display_msg "Starting shell ..."
+    [+session] ksh &
+}
+
+
+[uid=0 gid=0]
+
+[type=link] /bin/sh=/bin/ksh
+[type=link] /tmp=/dev/shmem
+[type=link] /dev/console=/dev/ser1
+[type=link] /var/log=/tmp
+[type=link] /usr/tmp=/tmp
+
+
+################################################################################################
+## WDT driver
+################################################################################################
+/bin/wdtkick=wdtkick
+
+
+################################################################################################
+## Serial drivers
+################################################################################################
+/sbin/devc-serminiuart=devc-serminiuart
+/sbin/devc-serpl011=devc-serpl011
+
+
+################################################################################################
+## NOR flash driver files
+################################################################################################
+/sbin/devf-ram=devf-ram
+
+/usr/bin/flashctl=flashctl
+
+
+################################################################################################
+## Block drivers
+################################################################################################/
+/sbin/devb-sdmmc-bcm2711=devb-sdmmc-bcm2711
+
+################################################################################################
+## Block driver support libraries
+################################################################################################
+/lib/libcam.so=libcam.so
+
+/lib/dll/io-blk.so=io-blk.so
+/lib/dll/cam-disk.so=cam-disk.so
+/lib/dll/cam-cdrom.so=cam-cdrom.so
+/lib/dll/fs-qnx6.so=fs-qnx6.so
+/lib/dll/fs-dos.so=fs-dos.so
+
+
+################################################################################################
+## Storage script
+################################################################################################
+[perms=0744] .storage-server.sh = {
+#!/bin/ksh
+
+## Check if the /var/run directory exists
+if [ ! -d /var/run ]
+then
+    ## Use devf-ram file system for dhcpcd service
+    echo "Starting devf-ram filesystem ..."
+    devf-ram -i 9,0 -s0,16m
+    waitfor /dev/fs9p0
+
+    flashctl -p /dev/fs9p0 -e -f -n /var -m
+    mkdir -m 755 /var/run
+    mkdir -m 755 /var/db
+fi
+}
+
+
+
+################################################################################################
+## Network driver files
+################################################################################################
+/lib/dll/devs-genet.so=devs-genet.so
+
+/lib/dll/devs-em.so=devs-em.so
+/lib/dll/devs-ix.so=devs-ix.so
+/lib/dll/devs-re.so=devs-re.so
+/lib/dll/devs-igc.so=devs-igc.so
+
+/lib/dll/devs-axe.so=devs-axe.so
+/lib/dll/devs-axge.so=devs-axge.so
+/lib/dll/devs-cdce.so=devs-cdce.so
+/lib/dll/devs-smsc.so=devs-smsc.so
+
+################################################################################################
+## Network driver shared libraries
+################################################################################################
+/usr/lib/libedit.so=libedit.so
+/usr/lib/libexpat.so=libexpat.so
+/usr/lib/libfdt.so=libfdt.so
+/usr/lib/librpc.so.2=librpc.so.2
+/usr/lib/libxo.so.0=libxo.so.0
+
+/lib/libsocket.so=libsocket.so
+/lib/libjail.so=libjail.so
+
+/lib/dll/mods-phy.so=mods-phy.so
+/lib/dll/mods-pci.so=mods-pci.so
+/lib/dll/mods-usb.so=mods-usb.so
+/lib/dll/mods-fdt.so=mods-fdt.so
+/lib/dll/mods-phy_fdt.so=mods-phy_fdt.so
+
+################################################################################################
+## Network driver and support
+################################################################################################
+/sbin/dhcpcd=dhcpcd
+/sbin/dhcpcd-run-hooks=${QNX_TARGET}/sbin/dhcpcd-run-hooks
+/sbin/dhcpcd-hooks/20-resolv.conf=${QNX_TARGET}/sbin/dhcpcd-hooks/20-resolv.conf
+/sbin/ifconfig=ifconfig
+/sbin/io-sock=io-sock
+/sbin/pfctl=pfctl
+[uid=0 gid=0 perms=4755] /sbin/ping=ping
+/sbin/route=route
+/sbin/sysctl=sysctl
+
+/usr/bin/netstat=netstat
+/usr/bin/sockstat=sockstat
+/usr/bin/vmstat=vmstat
+
+/usr/sbin/arp=arp
+/usr/sbin/devctl=devctl
+/usr/sbin/devinfo=devinfo
+/usr/sbin/fs-nfs3=fs-nfs3
+/usr/sbin/if_up=if_up
+/usr/sbin/ifmcstat=ifmcstat
+/usr/sbin/ifwatchd=ifwatchd
+/usr/sbin/ip6addrctl=ip6addrctl
+/usr/sbin/ndp=ndp
+/usr/sbin/tcpdump=tcpdump
+[uid=0 gid=0 perms=4755] /usr/sbin/traceroute=traceroute
+[uid=0 gid=0 perms=4755] /usr/sbin/traceroute6=traceroute6
+
+/etc/dhcpcd.conf=${QNX_TARGET}/etc/dhcpcd.conf
+/etc/hosts=${QNX_TARGET}/etc/hosts
+/etc/netconfig=${QNX_TARGET}/etc/netconfig
+/etc/protocols=${QNX_TARGET}/etc/protocols
+/etc/services=${QNX_TARGET}/etc/services
+/etc/pf.os=${QNX_TARGET}/etc/pf.os
+
+################################################################################################
+## Remote_debug
+################################################################################################
+/sbin/devc-pty=devc-pty
+
+/usr/bin/pdebug=pdebug
+
+/usr/sbin/qconn=qconn
+
+
+
+
+################################################################################################
+## USB host drivers
+################################################################################################
+/lib/dll/devu-hcd-bcm2711-xhci.so=devu-hcd-bcm2711-xhci.so
+
+################################################################################################
+## USB host shared libraries
+################################################################################################
+/lib/libhiddi.so=libhiddi.so
+/lib/libusbdi.so=libusbdi.so
+
+################################################################################################
+## USB host driver and support
+################################################################################################
+/sbin/io-usb-otg=io-usb-otg
+/sbin/usb=usb
+/sbin/devb-umass=devb-umass
+
+################################################################################################
+## USB device shared libraries
+################################################################################################
+/lib/libusbdci.so=libusbdci.so
+
+
+################################################################################################
+## I2C drivers
+################################################################################################
+/sbin/i2c-bcm2711=i2c-bcm2711
+
+################################################################################################
+## I2C support
+################################################################################################
+/bin/isendrecv=isendrecv
+/bin/isend=isend
+
+
+################################################################################################
+## PCI driver HW Modules and configuration file
+################################################################################################
+#/lib/dll/pci/pci_hw-bcm2711-rpi4.so=pci/pci_hw-bcm2711-rpi4.so
+
+
+# This file can be used to configure pci-server via the --config option
+/etc/system/config/pci/pci_server.cfg = {
+[buscfg]
+
+[runtime]
+BUS_SCAN_LIMIT=1
+
+[envars]
+PCI_HW_MODULE=/lib/dll/pci/pci_hw-bcm2711-rpi4.so
+PCI_DEBUG_MODULE=pci_debug2.so
+
+}
+
+################################################################################################
+## PCIe driver shared libraries
+################################################################################################
+/lib/libpci.so=libpci.so
+
+/lib/dll/pci/pci_bkwd_compat.so=pci/pci_bkwd_compat.so
+/lib/dll/pci/pci_cap-0x01.so=pci/pci_cap-0x01.so
+/lib/dll/pci/pci_cap-0x04.so=pci/pci_cap-0x04.so
+/lib/dll/pci/pci_cap-0x05.so=pci/pci_cap-0x05.so
+/lib/dll/pci/pci_cap-0x07.so=pci/pci_cap-0x07.so
+/lib/dll/pci/pci_cap-0x09-ffffffff.so=pci/pci_cap-0x09-ffffffff.so
+/lib/dll/pci/pci_cap-0x0d.so=pci/pci_cap-0x0d.so
+/lib/dll/pci/pci_cap-0x10-16c3abcd.so=pci/pci_cap-0x10-16c3abcd.so
+/lib/dll/pci/pci_cap-0x10-19570400.so=pci/pci_cap-0x10-19570400.so
+/lib/dll/pci/pci_cap-0x10.so=pci/pci_cap-0x10.so
+/lib/dll/pci/pci_cap-0x11-ffffffff.so=pci/pci_cap-0x11-ffffffff.so
+/lib/dll/pci/pci_cap-0x11.so=pci/pci_cap-0x11.so
+/lib/dll/pci/pci_cap-0x12.so=pci/pci_cap-0x12.so
+/lib/dll/pci/pci_cap-0x13.so=pci/pci_cap-0x13.so
+/lib/dll/pci/pci_debug.so=pci/pci_debug.so
+/lib/dll/pci/pci_debug2.so=pci/pci_debug2.so
+/lib/dll/pci/pci_server-buscfg-generic.so=pci/pci_server-buscfg-generic.so
+/lib/dll/pci/pci_server-buscfg-hotplug.so=pci/pci_server-buscfg-hotplug.so
+/lib/dll/pci/pci_server-buscfg2-generic.so=pci/pci_server-buscfg2-generic.so
+/lib/dll/pci/pci_server-buscfg2-hotplug.so=pci/pci_server-buscfg2-hotplug.so
+/lib/dll/pci/pci_server-enable_features.so=pci/pci_server-enable_features.so
+/lib/dll/pci/pci_server-event_handler.so=pci/pci_server-event_handler.so
+/lib/dll/pci/pci_server-namespace.so=pci/pci_server-namespace.so
+/lib/dll/pci/pci_slog.so=pci/pci_slog.so
+/lib/dll/pci/pci_slog2.so=pci/pci_slog2.so
+/lib/dll/pci/pci_strings.so=pci/pci_strings.so
+/lib/dll/pci/pcie_xcap-0x0001.so=pci/pcie_xcap-0x0001.so
+/lib/dll/pci/pcie_xcap-0x0003.so=pci/pcie_xcap-0x0003.so
+/lib/dll/pci/pcie_xcap-0x000b-ffffffff.so=pci/pcie_xcap-0x000b-ffffffff.so
+/lib/dll/pci/pcie_xcap-0x0015.so=pci/pcie_xcap-0x0015.so
+
+################################################################################################
+## PCIe driver and support
+################################################################################################
+/sbin/pci-server=pci-server
+
+/usr/sbin/pci-tool=pci-tool
+/usr/sbin/rsrcdb_query=rsrcdb_query
+
+/etc/system/config/pci/pcidatabase.com-tab_delimited.txt=${QNX_TARGET}/etc/system/config/pci/pcidatabase.com-tab_delimited.txt
+
+
+################################################################################################
+## SPI driver
+################################################################################################
+/sbin/spi-bcm2711=spi-bcm2711
+
+/etc/system/config/spi/spi.conf = {
+# See spi-template.conf or SDP docs for a full description of the configuration fields.
+
+[globals]
+verbose=5
+
+[bus]
+busno=0
+name=spi0
+base=0xfe204000
+irq=150
+input_clock=500000000
+bs=rpanic=48,tpanic=16
+dma_attach_opts=num_cbs=256,range_min=0,range_max=14,typed_mem=sysram&below1G
+dma_thld=4
+
+[dev]
+parent_busno=0
+devno=0
+name=dev0
+clock_rate=5000000
+cpha=1
+cpol=0
+bit_order=msb
+word_width=32
+idle_insert=1
+
+[dev]
+parent_busno=0
+devno=1
+name=dev1
+cpha=0
+cpol=1
+word_width=32
+clock_rate=5000000
+
+[bus]
+busno=3
+name=spi3
+base=0xfe204600
+irq=151
+input_clock=500000000
+
+[dev]
+parent_busno=3
+devno=0
+name=dev0
+cpha=0
+cpol=1
+word_width=8
+clock_rate=5000000
+
+}
+
+
+################################################################################################
+## Shared libraries for security
+################################################################################################
+/lib/libqh.so=libqh.so
+/lib/libregex.so=libregex.so
+/lib/libsecpol.so=libsecpol.so
+/lib/libslog2parse.so=libslog2parse.so
+/lib/libslog2shim.so=libslog2shim.so
+/lib/libslog2.so=libslog2.so
+/lib/libtracelog.so=libtracelog.so
+
+/lib/dll/qcrypto-openssl-3.so=qcrypto-openssl-3.so
+
+/usr/lib/libcrypto.so=libcrypto.so
+/usr/lib/libncursesw.so=libncursesw.so
+/usr/lib/libqcrypto.so=libqcrypto.so
+/usr/lib/libssl.so=libssl.so
+
+################################################################################################
+## libqcrypto support
+################################################################################################
+[uid=0 gid=0 perms=0644] /etc/qcrypto.conf = {
+openssl-3     tags=*
+}
+
+################################################################################################
+## Security files
+################################################################################################
+[uid=0 gid=0 perms=4755] /bin/login=login
+[uid=0 gid=0 perms=4755] /bin/su=su
+
+[uid=0 gid=0 perms=4755] /usr/bin/passwd=passwd
+
+[uid=0 gid=0 perms=0644] /etc/passwd = {
+root:x:0:0:Superuser:/root:/bin/sh
+sshd:x:15:6:sshd:/var/chroot/sshd:/bin/false
+qnxuser:x:1000:1000:QNX User:/home/qnxuser:/bin/sh
+}
+
+## Enabled Username/Password: root/root, qnxuser/qnxuser
+[uid=0 gid=0 perms=0644] /etc/shadow = {
+root:@S@NKlWES1quMp1wmqugkUSnFEpPGn58kIs4wQOgDDNs06vimR+bbGPUKM+9P6jbFUzo3Rm+Qe5MS+17xKhwaeJEg==@Mjg5ZTJiMTM0YTRjYTE2ZGFjMDdhZTFlY2NlMDVmNmE=:1468494669:0:0
+sshd:*:1231323780:0:0
+qnxuser:@S@HZERXjgixvb3157FFeraShhvTVw+10ccUtVUVZbi0fUwpzlzBZFw5gHiFd1XHKit8D39Whe749XAY8fV4P5ANQ==@Y2ZlOTg3M2RhNTM4Y2M2ODY0OWZhODdiNDRkMmU5Nzg=:1468488235:0:0
+}
+
+[uid=0 gid=0 perms=0644] /etc/group = {
+root:x:0:root
+sshd:x:6:
+qnxuser:x:1000
+}
+
+
+################################################################################################
+## PAM configurations addon build file
+################################################################################################
+[uid=0 gid=0 type=dir dperms=0755] /
+[uid=0 gid=0 type=dir dperms=0755] /etc
+[uid=0 gid=0 type=dir dperms=0755] /etc/pam.d
+[uid=0 gid=0 type=dir dperms=0755] /home
+[uid=1000 gid=1000 type=dir dperms=0755] /home/qnxuser
+[uid=0 gid=0 type=dir dperms=0755] /lib
+[uid=0 gid=0 type=dir dperms=0700] /root
+[uid=0 gid=0 type=dir dperms=0755] /usr
+[uid=0 gid=0 type=dir dperms=0755] /usr/lib
+[uid=0 gid=0 type=dir dperms=0755] /var
+[uid=0 gid=0 type=dir dperms=0755] /var/chroot
+[uid=0 gid=0 type=dir dperms=0755] /var/chroot/sshd
+
+[uid=0 gid=0 perms=0644] /etc/pam.d/login=${QNX_TARGET}/etc/pam.d/login
+[uid=0 gid=0 perms=0644] /etc/pam.d/passwd=${QNX_TARGET}/etc/pam.d/passwd
+[uid=0 gid=0 perms=0644] /etc/pam.d/su=${QNX_TARGET}/etc/pam.d/su
+
+[uid=0 gid=0 perms=0755] /usr/lib/libpam.so=libpam.so
+[uid=0 gid=0 perms=0755] /usr/lib/pam_deny.so=pam_deny.so
+[uid=0 gid=0 perms=0755] /usr/lib/pam_echo.so=pam_echo.so
+[uid=0 gid=0 perms=0755] /usr/lib/pam_exec.so=pam_exec.so
+[uid=0 gid=0 perms=0755] /usr/lib/pam_group.so=pam_group.so
+[uid=0 gid=0 perms=0755] /usr/lib/pam_permit.so=pam_permit.so
+[uid=0 gid=0 perms=0755] /usr/lib/pam_qnx.so=pam_qnx.so
+[uid=0 gid=0 perms=0755] /usr/lib/pam_rootok.so=pam_rootok.so
+[uid=0 gid=0 perms=0755] /usr/lib/pam_secpol.so=pam_secpol.so
+[uid=0 gid=0 perms=0755] /usr/lib/pam_self.so=pam_self.so
+
+
+################################################################################################
+## General shared libraries
+################################################################################################
+ldqnx-64.so.2=ldqnx-64.so.2
+
+/lib/libc.so=libc.so
+/lib/libcatalog.so=libcatalog.so
+/lib/libdevice-publisher.so=libdevice-publisher.so
+/lib/libgcc_s.so=libgcc_s.so
+/lib/libm.so=libm.so
+[+optional] /lib/libfsnotify.so=libfsnotify.so
+
+/usr/lib/libbacktrace.so=libbacktrace.so
+/usr/lib/libc++.so=libc++.so
+/usr/lib/libiconv.so=libiconv.so
+/usr/lib/libintl.so=libintl.so
+/usr/lib/libpanelw.so=libpanelw.so
+/usr/lib/libz.so=libz.so
+
+
+################################################################################################
+## General commands
+################################################################################################
+/bin/confstr=confstr
+/bin/df=df
+/bin/hostname=hostname
+/bin/kill=kill
+/bin/ksh=ksh
+/bin/mount=mount
+/bin/on=on
+/bin/pidin=pidin
+/bin/slay=slay
+/bin/slog2info=slog2info
+/bin/slogger2=slogger2
+/bin/sync=sync
+/bin/umount=umount
+/bin/waitfor=waitfor
+
+/sbin/mqueue=mqueue
+/sbin/pipe=pipe
+/sbin/shutdown=shutdown
+
+/usr/bin/getconf=getconf
+/usr/bin/hd=hd
+/usr/bin/ldd=ldd
+/usr/bin/setconf=setconf
+/usr/bin/top=top
+/usr/bin/use=use
+
+/usr/sbin/dumper=dumper
+/usr/sbin/random=random
+/usr/sbin/tracelogger=tracelogger
+
+[uid=0 gid=0 perms=0755] /usr/bin/kvs_tool=bazel-out/k8-fastbuild/bin/tests/integration_test_scenarios/install/usr/bin/kvs_tool
+[uid=0 gid=0 perms=0755] /usr/bin/kvs_test.sh=bazel-out/k8-fastbuild/bin/tests/integration_test_scenarios/install/usr/bin/kvs_test.sh
+
+#TODO: enable when rust_test_scenarios is built for QNX
+#[uid=0 gid=0 perms=0755] /usr/bin/rust_test_scenarios=bazel-out/k8-fastbuild/bin/tests/integration_test_scenarios/install/usr/bin/rust_test_scenarios
+
+
+
+################################################################################################
+## Toybox commands
+## Note: The toybox package combines many common Linux command line utilities together into
+##       a single, BSD-licensed executable. The following toybox commands are supported.
+##       Use one of the following commands to access help for a toybox command:
+##         toybox command_name --help
+##         command_name --help
+################################################################################################
+/usr/bin/toybox=toybox
+
+[type=link] /bin/cat=/usr/bin/toybox
+[type=link] /bin/chmod=/usr/bin/toybox
+[type=link] /bin/cp=/usr/bin/toybox
+[type=link] /bin/dd=/usr/bin/toybox
+[type=link] /bin/echo=/usr/bin/toybox
+[type=link] /bin/ln=/usr/bin/toybox
+[type=link] /bin/ls=/usr/bin/toybox
+[type=link] /bin/mkdir=/usr/bin/toybox
+[type=link] /bin/mv=/usr/bin/toybox
+[type=link] /bin/pwd=/usr/bin/toybox
+[type=link] /bin/rm=/usr/bin/toybox
+[type=link] /bin/sed=/usr/bin/toybox
+[type=link] /bin/uname=/usr/bin/toybox
+
+[type=link] /usr/bin/ascii=/usr/bin/toybox
+[type=link] /usr/bin/base64=/usr/bin/toybox
+[type=link] /usr/bin/basename=/usr/bin/toybox
+[type=link] /usr/bin/bc=/usr/bin/toybox
+[type=link] /usr/bin/bunzip2=/usr/bin/toybox
+[type=link] /usr/bin/bzcat=/usr/bin/toybox
+[type=link] /usr/bin/cal=/usr/bin/toybox
+[type=link] /usr/bin/chgrp=/usr/bin/toybox
+[type=link] /usr/bin/chown=/usr/bin/toybox
+[type=link] /usr/bin/cksum=/usr/bin/toybox
+[type=link] /usr/bin/clear=/usr/bin/toybox
+[type=link] /usr/bin/cmp=/usr/bin/toybox
+[type=link] /usr/bin/comm=/usr/bin/toybox
+[type=link] /usr/bin/cpio=/usr/bin/toybox
+[type=link] /usr/bin/crc32=/usr/bin/toybox
+[type=link] /usr/bin/cut=/usr/bin/toybox
+[type=link] /usr/bin/date=/usr/bin/toybox
+[type=link] /usr/bin/diff=/usr/bin/toybox
+[type=link] /usr/bin/dirname=/usr/bin/toybox
+[type=link] /usr/bin/dos2unix=/usr/bin/toybox
+[type=link] /usr/bin/du=/usr/bin/toybox
+[type=link] /usr/bin/egrep=/usr/bin/toybox
+[type=link] /usr/bin/env=/usr/bin/toybox
+[type=link] /usr/bin/expand=/usr/bin/toybox
+[type=link] /usr/bin/expr=/usr/bin/toybox
+[type=link] /usr/bin/false=/usr/bin/toybox
+[type=link] /usr/bin/fgrep=/usr/bin/toybox
+[type=link] /usr/bin/file=/usr/bin/toybox
+[type=link] /usr/bin/find=/usr/bin/toybox
+[type=link] /usr/bin/grep=/usr/bin/toybox
+[type=link] /usr/bin/groups=/usr/bin/toybox
+[type=link] /usr/bin/gunzip=/usr/bin/toybox
+[type=link] /usr/bin/gzip=/usr/bin/toybox
+[type=link] /usr/bin/head=/usr/bin/toybox
+[type=link] /usr/bin/id=/usr/bin/toybox
+[type=link] /usr/bin/install=/usr/bin/toybox
+[type=link] /usr/bin/link=/usr/bin/toybox
+[type=link] /usr/bin/logname=/usr/bin/toybox
+[type=link] /usr/bin/md5sum=/usr/bin/toybox
+[type=link] /usr/bin/mkfifo=/usr/bin/toybox
+[type=link] /usr/bin/mktemp=/usr/bin/toybox
+[type=link] /usr/bin/more=/usr/bin/toybox
+[type=link] /usr/bin/nl=/usr/bin/toybox
+[type=link] /usr/bin/nohup=/usr/bin/toybox
+[type=link] /usr/bin/od=/usr/bin/toybox
+[type=link] /usr/bin/paste=/usr/bin/toybox
+[type=link] /usr/bin/patch=/usr/bin/toybox
+[type=link] /usr/bin/printenv=/usr/bin/toybox
+[type=link] /usr/bin/printf=/usr/bin/toybox
+[type=link] /usr/bin/readlink=/usr/bin/toybox
+[type=link] /usr/bin/realpath=/usr/bin/toybox
+[type=link] /usr/bin/rmdir=/usr/bin/toybox
+[type=link] /usr/bin/seq=/usr/bin/toybox
+[type=link] /usr/bin/sha1sum=/usr/bin/toybox
+[type=link] /usr/bin/sleep=/usr/bin/toybox
+[type=link] /usr/bin/sort=/usr/bin/toybox
+[type=link] /usr/bin/split=/usr/bin/toybox
+[type=link] /usr/bin/stat=/usr/bin/toybox
+[type=link] /usr/bin/strings=/usr/bin/toybox
+[type=link] /usr/bin/tail=/usr/bin/toybox
+[type=link] /usr/bin/tar=/usr/bin/toybox
+[type=link] /usr/bin/tee=/usr/bin/toybox
+[type=link] /usr/bin/test=/usr/bin/toybox
+[type=link] /usr/bin/time=/usr/bin/toybox
+[type=link] /usr/bin/timeout=/usr/bin/toybox
+[type=link] /usr/bin/touch=/usr/bin/toybox
+[type=link] /usr/bin/true=/usr/bin/toybox
+[type=link] /usr/bin/truncate=/usr/bin/toybox
+[type=link] /usr/bin/tty=/usr/bin/toybox
+[type=link] /usr/bin/uniq=/usr/bin/toybox
+[type=link] /usr/bin/unix2dos=/usr/bin/toybox
+[type=link] /usr/bin/unlink=/usr/bin/toybox
+[type=link] /usr/bin/uudecode=/usr/bin/toybox
+[type=link] /usr/bin/uuencode=/usr/bin/toybox
+[type=link] /usr/bin/uuidgen=/usr/bin/toybox
+[type=link] /usr/bin/wc=/usr/bin/toybox
+[type=link] /usr/bin/which=/usr/bin/toybox
+[type=link] /usr/bin/whoami=/usr/bin/toybox
+[type=link] /usr/bin/xargs=/usr/bin/toybox
+[type=link] /usr/bin/xxd=/usr/bin/toybox
+[type=link] /usr/bin/yes=/usr/bin/toybox
+[type=link] /usr/bin/zcat=/usr/bin/toybox
+
+
+################################################################################################
+## ENV profile
+################################################################################################
+/etc/profile = {
+export HOME=/
+export SYSNAME=nto
+export TERM=qansi
+export PATH=/proc/boot:/sbin:/bin:/usr/bin:/usr/sbin:/usr/libexec
+export LD_LIBRARY_PATH=/proc/boot:/lib:/usr/lib:/lib/dll:/lib/dll/pci
+
+export PCI_HW_MODULE=/lib/dll/pci/pci_hw-bcm2711-rpi4.so
+export PCI_DEBUG_MODULE=/lib/dll/pci/pci_debug2.so
+export PCI_SLOG_MODULE=/lib/dll/pci/pci_slog2.so
+export PCI_BKWD_COMPAT_MODULE=/lib/dll/pci/pci_bkwd_compat.so
+}
+
+
+################################################################################################
+## Customize startup
+################################################################################################
+customize_startup.sh = {
+#!/bin/ksh
+
+if [ -e /scripts/board_startup.sh ]; then
+    echo "Starting board customize script ..."
+    ksh /scripts/board_startup.sh
+fi
+}
+
+
+
+################################################################################################
+## Script for launching the io-usb-otg
+################################################################################################
+usb_start.sh = {
+#!/bin/sh
+    VL805_VERSION=/dev/shmem/vl805_version.txt
+    pci-tool -d 1:0:0 --read="CFG:0x50" > $VL805_VERSION
+    if grep "50] 00000000" $VL805_VERSION > /dev/null; then
+        echo "Inform vc to load vl805 firmware"
+        mbox-bcm2711 notifyxhcireset=0x100000 > /dev/null 2>&1
+    fi
+    echo "Starting USB xHCI controller in the host mode (/dev/usb/*)..."
+    io-usb-otg -t memory=below1G -d bcm2711-xhci pindex=0,memory=below1G
+    waitfor /dev/usb/io-usb-otg
+    waitfor /dev/usb/devu-hcd-bcm2711-xhci.so
+}
+
+################################################################################################
+## GPIO utility
+################################################################################################
+/bin/gpio-bcm2711=gpio-bcm2711
+
+################################################################################################
+## Mailbox utility
+################################################################################################
+/bin/mbox-bcm2711=mbox-bcm2711
+
+################################################################################################
+## WIFI firmware and WPA utilities
+################################################################################################
+#[search=../install/etc/firmware] /etc/hotspot/firmware.bin=brcmfmac43455-sdio.bin
+#[search=../install/etc/firmware] /etc/hotspot/nvram.txt=brcmfmac43455-sdio.txt
+#[search=../install/etc/firmware] /etc/hotspot/firmware.clm_blob=brcmfmac43455-sdio.clm_blob
+#/usr/sbin/wpa_cli=wpa_cli
+#/usr/sbin/wpa_passphrase=wpa_passphrase
+#/usr/sbin/wpa_supplicant=wpa_supplicant
+
+#[perms=0555] /etc/wpa_act={
+#!/bin/sh
+#case  in
+#CONNECTED) echo __BOARD_FILES__   ID=$WPA_ID STR=$WPA_ID_STR >/dev/console; dhcp. -D rpi4 -i  ;;
+#DISCONNECTED) echo __BOARD_FILES__   >/dev/console; slay -f dhcp.; ifconfig  delete ;;
+#esac
+#}
+

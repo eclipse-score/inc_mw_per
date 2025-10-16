@@ -37,7 +37,11 @@ setup_starpls(
 copyright_checker(
     name = "copyright",
     srcs = [
+        ".github",
+        "docs",
         "src",
+        "tests",
+        "tools",
         "//:BUILD",
         "//:MODULE.bazel",
     ],

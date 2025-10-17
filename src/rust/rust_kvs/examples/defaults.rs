@@ -31,9 +31,10 @@ fn create_defaults_file(dir_path: PathBuf, instance_id: InstanceId) -> Result<()
 }
 
 fn main() -> Result<(), ErrorCode> {
-    // Temporary directory.
+    // Temporary directory and common backend.
     let dir = tempdir()?;
-    let dir_string = dir.path().to_string_lossy().to_string();
+    let dir_path = dir.path().to_path_buf();
+    let backend = Box::new(JsonBackendBuilder::new().working_dir(dir_path).build());
 
     // Instance ID for KVS object instances.
     let instance_id = InstanceId(0);
@@ -44,7 +45,7 @@ fn main() -> Result<(), ErrorCode> {
     // Build KVS instance for given instance ID and temporary directory.
     // `defaults` is set to `KvsDefaults::Required` - defaults are required.
     let builder = KvsBuilder::new(instance_id)
-        .dir(dir_string)
+        .backend(backend.clone())
         .defaults(KvsDefaults::Required);
     let kvs = builder.build()?;
 

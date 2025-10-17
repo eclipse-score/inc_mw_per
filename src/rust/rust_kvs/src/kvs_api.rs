@@ -12,10 +12,9 @@
 use crate::error_code::ErrorCode;
 use crate::kvs_value::KvsValue;
 use core::fmt;
-use std::path::PathBuf;
 
 /// Instance ID
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct InstanceId(pub usize);
 
 impl fmt::Display for InstanceId {
@@ -31,7 +30,7 @@ impl From<InstanceId> for usize {
 }
 
 /// Snapshot ID
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct SnapshotId(pub usize);
 
 impl fmt::Display for SnapshotId {
@@ -47,7 +46,7 @@ impl From<SnapshotId> for usize {
 }
 
 /// Defaults handling mode.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum KvsDefaults {
     /// Defaults are not loaded.
     Ignored,
@@ -60,7 +59,7 @@ pub enum KvsDefaults {
 }
 
 /// KVS load mode.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum KvsLoad {
     /// KVS is not loaded.
     Ignored,
@@ -94,8 +93,6 @@ pub trait KvsApi {
     fn snapshot_count(&self) -> usize;
     fn snapshot_max_count(&self) -> usize;
     fn snapshot_restore(&self, snapshot_id: SnapshotId) -> Result<(), ErrorCode>;
-    fn get_kvs_filename(&self, snapshot_id: SnapshotId) -> Result<PathBuf, ErrorCode>;
-    fn get_hash_filename(&self, snapshot_id: SnapshotId) -> Result<PathBuf, ErrorCode>;
 }
 
 #[cfg(test)]

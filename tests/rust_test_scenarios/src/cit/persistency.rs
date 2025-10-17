@@ -1,6 +1,6 @@
 use crate::helpers::kvs_instance::kvs_instance;
 use crate::helpers::kvs_parameters::KvsParameters;
-use crate::helpers::to_str;
+use crate::helpers::{kvs_hash_paths, to_str};
 use rust_kvs::prelude::*;
 use test_scenarios_rust::scenario::{Scenario, ScenarioGroup, ScenarioGroupImpl};
 use tracing::info;
@@ -41,13 +41,12 @@ impl Scenario for ExplicitFlush {
         {
             // Second KVS instance object - used for flush check.
             let kvs = kvs_instance(params).expect("Failed to create KVS instance");
-
-            let snapshot_id = SnapshotId(0);
-            let kvs_path_result = kvs.get_kvs_filename(snapshot_id);
-            let hash_path_result = kvs.get_hash_filename(snapshot_id);
+            let (kvs_path, hash_path) = kvs_hash_paths(&kvs, SnapshotId(0));
             info!(
-                kvs_path = format!("{kvs_path_result:?}"),
-                hash_path = format!("{hash_path_result:?}")
+                kvs_path = to_str(&kvs_path),
+                kvs_path_exists = kvs_path.exists(),
+                hash_path = to_str(&hash_path),
+                hash_path_exists = hash_path.exists(),
             );
 
             // Get values.

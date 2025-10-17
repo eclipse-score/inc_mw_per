@@ -4,10 +4,17 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
-rust_kvs.workspace = true
+rust_kvs = { workspace = true, features = ["logging"] }
 tinyjson.workspace = true
 tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.19", features = ["json"] }
 serde = { version = "1.0.219", features = ["derive"] }
 serde_json = "1.0.140"
 test_scenarios_rust = { git = "https://github.com/qorix-group/testing_tools.git", tag = "v0.2.0" }
+log = { version = "0.4.27", optional = true }
+simple_logger = { version = "5.0.0", optional = true }
+
+[features]
+default = ["logging"]
+score-log = []
+logging = ["log", "simple_logger"]

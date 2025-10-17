@@ -201,8 +201,10 @@ class TestSnapshotRestoreCurrent(CommonScenario):
     ):
         assert results.return_code == ResultCode.SUCCESS
 
-        assert results.stderr is not None
-        assert "error: tried to restore current KVS as snapshot" in results.stderr
+        # TODO: Restore 'stderr' capture for error logs.
+        # 'mw_log' prints to 'stdout'.
+        # 'stderr' would be preferred for pytest-based tests.
+        assert "Restoring current KVS snapshot is not allowed" in results.stdout
 
         result_log = logs_info_level.find_log("result")
         assert result_log is not None
@@ -244,8 +246,10 @@ class TestSnapshotRestoreNonexistent(CommonScenario):
     ):
         assert results.return_code == ResultCode.SUCCESS
 
-        assert results.stderr is not None
-        assert "error: tried to restore a non-existing snapshot" in results.stderr
+        # TODO: Restore 'stderr' capture for error logs.
+        # 'mw_log' prints to 'stdout'.
+        # 'stderr' would be preferred for pytest-based tests.
+        assert "Unable to restore non-existing snapshot" in results.stdout
 
         result_log = logs_info_level.find_log("result")
         assert result_log is not None

@@ -6,6 +6,12 @@ edition.workspace = true
 [dependencies]
 adler32.workspace = true
 tinyjson.workspace = true
+log = { version = "0.4.27", optional = true }
+
+[features]
+default = ["logging"]
+score-log = []
+logging = ["log"]
 
 [dev-dependencies]
 tempfile = "3.20"

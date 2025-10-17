@@ -183,12 +183,6 @@ Snapshot Count:
 Snapshot Restore:
     kvs_tool -o snapshotrestore -s 1
 
-Get KVS Filename:
-    kvs_tool -o getkvsfilename -s 1
-
-Get Hash Filename:
-    kvs_tool -o gethashfilename -s 1
-
 ---------------------------------------
 
 Create Test Data:

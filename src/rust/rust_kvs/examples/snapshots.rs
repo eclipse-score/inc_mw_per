@@ -6,9 +6,13 @@ use rust_kvs::prelude::*;
 use tempfile::tempdir;
 
 fn main() -> Result<(), ErrorCode> {
-    // Temporary directory.
+    // Temporary directory and common backend.
     let dir = tempdir()?;
     let dir_string = dir.path().to_string_lossy().to_string();
+    let backend_parameters = KvsMap::from([
+        ("name".to_string(), KvsValue::String("json".to_string())),
+        ("working_dir".to_string(), KvsValue::String(dir_string)),
+    ]);
 
     // Instance ID for KVS object instances.
     let instance_id = InstanceId(0);
@@ -17,7 +21,7 @@ fn main() -> Result<(), ErrorCode> {
         println!("-> `snapshot_count` and `snapshot_max_count` usage");
 
         // Build KVS instance for given instance ID and temporary directory.
-        let builder = KvsBuilder::new(instance_id).dir(dir_string.clone());
+        let builder = KvsBuilder::new(instance_id).backend_parameters(backend_parameters.clone());
         let kvs = builder.build()?;
 
         let max_count = kvs.snapshot_max_count() as u32;
@@ -38,7 +42,7 @@ fn main() -> Result<(), ErrorCode> {
         println!("-> `snapshot_restore` usage");
 
         // Build KVS instance for given instance ID and temporary directory.
-        let builder = KvsBuilder::new(instance_id).dir(dir_string.clone());
+        let builder = KvsBuilder::new(instance_id).backend_parameters(backend_parameters);
         let kvs = builder.build()?;
 
         let max_count = kvs.snapshot_max_count() as u32;

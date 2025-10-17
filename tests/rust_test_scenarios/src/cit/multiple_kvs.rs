@@ -1,4 +1,5 @@
-use crate::helpers::{kvs_instance::kvs_instance, kvs_parameters::KvsParameters};
+use crate::helpers::kvs_instance::kvs_instance;
+use crate::helpers::kvs_parameters::KvsParameters;
 use rust_kvs::prelude::KvsApi;
 use serde_json::Value;
 use test_scenarios_rust::scenario::{Scenario, ScenarioGroup, ScenarioGroupImpl};

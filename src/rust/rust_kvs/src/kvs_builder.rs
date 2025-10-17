@@ -10,12 +10,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::error_code::ErrorCode;
-use crate::kvs::{GenericKvs, KvsParameters};
+use crate::kvs::{Kvs, KvsParameters};
 use crate::kvs_api::{InstanceId, KvsDefaults, KvsLoad, SnapshotId};
-use crate::kvs_backend::{KvsBackend, KvsPathResolver};
-use crate::kvs_value::KvsMap;
-use std::marker::PhantomData;
-use std::path::PathBuf;
+use crate::kvs_backend::KvsBackend;
+use crate::kvs_backend_registry::KvsBackendRegistry;
+use crate::kvs_value::{KvsMap, KvsValue};
 use std::sync::{Arc, LazyLock, Mutex, MutexGuard, PoisonError};
 
 /// Maximum number of instances.
@@ -40,7 +39,7 @@ impl From<PoisonError<MutexGuard<'_, KvsData>>> for ErrorCode {
 /// KVS instance inner representation.
 pub(crate) struct KvsInner {
     /// KVS instance parameters.
-    pub(crate) parameters: KvsParameters,
+    pub(crate) parameters: Arc<KvsParameters>,
 
     /// KVS instance data.
     pub(crate) data: Arc<Mutex<KvsData>>,
@@ -56,18 +55,12 @@ impl From<PoisonError<MutexGuard<'_, [Option<KvsInner>; KVS_MAX_INSTANCES]>>> fo
 }
 
 /// Key-value-storage builder.
-pub struct GenericKvsBuilder<Backend: KvsBackend, PathResolver: KvsPathResolver = Backend> {
+pub struct KvsBuilder {
     /// KVS instance parameters.
     parameters: KvsParameters,
-
-    /// Marker for `Backend`.
-    _backend_marker: PhantomData<Backend>,
-
-    /// Marker for `PathResolver`.
-    _path_resolver_marker: PhantomData<PathResolver>,
 }
 
-impl<Backend: KvsBackend, PathResolver: KvsPathResolver> GenericKvsBuilder<Backend, PathResolver> {
+impl KvsBuilder {
     /// Create a builder to open the key-value-storage
     ///
     /// Only the instance ID must be set. All other settings are using default values until changed
@@ -83,15 +76,13 @@ impl<Backend: KvsBackend, PathResolver: KvsPathResolver> GenericKvsBuilder<Backe
             instance_id,
             defaults: KvsDefaults::Optional,
             kvs_load: KvsLoad::Optional,
-            working_dir: PathBuf::new(),
-            snapshot_max_count: 3,
+            backend_parameters: KvsMap::from([(
+                "name".to_string(),
+                KvsValue::String("json".to_string()),
+            )]),
         };
 
-        Self {
-            parameters,
-            _backend_marker: PhantomData,
-            _path_resolver_marker: PhantomData,
-        }
+        Self { parameters }
     }
 
     /// Return maximum number of allowed KVS instances.
@@ -126,28 +117,21 @@ impl<Backend: KvsBackend, PathResolver: KvsPathResolver> GenericKvsBuilder<Backe
         self
     }
 
-    /// Set the key-value-storage permanent storage directory
+    /// Set backend parameters.
     ///
     /// # Parameters
-    ///   * `dir`: Path to permanent storage
+    ///   * `parameters`: KVS backend parameters.
     ///
     /// # Return Values
     ///   * KvsBuilder instance
-    pub fn dir<P: Into<String>>(mut self, dir: P) -> Self {
-        self.parameters.working_dir = PathBuf::from(dir.into());
+    pub fn backend_parameters(mut self, parameters: KvsMap) -> Self {
+        self.parameters.backend_parameters = parameters;
         self
     }
 
-    /// Set the maximum number of snapshots to store.
-    ///
-    /// # Parameters
-    ///   * `snapshot_max_count`: Maximum number of snapshots to store.
-    ///
-    /// # Return Values
-    ///   * KvsBuilder instance
-    pub fn snapshot_max_count(mut self, snapshot_max_count: usize) -> Self {
-        self.parameters.snapshot_max_count = snapshot_max_count;
-        self
+    fn create_backend(backend_parameters: &KvsMap) -> Result<Box<dyn KvsBackend>, ErrorCode> {
+        let factory = KvsBackendRegistry::from_parameters(backend_parameters)?;
+        factory.create(backend_parameters)
     }
 
     /// Finalize the builder and open the key-value-storage
@@ -166,10 +150,10 @@ impl<Backend: KvsBackend, PathResolver: KvsPathResolver> GenericKvsBuilder<Backe
     ///   * `ErrorCode::KvsFileReadError`: KVS file read error
     ///   * `ErrorCode::KvsHashFileReadError`: KVS hash file read error
     ///   * `ErrorCode::UnmappedError`: Generic error
-    pub fn build(self) -> Result<GenericKvs<Backend, PathResolver>, ErrorCode> {
-        let instance_id = self.parameters.clone().instance_id;
+    pub fn build(self) -> Result<Kvs, ErrorCode> {
+        let parameters = Arc::new(self.parameters);
+        let instance_id = parameters.instance_id;
         let instance_id_index: usize = instance_id.into();
-        let working_dir = self.parameters.clone().working_dir;
 
         // Check if instance already exists.
         {
@@ -178,7 +162,7 @@ impl<Backend: KvsBackend, PathResolver: KvsPathResolver> GenericKvsBuilder<Backe
                 Some(kvs_pool_entry) => match kvs_pool_entry {
                     // If instance exists then parameters must match.
                     Some(kvs_inner) => {
-                        if kvs_inner.parameters == self.parameters {
+                        if kvs_inner.parameters == parameters {
                             Ok(Some(kvs_inner))
                         } else {
                             Err(ErrorCode::InstanceParametersMismatch)
@@ -193,42 +177,44 @@ impl<Backend: KvsBackend, PathResolver: KvsPathResolver> GenericKvsBuilder<Backe
 
             // Return existing instance if initialized.
             if let Some(kvs_inner) = kvs_inner_option {
-                return Ok(GenericKvs::<Backend, PathResolver>::new(
+                let backend = Self::create_backend(&parameters.backend_parameters)?;
+                return Ok(Kvs::new(
                     kvs_inner.data.clone(),
                     kvs_inner.parameters.clone(),
+                    backend,
                 ));
             }
         }
 
+        // Initialize backend.
+        let backend = Self::create_backend(&parameters.backend_parameters)?;
+
         // Initialize KVS instance with provided parameters.
-        // Load file containing defaults.
-        let defaults_path = PathResolver::defaults_file_path(&working_dir, instance_id);
-        let defaults_map = match self.parameters.defaults {
+        // Load defaults.
+        let defaults_map = match parameters.defaults {
             KvsDefaults::Ignored => KvsMap::new(),
-            KvsDefaults::Optional => {
-                if defaults_path.exists() {
-                    Backend::load_kvs(&defaults_path, None)?
-                } else {
-                    KvsMap::new()
-                }
-            }
-            KvsDefaults::Required => Backend::load_kvs(&defaults_path, None)?,
+            KvsDefaults::Optional => match backend.load_defaults(instance_id) {
+                Ok(map) => map,
+                Err(e) => match e {
+                    ErrorCode::FileNotFound => KvsMap::new(),
+                    _ => return Err(e),
+                },
+            },
+            KvsDefaults::Required => backend.load_defaults(instance_id)?,
         };
 
         // Load KVS and hash files.
         let snapshot_id = SnapshotId(0);
-        let kvs_path = PathResolver::kvs_file_path(&working_dir, instance_id, snapshot_id);
-        let hash_path = PathResolver::hash_file_path(&working_dir, instance_id, snapshot_id);
-        let kvs_map = match self.parameters.kvs_load {
+        let kvs_map = match parameters.kvs_load {
             KvsLoad::Ignored => KvsMap::new(),
-            KvsLoad::Optional => {
-                if kvs_path.exists() && hash_path.exists() {
-                    Backend::load_kvs(&kvs_path, Some(&hash_path))?
-                } else {
-                    KvsMap::new()
-                }
-            }
-            KvsLoad::Required => Backend::load_kvs(&kvs_path, Some(&hash_path))?,
+            KvsLoad::Optional => match backend.load_kvs(instance_id, snapshot_id) {
+                Ok(map) => map,
+                Err(e) => match e {
+                    ErrorCode::FileNotFound => KvsMap::new(),
+                    _ => return Err(e),
+                },
+            },
+            KvsLoad::Required => backend.load_kvs(instance_id, snapshot_id)?,
         };
 
         // Shared object containing data.
@@ -246,22 +232,23 @@ impl<Backend: KvsBackend, PathResolver: KvsPathResolver> GenericKvsBuilder<Backe
             };
 
             let _ = kvs_pool_entry.insert(KvsInner {
-                parameters: self.parameters.clone(),
+                parameters: parameters.clone(),
                 data: data.clone(),
             });
         }
 
-        Ok(GenericKvs::new(data, self.parameters))
+        Ok(Kvs::new(data, parameters, backend))
     }
 }
 
 #[cfg(test)]
 mod kvs_builder_tests {
+    // Tests reuse JSON backend to ensure valid load/save behavior.
     use crate::error_code::ErrorCode;
-    use crate::json_backend::JsonBackend;
-    use crate::kvs_api::{InstanceId, KvsApi, KvsDefaults, KvsLoad, SnapshotId};
-    use crate::kvs_backend::{KvsBackend, KvsPathResolver};
-    use crate::kvs_builder::{GenericKvsBuilder, KVS_MAX_INSTANCES, KVS_POOL};
+    use crate::json_backend::{JsonBackend, JsonBackendBuilder};
+    use crate::kvs::KvsParameters;
+    use crate::kvs_api::{InstanceId, KvsDefaults, KvsLoad, SnapshotId};
+    use crate::kvs_builder::{KvsBuilder, KVS_MAX_INSTANCES, KVS_POOL};
     use crate::kvs_value::{KvsMap, KvsValue};
     use std::ops::DerefMut;
     use std::path::{Path, PathBuf};
@@ -284,10 +271,57 @@ mod kvs_builder_tests {
         serial_lock
     }
 
-    /// KVS backend type used for tests.
-    /// Tests reuse JSON backend to ensure valid load/save behavior.
-    type TestBackend = JsonBackend;
-    type TestKvsBuilder = GenericKvsBuilder<TestBackend>;
+    /// Create `KvsMap` based on provided parameters.
+    struct BackendParametersBuilder {
+        name: KvsValue,
+        working_dir: Option<KvsValue>,
+        snapshot_max_count: Option<KvsValue>,
+    }
+
+    impl BackendParametersBuilder {
+        pub fn new() -> Self {
+            Self {
+                name: KvsValue::String("json".to_string()),
+                working_dir: None,
+                snapshot_max_count: None,
+            }
+        }
+
+        #[allow(dead_code)]
+        pub fn name(mut self, name: String) -> Self {
+            self.name = KvsValue::String(name);
+            self
+        }
+
+        pub fn working_dir(mut self, working_dir: PathBuf) -> Self {
+            self.working_dir = Some(KvsValue::String(working_dir.to_string_lossy().to_string()));
+            self
+        }
+
+        pub fn snapshot_max_count(mut self, snapshot_max_count: usize) -> Self {
+            self.snapshot_max_count = Some(KvsValue::U64(snapshot_max_count as u64));
+            self
+        }
+
+        pub fn build(self) -> KvsMap {
+            let mut backend_parameters = KvsMap::new();
+
+            // Set name.
+            backend_parameters.insert("name".to_string(), self.name);
+
+            // Set working directory.
+            if let Some(working_dir) = self.working_dir {
+                backend_parameters.insert("working_dir".to_string(), working_dir);
+            }
+
+            // Set snapshot max count.
+            if let Some(snapshot_max_count) = self.snapshot_max_count {
+                backend_parameters.insert("snapshot_max_count".to_string(), snapshot_max_count);
+            }
+
+            backend_parameters
+        }
+    }
 
     #[test]
     fn test_new_ok() {
@@ -295,12 +329,12 @@ mod kvs_builder_tests {
 
         // Check only if panic happens.
         let instance_id = InstanceId(0);
-        let _ = TestKvsBuilder::new(instance_id);
+        let _ = KvsBuilder::new(instance_id);
     }
 
     #[test]
     fn test_max_instances() {
-        assert_eq!(TestKvsBuilder::max_instances(), KVS_MAX_INSTANCES);
+        assert_eq!(KvsBuilder::max_instances(), KVS_MAX_INSTANCES);
     }
 
     #[test]
@@ -308,15 +342,18 @@ mod kvs_builder_tests {
         let _lock = lock_and_reset();
 
         let instance_id = InstanceId(1);
-        let builder = TestKvsBuilder::new(instance_id);
+        let builder = KvsBuilder::new(instance_id);
         let kvs = builder.build().unwrap();
 
-        assert_eq!(kvs.parameters().instance_id, instance_id);
-        // Check default values.
-        assert_eq!(kvs.parameters().defaults, KvsDefaults::Optional);
-        assert_eq!(kvs.parameters().kvs_load, KvsLoad::Optional);
-        assert_eq!(kvs.parameters().working_dir, PathBuf::new());
-        assert_eq!(kvs.snapshot_max_count(), 3);
+        // Assert params as expected.
+        let expected_parameters = KvsParameters {
+            instance_id,
+            defaults: KvsDefaults::Optional,
+            kvs_load: KvsLoad::Optional,
+            backend_parameters: BackendParametersBuilder::new().build(),
+        };
+
+        assert_eq!(*kvs.parameters(), expected_parameters);
     }
 
     #[test]
@@ -324,13 +361,18 @@ mod kvs_builder_tests {
         let _lock = lock_and_reset();
 
         let instance_id = InstanceId(1);
-        let builder = TestKvsBuilder::new(instance_id).defaults(KvsDefaults::Ignored);
+        let builder = KvsBuilder::new(instance_id).defaults(KvsDefaults::Ignored);
         let kvs = builder.build().unwrap();
-        assert_eq!(kvs.parameters().instance_id, instance_id);
-        assert_eq!(kvs.parameters().defaults, KvsDefaults::Ignored);
-        assert_eq!(kvs.parameters().kvs_load, KvsLoad::Optional);
-        assert_eq!(kvs.parameters().working_dir, PathBuf::new());
-        assert_eq!(kvs.snapshot_max_count(), 3);
+
+        // Assert params as expected.
+        let expected_parameters = KvsParameters {
+            instance_id,
+            defaults: KvsDefaults::Ignored,
+            kvs_load: KvsLoad::Optional,
+            backend_parameters: BackendParametersBuilder::new().build(),
+        };
+
+        assert_eq!(*kvs.parameters(), expected_parameters);
     }
 
     #[test]
@@ -338,44 +380,44 @@ mod kvs_builder_tests {
         let _lock = lock_and_reset();
 
         let instance_id = InstanceId(1);
-        let builder = TestKvsBuilder::new(instance_id).kvs_load(KvsLoad::Ignored);
+        let builder = KvsBuilder::new(instance_id).kvs_load(KvsLoad::Ignored);
         let kvs = builder.build().unwrap();
-        assert_eq!(kvs.parameters().instance_id, instance_id);
-        assert_eq!(kvs.parameters().defaults, KvsDefaults::Optional);
-        assert_eq!(kvs.parameters().kvs_load, KvsLoad::Ignored);
-        assert_eq!(kvs.parameters().working_dir, PathBuf::new());
-        assert_eq!(kvs.snapshot_max_count(), 3);
+
+        // Assert params as expected.
+        let expected_parameters = KvsParameters {
+            instance_id,
+            defaults: KvsDefaults::Optional,
+            kvs_load: KvsLoad::Ignored,
+            backend_parameters: BackendParametersBuilder::new().build(),
+        };
+
+        assert_eq!(*kvs.parameters(), expected_parameters);
     }
 
     #[test]
-    fn test_parameters_dir() {
+    fn test_parameters_backend_parameters() {
         let _lock = lock_and_reset();
 
         let dir = tempdir().unwrap();
-        let dir_string = dir.path().to_string_lossy().to_string();
+        let dir_path = dir.path().to_path_buf();
 
         let instance_id = InstanceId(5);
-        let builder = TestKvsBuilder::new(instance_id).dir(dir_string.clone());
+        let backend_parameters = BackendParametersBuilder::new()
+            .working_dir(dir_path.clone())
+            .snapshot_max_count(1234)
+            .build();
+        let builder = KvsBuilder::new(instance_id).backend_parameters(backend_parameters.clone());
         let kvs = builder.build().unwrap();
-        assert_eq!(kvs.parameters().instance_id, instance_id);
-        assert_eq!(kvs.parameters().defaults, KvsDefaults::Optional);
-        assert_eq!(kvs.parameters().kvs_load, KvsLoad::Optional);
-        assert_eq!(kvs.parameters().working_dir, dir.path());
-        assert_eq!(kvs.snapshot_max_count(), 3);
-    }
 
-    #[test]
-    fn test_parameters_snapshot_max_count() {
-        let _lock = lock_and_reset();
+        // Assert params as expected.
+        let expected_parameters = KvsParameters {
+            instance_id,
+            defaults: KvsDefaults::Optional,
+            kvs_load: KvsLoad::Optional,
+            backend_parameters,
+        };
 
-        let instance_id = InstanceId(1);
-        let builder = TestKvsBuilder::new(instance_id).snapshot_max_count(1234);
-        let kvs = builder.build().unwrap();
-        assert_eq!(kvs.parameters().instance_id, instance_id);
-        assert_eq!(kvs.parameters().defaults, KvsDefaults::Optional);
-        assert_eq!(kvs.parameters().kvs_load, KvsLoad::Optional);
-        assert_eq!(kvs.parameters().working_dir, PathBuf::new());
-        assert_eq!(kvs.snapshot_max_count(), 1234);
+        assert_eq!(*kvs.parameters(), expected_parameters);
     }
 
     #[test]
@@ -383,20 +425,27 @@ mod kvs_builder_tests {
         let _lock = lock_and_reset();
 
         let dir = tempdir().unwrap();
-        let dir_string = dir.path().to_string_lossy().to_string();
+        let dir_path = dir.path().to_path_buf();
 
         let instance_id = InstanceId(1);
-        let builder = TestKvsBuilder::new(instance_id)
+        let backend_parameters = BackendParametersBuilder::new()
+            .working_dir(dir_path.clone())
+            .snapshot_max_count(1234)
+            .build();
+        let builder = KvsBuilder::new(instance_id)
             .defaults(KvsDefaults::Ignored)
             .kvs_load(KvsLoad::Ignored)
-            .dir(dir_string)
-            .snapshot_max_count(1234);
+            .backend_parameters(backend_parameters.clone());
         let kvs = builder.build().unwrap();
-        assert_eq!(kvs.parameters().instance_id, instance_id);
-        assert_eq!(kvs.parameters().defaults, KvsDefaults::Ignored);
-        assert_eq!(kvs.parameters().kvs_load, KvsLoad::Ignored);
-        assert_eq!(kvs.parameters().working_dir, dir.path());
-        assert_eq!(kvs.snapshot_max_count(), 1234);
+
+        let expected_parameters = KvsParameters {
+            instance_id,
+            defaults: KvsDefaults::Ignored,
+            kvs_load: KvsLoad::Ignored,
+            backend_parameters,
+        };
+
+        assert_eq!(*kvs.parameters(), expected_parameters);
     }
 
     #[test]
@@ -404,7 +453,7 @@ mod kvs_builder_tests {
         let _lock = lock_and_reset();
 
         let instance_id = InstanceId(1);
-        let builder = TestKvsBuilder::new(instance_id);
+        let builder = KvsBuilder::new(instance_id);
         let _ = builder.build().unwrap();
     }
 
@@ -413,27 +462,34 @@ mod kvs_builder_tests {
         let _lock = lock_and_reset();
 
         let dir = tempdir().unwrap();
-        let dir_string = dir.path().to_string_lossy().to_string();
+        let dir_path = dir.path().to_path_buf();
 
         // Create two instances with same parameters.
         let instance_id = InstanceId(1);
-        let builder1 = TestKvsBuilder::new(instance_id)
+        let backend_parameters = BackendParametersBuilder::new()
+            .working_dir(dir_path.clone())
+            .build();
+        let builder1 = KvsBuilder::new(instance_id)
             .defaults(KvsDefaults::Ignored)
             .kvs_load(KvsLoad::Ignored)
-            .dir(dir_string.clone());
+            .backend_parameters(backend_parameters.clone());
         let _ = builder1.build().unwrap();
 
-        let builder2 = TestKvsBuilder::new(instance_id)
+        let builder2 = KvsBuilder::new(instance_id)
             .defaults(KvsDefaults::Ignored)
             .kvs_load(KvsLoad::Ignored)
-            .dir(dir_string);
+            .backend_parameters(backend_parameters.clone());
         let kvs = builder2.build().unwrap();
 
         // Assert params as expected.
-        assert_eq!(kvs.parameters().instance_id, instance_id);
-        assert_eq!(kvs.parameters().defaults, KvsDefaults::Ignored);
-        assert_eq!(kvs.parameters().kvs_load, KvsLoad::Ignored);
-        assert_eq!(kvs.parameters().working_dir, dir.path());
+        let expected_parameters = KvsParameters {
+            instance_id,
+            defaults: KvsDefaults::Ignored,
+            kvs_load: KvsLoad::Ignored,
+            backend_parameters,
+        };
+
+        assert_eq!(*kvs.parameters(), expected_parameters);
     }
 
     #[test]
@@ -441,20 +497,23 @@ mod kvs_builder_tests {
         let _lock = lock_and_reset();
 
         let dir = tempdir().unwrap();
-        let dir_string = dir.path().to_string_lossy().to_string();
+        let dir_path = dir.path().to_path_buf();
 
         // Create two instances with same parameters.
         let instance_id = InstanceId(1);
-        let builder1 = TestKvsBuilder::new(instance_id)
+        let backend_parameters = BackendParametersBuilder::new()
+            .working_dir(dir_path.clone())
+            .build();
+        let builder1 = KvsBuilder::new(instance_id)
             .defaults(KvsDefaults::Ignored)
             .kvs_load(KvsLoad::Optional)
-            .dir(dir_string.clone());
+            .backend_parameters(backend_parameters.clone());
         let _ = builder1.build().unwrap();
 
-        let builder2 = TestKvsBuilder::new(instance_id)
+        let builder2 = KvsBuilder::new(instance_id)
             .defaults(KvsDefaults::Optional)
             .kvs_load(KvsLoad::Ignored)
-            .dir(dir_string);
+            .backend_parameters(backend_parameters.clone());
         let result = builder2.build();
 
         assert!(result.is_err_and(|e| e == ErrorCode::InstanceParametersMismatch));
@@ -465,7 +524,7 @@ mod kvs_builder_tests {
         let _lock = lock_and_reset();
 
         let instance_id = InstanceId(123);
-        let result = TestKvsBuilder::new(instance_id).build();
+        let result = KvsBuilder::new(instance_id).build();
         assert!(result.is_err_and(|e| e == ErrorCode::InvalidInstanceId));
     }
 
@@ -474,13 +533,16 @@ mod kvs_builder_tests {
         working_dir: &Path,
         instance_id: InstanceId,
     ) -> Result<PathBuf, ErrorCode> {
-        let defaults_file_path = TestBackend::defaults_file_path(working_dir, instance_id);
+        let backend = JsonBackendBuilder::new()
+            .working_dir(working_dir.to_path_buf())
+            .build();
+        let defaults_file_path = backend.defaults_file_path(instance_id);
         let kvs_map = KvsMap::from([
             ("number1".to_string(), KvsValue::F64(123.0)),
             ("bool1".to_string(), KvsValue::Boolean(true)),
             ("string1".to_string(), KvsValue::String("Hello".to_string())),
         ]);
-        TestBackend::save_kvs(&kvs_map, &defaults_file_path, None)?;
+        JsonBackend::save(&kvs_map, &defaults_file_path, None)?;
 
         Ok(defaults_file_path)
     }
@@ -491,14 +553,17 @@ mod kvs_builder_tests {
         instance_id: InstanceId,
         snapshot_id: SnapshotId,
     ) -> Result<(PathBuf, PathBuf), ErrorCode> {
-        let kvs_file_path = TestBackend::kvs_file_path(working_dir, instance_id, snapshot_id);
-        let hash_file_path = TestBackend::hash_file_path(working_dir, instance_id, snapshot_id);
+        let backend = JsonBackendBuilder::new()
+            .working_dir(working_dir.to_path_buf())
+            .build();
+        let kvs_file_path = backend.kvs_file_path(instance_id, snapshot_id);
+        let hash_file_path = backend.hash_file_path(instance_id, snapshot_id);
         let kvs_map = KvsMap::from([
             ("number1".to_string(), KvsValue::F64(321.0)),
             ("bool1".to_string(), KvsValue::Boolean(false)),
             ("string1".to_string(), KvsValue::String("Hi".to_string())),
         ]);
-        TestBackend::save_kvs(&kvs_map, &kvs_file_path, Some(&hash_file_path))?;
+        JsonBackend::save(&kvs_map, &kvs_file_path, Some(&hash_file_path))?;
 
         Ok((kvs_file_path, hash_file_path))
     }
@@ -508,13 +573,16 @@ mod kvs_builder_tests {
         let _lock = lock_and_reset();
 
         let dir = tempdir().unwrap();
-        let dir_string = dir.path().to_string_lossy().to_string();
+        let dir_path = dir.path().to_path_buf();
 
         let instance_id = InstanceId(2);
-        create_defaults_file(dir.path(), instance_id).unwrap();
-        let builder = TestKvsBuilder::new(instance_id)
+        let backend_parameters = BackendParametersBuilder::new()
+            .working_dir(dir_path.clone())
+            .build();
+        create_defaults_file(&dir_path, instance_id).unwrap();
+        let builder = KvsBuilder::new(instance_id)
             .defaults(KvsDefaults::Ignored)
-            .dir(dir_string);
+            .backend_parameters(backend_parameters);
         let kvs = builder.build().unwrap();
 
         assert_eq!(kvs.parameters().defaults, KvsDefaults::Ignored);
@@ -529,12 +597,15 @@ mod kvs_builder_tests {
         let _lock = lock_and_reset();
 
         let dir = tempdir().unwrap();
-        let dir_string = dir.path().to_string_lossy().to_string();
+        let dir_path = dir.path().to_path_buf();
 
         let instance_id = InstanceId(2);
-        let builder = TestKvsBuilder::new(instance_id)
+        let backend_parameters = BackendParametersBuilder::new()
+            .working_dir(dir_path.clone())
+            .build();
+        let builder = KvsBuilder::new(instance_id)
             .defaults(KvsDefaults::Optional)
-            .dir(dir_string);
+            .backend_parameters(backend_parameters);
         let kvs = builder.build().unwrap();
 
         assert_eq!(kvs.parameters().defaults, KvsDefaults::Optional);
@@ -549,13 +620,16 @@ mod kvs_builder_tests {
         let _lock = lock_and_reset();
 
         let dir = tempdir().unwrap();
-        let dir_string = dir.path().to_string_lossy().to_string();
+        let dir_path = dir.path().to_path_buf();
 
         let instance_id = InstanceId(2);
-        create_defaults_file(dir.path(), instance_id).unwrap();
-        let builder = TestKvsBuilder::new(instance_id)
+        let backend_parameters = BackendParametersBuilder::new()
+            .working_dir(dir_path.clone())
+            .build();
+        create_defaults_file(&dir_path, instance_id).unwrap();
+        let builder = KvsBuilder::new(instance_id)
             .defaults(KvsDefaults::Optional)
-            .dir(dir_string);
+            .backend_parameters(backend_parameters);
         let kvs = builder.build().unwrap();
 
         assert_eq!(kvs.parameters().defaults, KvsDefaults::Optional);
@@ -570,12 +644,15 @@ mod kvs_builder_tests {
         let _lock = lock_and_reset();
 
         let dir = tempdir().unwrap();
-        let dir_string = dir.path().to_string_lossy().to_string();
+        let dir_path = dir.path().to_path_buf();
 
         let instance_id = InstanceId(2);
-        let builder = TestKvsBuilder::new(instance_id)
+        let backend_parameters = BackendParametersBuilder::new()
+            .working_dir(dir_path.clone())
+            .build();
+        let builder = KvsBuilder::new(instance_id)
             .defaults(KvsDefaults::Required)
-            .dir(dir_string);
+            .backend_parameters(backend_parameters);
         let result = builder.build();
 
         assert!(result.is_err_and(|e| e == ErrorCode::FileNotFound));
@@ -586,13 +663,16 @@ mod kvs_builder_tests {
         let _lock = lock_and_reset();
 
         let dir = tempdir().unwrap();
-        let dir_string = dir.path().to_string_lossy().to_string();
+        let dir_path = dir.path().to_path_buf();
 
         let instance_id = InstanceId(2);
-        create_defaults_file(dir.path(), instance_id).unwrap();
-        let builder = TestKvsBuilder::new(instance_id)
+        let backend_parameters = BackendParametersBuilder::new()
+            .working_dir(dir_path.clone())
+            .build();
+        create_defaults_file(&dir_path, instance_id).unwrap();
+        let builder = KvsBuilder::new(instance_id)
             .defaults(KvsDefaults::Required)
-            .dir(dir_string);
+            .backend_parameters(backend_parameters);
         let kvs = builder.build().unwrap();
 
         assert_eq!(kvs.parameters().defaults, KvsDefaults::Required);
@@ -607,13 +687,16 @@ mod kvs_builder_tests {
         let _lock = lock_and_reset();
 
         let dir = tempdir().unwrap();
-        let dir_string = dir.path().to_string_lossy().to_string();
+        let dir_path = dir.path().to_path_buf();
 
         let instance_id = InstanceId(2);
-        create_kvs_files(dir.path(), instance_id, SnapshotId(0)).unwrap();
-        let builder = TestKvsBuilder::new(instance_id)
+        let backend_parameters = BackendParametersBuilder::new()
+            .working_dir(dir_path.clone())
+            .build();
+        create_kvs_files(&dir_path, instance_id, SnapshotId(0)).unwrap();
+        let builder = KvsBuilder::new(instance_id)
             .kvs_load(KvsLoad::Ignored)
-            .dir(dir_string);
+            .backend_parameters(backend_parameters);
         let kvs = builder.build().unwrap();
 
         assert_eq!(kvs.parameters().kvs_load, KvsLoad::Ignored);
@@ -628,12 +711,15 @@ mod kvs_builder_tests {
         let _lock = lock_and_reset();
 
         let dir = tempdir().unwrap();
-        let dir_string = dir.path().to_string_lossy().to_string();
+        let dir_path = dir.path().to_path_buf();
 
         let instance_id = InstanceId(2);
-        let builder = TestKvsBuilder::new(instance_id)
+        let backend_parameters = BackendParametersBuilder::new()
+            .working_dir(dir_path.clone())
+            .build();
+        let builder = KvsBuilder::new(instance_id)
             .kvs_load(KvsLoad::Optional)
-            .dir(dir_string);
+            .backend_parameters(backend_parameters);
         let kvs = builder.build().unwrap();
 
         assert_eq!(kvs.parameters().kvs_load, KvsLoad::Optional);
@@ -649,19 +735,18 @@ mod kvs_builder_tests {
         let _lock = lock_and_reset();
 
         let dir = tempdir().unwrap();
-        let dir_string = dir.path().to_string_lossy().to_string();
+        let dir_path = dir.path().to_path_buf();
 
         let instance_id = InstanceId(2);
-        create_kvs_files(dir.path(), instance_id, SnapshotId(0)).unwrap();
-        std::fs::remove_file(TestBackend::hash_file_path(
-            dir.path(),
-            instance_id,
-            SnapshotId(0),
-        ))
-        .unwrap();
-        let builder = TestKvsBuilder::new(instance_id)
+        let backend_parameters = BackendParametersBuilder::new()
+            .working_dir(dir_path.clone())
+            .build();
+        let (_kvs_path, hash_path) =
+            create_kvs_files(&dir_path, instance_id, SnapshotId(0)).unwrap();
+        std::fs::remove_file(hash_path).unwrap();
+        let builder = KvsBuilder::new(instance_id)
             .kvs_load(KvsLoad::Optional)
-            .dir(dir_string);
+            .backend_parameters(backend_parameters);
         let result = builder.build();
 
         assert!(result.is_err_and(|e| e == ErrorCode::KvsHashFileReadError));
@@ -673,19 +758,18 @@ mod kvs_builder_tests {
         let _lock = lock_and_reset();
 
         let dir = tempdir().unwrap();
-        let dir_string = dir.path().to_string_lossy().to_string();
+        let dir_path = dir.path().to_path_buf();
 
         let instance_id = InstanceId(2);
-        create_kvs_files(dir.path(), instance_id, SnapshotId(0)).unwrap();
-        std::fs::remove_file(TestBackend::kvs_file_path(
-            dir.path(),
-            instance_id,
-            SnapshotId(0),
-        ))
-        .unwrap();
-        let builder = TestKvsBuilder::new(instance_id)
+        let backend_parameters = BackendParametersBuilder::new()
+            .working_dir(dir_path.clone())
+            .build();
+        let (kvs_path, _hash_path) =
+            create_kvs_files(&dir_path, instance_id, SnapshotId(0)).unwrap();
+        std::fs::remove_file(kvs_path).unwrap();
+        let builder = KvsBuilder::new(instance_id)
             .kvs_load(KvsLoad::Optional)
-            .dir(dir_string);
+            .backend_parameters(backend_parameters);
         let result = builder.build();
 
         assert!(result.is_err_and(|e| e == ErrorCode::FileNotFound));
@@ -696,13 +780,16 @@ mod kvs_builder_tests {
         let _lock = lock_and_reset();
 
         let dir = tempdir().unwrap();
-        let dir_string = dir.path().to_string_lossy().to_string();
+        let dir_path = dir.path().to_path_buf();
 
         let instance_id = InstanceId(2);
-        create_kvs_files(dir.path(), instance_id, SnapshotId(0)).unwrap();
-        let builder = TestKvsBuilder::new(instance_id)
+        let backend_parameters = BackendParametersBuilder::new()
+            .working_dir(dir_path.clone())
+            .build();
+        create_kvs_files(&dir_path, instance_id, SnapshotId(0)).unwrap();
+        let builder = KvsBuilder::new(instance_id)
             .kvs_load(KvsLoad::Optional)
-            .dir(dir_string);
+            .backend_parameters(backend_parameters);
         let kvs = builder.build().unwrap();
 
         assert_eq!(kvs.parameters().kvs_load, KvsLoad::Optional);
@@ -717,12 +804,15 @@ mod kvs_builder_tests {
         let _lock = lock_and_reset();
 
         let dir = tempdir().unwrap();
-        let dir_string = dir.path().to_string_lossy().to_string();
+        let dir_path = dir.path().to_path_buf();
 
         let instance_id = InstanceId(2);
-        let builder = TestKvsBuilder::new(instance_id)
+        let backend_parameters = BackendParametersBuilder::new()
+            .working_dir(dir_path.clone())
+            .build();
+        let builder = KvsBuilder::new(instance_id)
             .kvs_load(KvsLoad::Required)
-            .dir(dir_string);
+            .backend_parameters(backend_parameters);
         let result = builder.build();
 
         assert!(result.is_err_and(|e| e == ErrorCode::FileNotFound));
@@ -734,19 +824,18 @@ mod kvs_builder_tests {
         let _lock = lock_and_reset();
 
         let dir = tempdir().unwrap();
-        let dir_string = dir.path().to_string_lossy().to_string();
+        let dir_path = dir.path().to_path_buf();
 
         let instance_id = InstanceId(2);
-        create_kvs_files(dir.path(), instance_id, SnapshotId(0)).unwrap();
-        std::fs::remove_file(TestBackend::hash_file_path(
-            dir.path(),
-            instance_id,
-            SnapshotId(0),
-        ))
-        .unwrap();
-        let builder = TestKvsBuilder::new(instance_id)
+        let backend_parameters = BackendParametersBuilder::new()
+            .working_dir(dir_path.clone())
+            .build();
+        let (_kvs_path, hash_path) =
+            create_kvs_files(&dir_path, instance_id, SnapshotId(0)).unwrap();
+        std::fs::remove_file(hash_path).unwrap();
+        let builder = KvsBuilder::new(instance_id)
             .kvs_load(KvsLoad::Required)
-            .dir(dir_string);
+            .backend_parameters(backend_parameters);
         let result = builder.build();
 
         assert!(result.is_err_and(|e| e == ErrorCode::KvsHashFileReadError));
@@ -758,19 +847,18 @@ mod kvs_builder_tests {
         let _lock = lock_and_reset();
 
         let dir = tempdir().unwrap();
-        let dir_string = dir.path().to_string_lossy().to_string();
+        let dir_path = dir.path().to_path_buf();
 
         let instance_id = InstanceId(2);
-        create_kvs_files(dir.path(), instance_id, SnapshotId(0)).unwrap();
-        std::fs::remove_file(TestBackend::kvs_file_path(
-            dir.path(),
-            instance_id,
-            SnapshotId(0),
-        ))
-        .unwrap();
-        let builder = TestKvsBuilder::new(instance_id)
+        let backend_parameters = BackendParametersBuilder::new()
+            .working_dir(dir_path.clone())
+            .build();
+        let (kvs_path, _hash_path) =
+            create_kvs_files(&dir_path, instance_id, SnapshotId(0)).unwrap();
+        std::fs::remove_file(kvs_path).unwrap();
+        let builder = KvsBuilder::new(instance_id)
             .kvs_load(KvsLoad::Required)
-            .dir(dir_string);
+            .backend_parameters(backend_parameters);
         let result = builder.build();
 
         assert!(result.is_err_and(|e| e == ErrorCode::FileNotFound));
@@ -781,13 +869,16 @@ mod kvs_builder_tests {
         let _lock = lock_and_reset();
 
         let dir = tempdir().unwrap();
-        let dir_string = dir.path().to_string_lossy().to_string();
+        let dir_path = dir.path().to_path_buf();
 
         let instance_id = InstanceId(2);
-        create_kvs_files(dir.path(), instance_id, SnapshotId(0)).unwrap();
-        let builder = TestKvsBuilder::new(instance_id)
+        let backend_parameters = BackendParametersBuilder::new()
+            .working_dir(dir_path.clone())
+            .build();
+        create_kvs_files(&dir_path, instance_id, SnapshotId(0)).unwrap();
+        let builder = KvsBuilder::new(instance_id)
             .kvs_load(KvsLoad::Required)
-            .dir(dir_string);
+            .backend_parameters(backend_parameters);
         let kvs = builder.build().unwrap();
 
         assert_eq!(kvs.parameters().kvs_load, KvsLoad::Required);

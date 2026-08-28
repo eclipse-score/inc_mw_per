@@ -19,7 +19,7 @@ bazel_dep(name = "rules_rust", version = "0.68.2-score")
 
 # External dependencies for production (alphabetically sorted)
 bazel_dep(name = "platforms", version = "1.1.0")
-bazel_dep(name = "score_bazel_platforms", version = "1.0.0")
+bazel_dep(name = "score_bazel_platforms", version = "1.1.0")
 bazel_dep(name = "score_baselibs", version = "0.2.12")
 bazel_dep(name = "score_crates", version = "0.0.11")
 bazel_dep(name = "score_docs_as_code", version = "8.1.1")

@@ -80,64 +80,22 @@ bazel build --config=per-x86_64-linux -- //...
 
 ## Run
 
-List all rust library targets:
+List all runnable targets:
 
 ```bash
-bazel query 'kind(rust_library, //score/...)'
+bazel query 'kind(".*_binary rule", //...)'
 ```
 
 Run selected target:
 
 ```bash
-bazel run <TARGET_NAME>
+bazel run --config=per-x86_64-linux <TARGET_NAME>
 ```
 
-## Test
-
-List all test targets:
+### Run CLI tool
 
 ```bash
-bazel query 'kind(rust_test, //...)'
-```
-
-Run all tests:
-
-```bash
-bazel test //...
-```
-
-Run Component Integration Tests (grouped into single Test Suite):
-
-```bash
-bazel test //score/kvs/tests/test_cases:cit
-```
-
-Run selected test target:
-
-```bash
-bazel test <TARGET_NAME>
-```
-
-## Clippy
-
-- Clippy is currently disabled in `.bazelrc` because the upstream lint toolchain resolves an APE-hosted binary URL that returns HTTP 403 and breaks unrelated Bazel commands.
-
-## Cargo-based operations
-
-Please use Bazel whenever possible.
-
-### Build with Cargo
-
-Build using `cargo` directly:
-
-```bash
-cargo build
-```
-
-### Run CLI tool with Cargo
-
-```bash
-cargo run --help
+bazel run --config=per-x86_64-linux //score/kvs/rust_kvs_tool:kvs_tool -- --help
 ```
 
 ```text
@@ -203,25 +161,32 @@ Create Test Data:
 ---------------------------------------
 ```
 
-### Run tests with Cargo
+## Test
 
-Using `cargo test`:
-
-```bash
-cargo test
-```
-
-### Run examples with Cargo
-
-Examples can be run `cargo run`.
-Following examples are available: `basic`, `defaults`, `flush`, `snapshots`.
+List all test targets:
 
 ```bash
-cargo run --example <EXAMPLE_NAME>
+bazel query 'tests(//...)'
 ```
 
-Basic example command:
+Run selected test target:
 
 ```bash
-cargo run --example basic
+bazel test --config=per-x86_64-linux <TARGET_NAME>
 ```
+
+Run all tests:
+
+```bash
+bazel test --config=per-x86_64-linux //...
+```
+
+Run Component Integration Tests (grouped into single Test Suite):
+
+```bash
+bazel test --config=per-x86_64-linux //score/kvs/tests/test_cases:cit
+```
+
+## Clippy
+
+Clippy is currently disabled in `.bazelrc` because the upstream lint toolchain resolves an APE-hosted binary URL that returns HTTP 403 and breaks unrelated Bazel commands.

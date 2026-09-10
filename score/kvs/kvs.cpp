@@ -342,15 +342,7 @@ score::Result<KvsValue> Kvs::get_value(const std::string_view key)
         }
         else
         {
-            auto search_default = default_values.find(std::string(key));
-            if (search_default != default_values.end())
-            {
-                result = search_default->second;
-            }
-            else
-            {
-                result = score::MakeUnexpected(ErrorCode::KeyNotFound);
-            }
+            result = score::MakeUnexpected(ErrorCode::KeyNotFound);
         }
     }
     else

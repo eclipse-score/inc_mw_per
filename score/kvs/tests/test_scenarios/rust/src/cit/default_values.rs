@@ -17,6 +17,23 @@ use rust_kvs::prelude::*;
 use test_scenarios_rust::scenario::{Scenario, ScenarioGroup, ScenarioGroupImpl};
 use tracing::info;
 
+/// Formats `is_value_default` as `Ok(true)` / `Ok(false)` / `Err(KeyNotFound)`.
+fn value_is_default_str(kvs: &Kvs, key: &str) -> String {
+    match kvs.is_value_default(key) {
+        Ok(true) => "Ok(true)".to_string(),
+        Ok(false) => "Ok(false)".to_string(),
+        Err(_) => "Err(KeyNotFound)".to_string(),
+    }
+}
+
+/// Formats `get_value` as `Ok(F64(x.x))` / `Err(KeyNotFound)`, without falling back to the default.
+fn current_value_str(kvs: &Kvs, key: &str) -> String {
+    match kvs.get_value(key) {
+        Ok(KvsValue::F64(v)) => format!("Ok(F64({v:.1}))"),
+        _ => "Err(KeyNotFound)".to_string(),
+    }
+}
+
 /// Common test for default values.
 struct DefaultValues;
 
@@ -138,8 +155,8 @@ impl Scenario for ResetAllKeys {
             // Set non-default values.
             for (key, value) in key_values.iter() {
                 // Get value parameters before set.
-                let value_is_default = kvs.is_value_default(key).expect("Failed to check if default value");
-                let current_value = kvs.get_value_as::<f64>(key).expect("Failed to read value");
+                let value_is_default = value_is_default_str(&kvs, key);
+                let current_value = current_value_str(&kvs, key);
 
                 info!(key = key, value_is_default, current_value);
 
@@ -147,8 +164,8 @@ impl Scenario for ResetAllKeys {
                 kvs.set_value(key.clone(), *value).expect("Failed to set value");
 
                 // Get value parameters after set.
-                let value_is_default = kvs.is_value_default(key).expect("Failed to check if default value");
-                let current_value = kvs.get_value_as::<f64>(key).expect("Failed to read value");
+                let value_is_default = value_is_default_str(&kvs, key);
+                let current_value = current_value_str(&kvs, key);
 
                 info!(key, value_is_default, current_value);
             }
@@ -158,8 +175,8 @@ impl Scenario for ResetAllKeys {
 
             // Get value parameters after reset.
             for (key, _) in key_values.iter() {
-                let value_is_default = kvs.is_value_default(key).expect("Failed to check if default value");
-                let current_value = kvs.get_value_as::<f64>(key).expect("Failed to read value");
+                let value_is_default = value_is_default_str(&kvs, key);
+                let current_value = current_value_str(&kvs, key);
 
                 info!(key, value_is_default, current_value);
             }
@@ -197,8 +214,8 @@ impl Scenario for ResetSingleKey {
             // Set non-default values.
             for (key, value) in key_values.iter() {
                 // Get value parameters before set.
-                let value_is_default = kvs.is_value_default(key).expect("Failed to check if default value");
-                let current_value = kvs.get_value_as::<f64>(key).expect("Failed to read value");
+                let value_is_default = value_is_default_str(&kvs, key);
+                let current_value = current_value_str(&kvs, key);
 
                 info!(key = key, value_is_default, current_value);
 
@@ -206,8 +223,8 @@ impl Scenario for ResetSingleKey {
                 kvs.set_value(key.clone(), *value).expect("Failed to set value");
 
                 // Get value parameters after set.
-                let value_is_default = kvs.is_value_default(key).expect("Failed to check if default value");
-                let current_value = kvs.get_value_as::<f64>(key).expect("Failed to read value");
+                let value_is_default = value_is_default_str(&kvs, key);
+                let current_value = current_value_str(&kvs, key);
 
                 info!(key, value_is_default, current_value);
             }
@@ -218,8 +235,8 @@ impl Scenario for ResetSingleKey {
 
             // Get value parameters after reset.
             for (key, _) in key_values.iter() {
-                let value_is_default = kvs.is_value_default(key).expect("Failed to check if default value");
-                let current_value = kvs.get_value_as::<f64>(key).expect("Failed to read value");
+                let value_is_default = value_is_default_str(&kvs, key);
+                let current_value = current_value_str(&kvs, key);
 
                 info!(key, value_is_default, current_value);
             }

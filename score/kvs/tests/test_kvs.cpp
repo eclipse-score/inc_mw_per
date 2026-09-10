@@ -372,9 +372,8 @@ TEST(kvs_get_value, get_value_success)
     int32_t default_value(42);
     result.value().default_values.insert_or_assign("kvs", KvsValue(default_value));
     get_value_result = result.value().get_value("kvs");
-    ASSERT_TRUE(get_value_result);
-    EXPECT_EQ(get_value_result.value().getType(), KvsValue::Type::i32);
-    EXPECT_EQ(std::get<int32_t>(get_value_result.value().getValue()), 42);
+    ASSERT_FALSE(get_value_result);
+    EXPECT_EQ(get_value_result.error(), ErrorCode::KeyNotFound);
 
     cleanup_environment();
 }

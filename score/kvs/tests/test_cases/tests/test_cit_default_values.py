@@ -12,7 +12,6 @@
 # *******************************************************************************
 import json
 import re
-from math import isclose
 from pathlib import Path
 from typing import Any, Generator
 from zlib import adler32
@@ -148,7 +147,7 @@ class TestDefaultValues(DefaultValuesScenario):
             # Check values before change.
             assert logs[0].value_is_default == "Ok(true)"
             assert logs[0].default_value == f"Ok(F64({self.VALUE}))"
-            assert logs[0].current_value == f"Ok(F64({self.VALUE}))"
+            assert logs[0].current_value == f"Err(KeyNotFound)"
             # Check values after change.
             assert logs[1].value_is_default == "Ok(false)"
             assert logs[1].default_value == f"Ok(F64({self.VALUE}))"
@@ -225,7 +224,7 @@ class TestRemoveKey(DefaultValuesScenario):
             # Check values before set.
             assert logs[0].value_is_default == "Ok(true)"
             assert logs[0].default_value == f"Ok(F64({self.VALUE}))"
-            assert logs[0].current_value == f"Ok(F64({self.VALUE}))"
+            assert logs[0].current_value == "Err(KeyNotFound)"
             # Check values after set.
             assert logs[1].value_is_default == "Ok(false)"
             assert logs[1].default_value == f"Ok(F64({self.VALUE}))"
@@ -233,7 +232,7 @@ class TestRemoveKey(DefaultValuesScenario):
             # Check values after remove.
             assert logs[2].value_is_default == "Ok(true)"
             assert logs[2].default_value == f"Ok(F64({self.VALUE}))"
-            assert logs[2].current_value == f"Ok(F64({self.VALUE}))"
+            assert logs[2].current_value == "Err(KeyNotFound)"
 
         else:
             # Check values before set.
@@ -413,17 +412,17 @@ class TestResetAllKeys(DefaultValuesScenario):
         for i in range(self.NUM_VALUES):
             logs = logs_info_level.get_logs("key", value=f"test_number_{i}")
 
-            # Check values before set.
-            assert logs[0].value_is_default
-            assert isclose(logs[0].current_value, 432.1 * i, abs_tol=0.01)
+            # Check values before set (no explicit value written yet, only a default).
+            assert logs[0].value_is_default == "Ok(true)"
+            assert logs[0].current_value == "Err(KeyNotFound)"
 
             # Check values after set.
-            assert not logs[1].value_is_default
-            assert isclose(logs[1].current_value, 123.4 * i, abs_tol=0.01)
+            assert logs[1].value_is_default == "Ok(false)"
+            assert logs[1].current_value == f"Ok(F64({123.4 * i:.1f}))"
 
-            # Check values after reset.
-            assert logs[2].value_is_default
-            assert isclose(logs[2].current_value, 432.1 * i, abs_tol=0.01)
+            # Check values after reset (explicit value removed again).
+            assert logs[2].value_is_default == "Ok(true)"
+            assert logs[2].current_value == "Err(KeyNotFound)"
 
 
 @add_test_properties(
@@ -481,30 +480,30 @@ class TestResetSingleKey(DefaultValuesScenario):
             logs = logs_info_level.get_logs("key", value=f"test_number_{i}")
 
             if i == self.RESET_INDEX:
-                # Check values before set.
-                assert logs[0].value_is_default
-                assert isclose(logs[0].current_value, 432.1 * i, abs_tol=0.01)
+                # Check values before set (no explicit value written yet, only a default).
+                assert logs[0].value_is_default == "Ok(true)"
+                assert logs[0].current_value == "Err(KeyNotFound)"
 
                 # Check values after set.
-                assert not logs[1].value_is_default
-                assert isclose(logs[1].current_value, 123.4 * i, abs_tol=0.01)
+                assert logs[1].value_is_default == "Ok(false)"
+                assert logs[1].current_value == f"Ok(F64({123.4 * i:.1f}))"
 
-                # Check values after reset.
-                assert logs[2].value_is_default
-                assert isclose(logs[2].current_value, 432.1 * i, abs_tol=0.01)
+                # Check values after reset (explicit value removed again).
+                assert logs[2].value_is_default == "Ok(true)"
+                assert logs[2].current_value == "Err(KeyNotFound)"
 
             else:
-                # Check values before set.
-                assert logs[0].value_is_default
-                assert isclose(logs[0].current_value, 432.1 * i, abs_tol=0.01)
+                # Check values before set (no explicit value written yet, only a default).
+                assert logs[0].value_is_default == "Ok(true)"
+                assert logs[0].current_value == "Err(KeyNotFound)"
 
                 # Check values after set.
-                assert not logs[1].value_is_default
-                assert isclose(logs[1].current_value, 123.4 * i, abs_tol=0.01)
+                assert logs[1].value_is_default == "Ok(false)"
+                assert logs[1].current_value == f"Ok(F64({123.4 * i:.1f}))"
 
-                # Check values after reset.
-                assert not logs[2].value_is_default
-                assert isclose(logs[2].current_value, 123.4 * i, abs_tol=0.01)
+                # Check values after reset (not reset, explicit value still present).
+                assert logs[2].value_is_default == "Ok(false)"
+                assert logs[2].current_value == f"Ok(F64({123.4 * i:.1f}))"
 
 
 @add_test_properties(

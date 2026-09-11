@@ -126,8 +126,6 @@ impl KvsApi for Kvs {
         let data = self.data.lock()?;
         if let Some(value) = data.kvs_map.get(key) {
             Ok(value.clone())
-        } else if let Some(value) = data.defaults_map.get(key) {
-            Ok(value.clone())
         } else {
             error!("Key not found: {}", key);
             Err(ErrorCode::KeyNotFound)

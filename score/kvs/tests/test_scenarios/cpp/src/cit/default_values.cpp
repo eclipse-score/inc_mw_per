@@ -51,19 +51,17 @@ static void info_log(const std::string& key,
 }
 
 /**
- * Overload of info_log for logging key/value state with a typed current value.
+ * Overload of info_log for logging key/value state without a default_value field.
  *
- * @tparam T The type of the current value to log.
  * @param key The key being queried or modified in the KVS.
- * @param value_is_default Boolean indicating whether the current value matches the default.
- * @param current_value The current value for the key, of type T.
+ * @param value_is_default String encoding whether the current value matches the default.
+ * @param current_value String encoding the current value for the key (e.g.,
+ * "Ok(F64(...))" or an error string such as "Err(KeyNotFound)").
  *
  * This function emits logs in a structured format so that the Python test suite
- * can parse and validate scenario output. Unlike the string overload, this version
- * logs the current value as a typed parameter and omits the default value.
+ * can parse and validate scenario output.
  */
-template <typename T>
-static void info_log(const std::string& key, const bool value_is_default, T current_value)
+static void info_log(const std::string& key, const std::string& value_is_default, const std::string& current_value)
 {
     TRACING_INFO(kTargetName,
                  std::pair{std::string{"key"}, key},
@@ -122,6 +120,7 @@ std::string get_current_value(Kvs& kvs, const std::string& key)
         return std::string{"Err(KeyNotFound)"};
     }
 }
+
 }  // namespace
 
 class DefaultValues final : public Scenario
@@ -271,8 +270,8 @@ class ResetAllKeys final : public Scenario
         {
             // Get value before set.
             {
-                const bool value_is_default{kvs.is_value_default(key).value()};
-                const double current_value{std::get<double>((*kvs.get_value(key)).getValue())};
+                const std::string value_is_default{get_value_is_default(kvs, key)};
+                const std::string current_value{get_current_value(kvs, key)};
 
                 info_log(key, value_is_default, current_value);
             }
@@ -286,8 +285,8 @@ class ResetAllKeys final : public Scenario
 
             // Get value after set.
             {
-                const bool value_is_default{kvs.is_value_default(key).value()};
-                const double current_value{std::get<double>((*kvs.get_value(key)).getValue())};
+                const std::string value_is_default{get_value_is_default(kvs, key)};
+                const std::string current_value{get_current_value(kvs, key)};
 
                 info_log(key, value_is_default, current_value);
             }
@@ -303,8 +302,8 @@ class ResetAllKeys final : public Scenario
         // Get value parameters after reset.
         for (const auto& [key, _] : key_values)
         {
-            const bool value_is_default{kvs.is_value_default(key).value()};
-            const double current_value{std::get<double>((*kvs.get_value(key)).getValue())};
+            const std::string value_is_default{get_value_is_default(kvs, key)};
+            const std::string current_value{get_current_value(kvs, key)};
 
             info_log(key, value_is_default, current_value);
         }
@@ -342,8 +341,8 @@ class ResetSingleKey final : public Scenario
         {
             // Get value parameters before set.
             {
-                const bool value_is_default{kvs.is_value_default(key).value()};
-                const double current_value{std::get<double>((*kvs.get_value(key)).getValue())};
+                const std::string value_is_default{get_value_is_default(kvs, key)};
+                const std::string current_value{get_current_value(kvs, key)};
 
                 info_log(key, value_is_default, current_value);
             }
@@ -357,8 +356,8 @@ class ResetSingleKey final : public Scenario
 
             // Get value parameters after set.
             {
-                const bool value_is_default{kvs.is_value_default(key).value()};
-                const double current_value{std::get<double>((*kvs.get_value(key)).getValue())};
+                const std::string value_is_default{get_value_is_default(kvs, key)};
+                const std::string current_value{get_current_value(kvs, key)};
 
                 info_log(key, value_is_default, current_value);
             }
@@ -374,8 +373,8 @@ class ResetSingleKey final : public Scenario
         // Use KVS APIs to get value_is_default and current_value after reset
         for (const auto& [key, value] : key_values)
         {
-            const bool value_is_default{kvs.is_value_default(key).value()};
-            const double current_value{std::get<double>((*kvs.get_value(key)).getValue())};
+            const std::string value_is_default{get_value_is_default(kvs, key)};
+            const std::string current_value{get_current_value(kvs, key)};
             info_log(key, value_is_default, current_value);
         }
     }

@@ -40,6 +40,7 @@ TEST(kvs_MessageFor, MessageFor)
         {ErrorCode::ConversionFailed, "Conversion failed"},
         {ErrorCode::MutexLockFailed, "Mutex failed"},
         {ErrorCode::InvalidValueType, "Invalid value type"},
+        {ErrorCode::KeyTooLong, "Key exceeds the maximum allowed length"},
     };
     for (const auto& test : test_cases)
     {

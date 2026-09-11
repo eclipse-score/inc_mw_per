@@ -151,6 +151,45 @@ TEST(kvs_TEST, parse_json_data_failure)
     cleanup_environment();
 }
 
+TEST(kvs_TEST, parse_json_data_rejects_over_length_key)
+{
+    /* comp_req__kvs__key_length: an over-length key found while loading means the file
+       is invalid/corrupted; loading must halt with an error, not silently drop data. */
+    prepare_environment();
+
+    auto kvs =
+        Kvs::open(InstanceId(instance_id), OpenNeedDefaults::Optional, OpenNeedKvs::Optional, std::string(data_dir));
+    ASSERT_TRUE(kvs);
+
+    const std::string valid_key(KVS_MAX_KEY_LENGTH_BYTES, 'a');
+    const std::string too_long_key(KVS_MAX_KEY_LENGTH_BYTES + 1U, 'b');
+
+    auto mock_parser = std::make_unique<score::json::IJsonParserMock>();
+    score::json::Object obj;
+
+    score::json::Object valid_inner;
+    valid_inner.emplace("t", score::json::Any(std::string("i32")));
+    valid_inner.emplace("v", score::json::Any(42));
+    obj.emplace(valid_key, score::json::Any(std::move(valid_inner)));
+
+    score::json::Object long_inner;
+    long_inner.emplace("t", score::json::Any(std::string("i32")));
+    long_inner.emplace("v", score::json::Any(7));
+    obj.emplace(too_long_key, score::json::Any(std::move(long_inner)));
+
+    score::json::Any any_obj(std::move(obj));
+    EXPECT_CALL(*mock_parser, FromBuffer(::testing::_))
+        .WillOnce(::testing::Return(score::Result<score::json::Any>(std::move(any_obj))));
+
+    kvs->parser = std::move(mock_parser);
+
+    auto result = kvs->parse_json_data("data_not_used_in_mocking");
+    ASSERT_FALSE(result);
+    EXPECT_EQ(static_cast<ErrorCode>(*result.error()), ErrorCode::KeyTooLong);
+
+    cleanup_environment();
+}
+
 TEST(kvs_open_json, open_json_success)
 {
     prepare_environment();
@@ -548,6 +587,26 @@ TEST(kvs_set_value, set_value_success)
     EXPECT_TRUE(set_value_result);
     EXPECT_EQ(result.value().kvs.at("kvs").getType(), KvsValue::Type::f64);
     EXPECT_DOUBLE_EQ(std::get<double>(result.value().kvs.at("kvs").getValue()), 2.718);
+
+    cleanup_environment();
+}
+
+TEST(kvs_set_value, set_value_key_too_long)
+{
+    prepare_environment();
+    auto result = Kvs::open(instance_id, OpenNeedDefaults::Required, OpenNeedKvs::Required, std::string(data_dir));
+    ASSERT_TRUE(result);
+
+    /* A key of exactly KVS_MAX_KEY_LENGTH_BYTES bytes is accepted (inclusive limit) */
+    std::string boundary_key(KVS_MAX_KEY_LENGTH_BYTES, 'k');
+    auto boundary_result = result.value().set_value(boundary_key, KvsValue(3.14));
+    EXPECT_TRUE(boundary_result);
+
+    /* A key of KVS_MAX_KEY_LENGTH_BYTES + 1 bytes is rejected with KeyTooLong */
+    std::string too_long_key(KVS_MAX_KEY_LENGTH_BYTES + 1U, 'k');
+    auto set_value_result = result.value().set_value(too_long_key, KvsValue(3.14));
+    EXPECT_FALSE(set_value_result);
+    EXPECT_EQ(static_cast<ErrorCode>(*set_value_result.error()), ErrorCode::KeyTooLong);
 
     cleanup_environment();
 }

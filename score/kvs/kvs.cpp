@@ -29,6 +29,19 @@ using namespace std;
 namespace score::mw::per::kvs
 {
 
+namespace
+{
+
+/* comp_req__kvs__key_length: single source of truth for the key-length rule,
+   shared by all paths that ingest keys (set_value, parse_json_data).
+   std::string_view::length() counts bytes, matching the byte-based requirement. */
+bool is_key_length_valid(std::string_view key)
+{
+    return key.length() <= KVS_MAX_KEY_LENGTH_BYTES;
+}
+
+}  // namespace
+
 /*********************** KVS Implementation *********************/
 Kvs::Kvs()
     : filesystem(std::make_unique<score::filesystem::Filesystem>(
@@ -107,6 +120,18 @@ score::Result<std::unordered_map<std::string, KvsValue>> Kvs::parse_json_data(co
             {
                 auto sv = element.first.GetAsStringView();
                 std::string key(sv.data(), sv.size());
+
+                /* comp_req__kvs__key_length: a stored file must satisfy the key-length
+                   limit; an over-length key means the file is invalid/corrupted. Halt
+                   loading with an error rather than silently dropping data. */
+                if (!is_key_length_valid(key))
+                {
+                    logger->LogError() << "Key length" << key.length() << "exceeds maximum allowed"
+                                       << KVS_MAX_KEY_LENGTH_BYTES << "bytes while loading";
+                    result = score::MakeUnexpected(ErrorCode::KeyTooLong);
+                    error = true;
+                    break;
+                }
 
                 auto conv = any_to_kvsvalue(element.second);
                 if (!conv)
@@ -432,6 +457,14 @@ score::Result<bool> Kvs::is_value_default(const std::string_view key) const
 /* Set the value for a key*/
 score::ResultBlank Kvs::set_value(const std::string_view key, const KvsValue& value)
 {
+    /* comp_req__kvs__key_length: reject keys that exceed the maximum length. */
+    if (!is_key_length_valid(key))
+    {
+        logger->LogError() << "Key length" << key.length() << "exceeds maximum allowed"
+                           << KVS_MAX_KEY_LENGTH_BYTES << "bytes";
+        return score::MakeUnexpected(ErrorCode::KeyTooLong);
+    }
+
     score::ResultBlank result = score::MakeUnexpected(ErrorCode::UnmappedError);
     std::unique_lock<std::mutex> lock(kvs_mutex, std::try_to_lock);
     if (lock.owns_lock())

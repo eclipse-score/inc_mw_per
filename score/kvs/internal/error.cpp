@@ -84,6 +84,9 @@ std::string_view MyErrorDomain::MessageFor(const score::result::ErrorCode& code)
         case ErrorCode::InvalidValueType:
             msg = "Invalid value type";
             break;
+        case ErrorCode::KeyTooLong:
+            msg = "Key exceeds the maximum allowed length";
+            break;
         default:
             msg = "Unknown Error!";
             break;

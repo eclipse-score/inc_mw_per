@@ -145,6 +145,14 @@ test_suite(
 )
 
 test_suite(
+    name = "cit_tests_local",
+    tests = [
+        "//tests/test_cases:cit_cpp",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+test_suite(
     name = "miri_tests",
     tags = ["manual"],
     tests = [

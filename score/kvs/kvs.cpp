@@ -151,13 +151,13 @@ score::Result<std::unordered_map<string, KvsValue>> Kvs::open_json(const score::
     {
         if (need_file == OpenJsonNeedFile::Required)
         {
-            logger->LogError() << "error: file " << json_file << " could not be read";
+            logger->LogError() << "error: file" << json_file << "could not be read";
             error = true;
             result = score::MakeUnexpected(ErrorCode::KvsFileReadError);
         }
         else
         {
-            logger->LogInfo() << "file " << json_file << " not found, using empty data";
+            logger->LogInfo() << "file" << json_file << "not found, using empty data";
             new_kvs = true;
             result = score::Result<std::unordered_map<string, KvsValue>>({});
         }
@@ -175,7 +175,7 @@ score::Result<std::unordered_map<string, KvsValue>> Kvs::open_json(const score::
         ifstream hin(hash_file.CStr(), ios::binary);
         if (!hin)
         {
-            logger->LogError() << "error: hash file " << hash_file << " could not be read";
+            logger->LogError() << "error: hash file" << hash_file << "could not be read";
             error = true;
             result = score::MakeUnexpected(ErrorCode::KvsHashFileReadError);
         }
@@ -184,7 +184,7 @@ score::Result<std::unordered_map<string, KvsValue>> Kvs::open_json(const score::
             bool valid_hash = check_hash(data, hin);
             if (!valid_hash)
             {
-                logger->LogError() << "error: KVS data corrupted (" << json_file << ", " << hash_file << ")";
+                logger->LogError() << "error: KVS data corrupted:" << json_file << hash_file;
                 error = true;
                 result = score::MakeUnexpected(ErrorCode::ValidationFailed);
             }
@@ -251,8 +251,8 @@ score::Result<Kvs> Kvs::open(const InstanceId& instance_id,
             kvs.kvs = std::move(kvs_res.value());
             kvs.default_values = std::move(default_res.value());
             kvs.filename_prefix = filename_prefix;
-            kvs.logger->LogInfo() << "opened KVS: instance '" << instance_id.id << "'";
-            kvs.logger->LogInfo() << "max snapshot count: " << KVS_MAX_SNAPSHOTS;
+            kvs.logger->LogInfo() << "opened KVS: instance" << instance_id.id;
+            kvs.logger->LogInfo() << "max snapshot count:" << KVS_MAX_SNAPSHOTS;
             result = std::move(kvs);
         }
     }
@@ -485,27 +485,27 @@ score::ResultBlank Kvs::write_and_sync(const std::string& path, const void* data
 
     if (file == nullptr)
     {
-        logger->LogError() << "Failed to open file '" << path << "'";
+        logger->LogError() << "Failed to open file" << path;
         return score::MakeUnexpected(ErrorCode::PhysicalStorageFailure);
     }
 
     if (std::fwrite(data, sizeof(char), size, file.get()) != size)
     {
-        logger->LogError() << "Failed to write to file '" << path << "'";
+        logger->LogError() << "Failed to write to file" << path;
         return score::MakeUnexpected(ErrorCode::PhysicalStorageFailure);
     }
 
     /* Flush the buffer to the OS. */
     if (std::fflush(file.get()) != 0)
     {
-        logger->LogError() << "Failed to flush file '" << path << "'";
+        logger->LogError() << "Failed to flush file" << path;
         return score::MakeUnexpected(ErrorCode::PhysicalStorageFailure);
     }
 
     /* Request the OS to commit the data from its buffers to physical storage */
     if (::fdatasync(::fileno(file.get())) != 0)
     {
-        logger->LogError() << "Failed to sync file '" << path << "'";
+        logger->LogError() << "Failed to sync file" << path;
         return score::MakeUnexpected(ErrorCode::PhysicalStorageFailure);
     }
 
@@ -543,7 +543,7 @@ score::ResultBlank Kvs::write_json_data(const std::string& buf)
     }
     else
     {
-        logger->LogError() << "Failed to create directory for KVS file '" << json_path << "'";
+        logger->LogError() << "Failed to create directory for KVS file" << json_path;
         result = score::MakeUnexpected(ErrorCode::PhysicalStorageFailure);
     }
 
@@ -669,7 +669,7 @@ score::ResultBlank Kvs::snapshot_rotate()
             score::filesystem::Path snap_old = filename_prefix.Native() + "_" + to_string(idx - 1) + ".json";
             score::filesystem::Path snap_new = filename_prefix.Native() + "_" + to_string(idx) + ".json";
 
-            logger->LogInfo() << "rotating: " << snap_old << " -> " << snap_new;
+            logger->LogInfo() << "rotating:" << snap_old << "->" << snap_new;
             /* Rename hash */
             int32_t hash_rename = std::rename(hash_old.CStr(), hash_new.CStr());
             if (0 != hash_rename)
@@ -677,7 +677,7 @@ score::ResultBlank Kvs::snapshot_rotate()
                 if (errno != ENOENT)
                 {
                     error = true;
-                    logger->LogError() << "error: could not rename hash file " << snap_old << ". Rename Errorcode "
+                    logger->LogError() << "error: could not rename hash file" << snap_old << "- Rename Errorcode"
                                        << errno;
                     result = score::MakeUnexpected(ErrorCode::PhysicalStorageFailure);
                 }
@@ -692,7 +692,7 @@ score::ResultBlank Kvs::snapshot_rotate()
                     {
                         error = true;
                         logger->LogError()
-                            << "error: could not rename snapshot file " << snap_old << ". Rename Errorcode " << errno;
+                            << "error: could not rename snapshot file" << snap_old << "- Rename Errorcode" << errno;
                         result = score::MakeUnexpected(ErrorCode::PhysicalStorageFailure);
                     }
                 }

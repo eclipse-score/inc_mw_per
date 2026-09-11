@@ -1235,3 +1235,111 @@ TEST(kvs_get_filename, get_hashname_failure)
 
     cleanup_environment();
 }
+
+/* Storage limit used by the max-size tests. The limit is an explicit test input:
+   an unconfigured KVS enforces no limit at all. */
+constexpr size_t kTestMaxStorageBytes = 1000U;
+
+TEST(kvs_max_storage_bytes, flush_succeeds_without_configured_limit)
+{
+    /* The builder default is an unset optional, meaning no limit is enforced.
+       Data far larger than kTestMaxStorageBytes must therefore still flush. */
+    const std::string test_dir = "./kvs_no_limit_test/";
+    std::filesystem::remove_all(test_dir);
+
+    KvsBuilder builder(instance_id);
+    builder.dir(std::string(test_dir));
+    auto open_res = builder.build();
+    ASSERT_TRUE(open_res);
+    Kvs kvs = std::move(open_res.value());
+
+    const std::string large_data(kTestMaxStorageBytes * 4U, 'a');
+    auto set_res = kvs.set_value("large_data", KvsValue(large_data.c_str()));
+    ASSERT_TRUE(set_res);
+
+    auto flush_res = kvs.flush();
+    EXPECT_TRUE(flush_res);
+
+    std::filesystem::remove_all(test_dir);
+}
+
+TEST(kvs_max_storage_bytes, flush_fails_when_storage_limit_exceeded)
+{
+    const std::string test_dir = "./kvs_storage_test/";
+    std::filesystem::remove_all(test_dir);
+
+    KvsBuilder builder(instance_id);
+    builder.dir(std::string(test_dir));
+    builder.max_storage_bytes(kTestMaxStorageBytes);
+    auto open_res = builder.build();
+    ASSERT_TRUE(open_res);
+    Kvs kvs = std::move(open_res.value());
+
+    /* Add data close to the limit. There is overhead for the JSON structure (key,
+       type info, braces) and the hash file, so keep the payload below the maximum. */
+    const size_t overhead_estimate = 100U;
+    const std::string large_data(kTestMaxStorageBytes - overhead_estimate, 'a');
+
+    auto set_res1 = kvs.set_value("large_data", KvsValue(large_data.c_str()));
+    ASSERT_TRUE(set_res1);
+
+    /* The first flush still fits */
+    auto flush_res1 = kvs.flush();
+    ASSERT_TRUE(flush_res1);
+
+    /* A little more data pushes the total over the limit */
+    auto set_res2 = kvs.set_value("extra_data", KvsValue("this should not fit"));
+    ASSERT_TRUE(set_res2);
+
+    auto flush_res2 = kvs.flush();
+    ASSERT_FALSE(flush_res2);
+    EXPECT_EQ(static_cast<ErrorCode>(*flush_res2.error()), ErrorCode::OutOfStorageSpace);
+
+    std::filesystem::remove_all(test_dir);
+}
+
+TEST(kvs_check_size, check_size_within_limit_succeeds)
+{
+    const std::string test_dir = "./kvs_check_size_within_test/";
+    std::filesystem::remove_all(test_dir);
+
+    KvsBuilder builder(InstanceId(1));
+    builder.dir(std::string(test_dir));
+    builder.max_storage_bytes(kTestMaxStorageBytes);
+    auto open_res = builder.build();
+    ASSERT_TRUE(open_res);
+    Kvs kvs = std::move(open_res.value());
+
+    auto set_res = kvs.set_value("key", KvsValue("some_data"));
+    ASSERT_TRUE(set_res);
+
+    auto check_res = kvs.calculate_potential_size();
+    ASSERT_TRUE(check_res) << "calculate_potential_size should succeed for data within limits";
+    EXPECT_GT(check_res.value(), 0U);
+    EXPECT_LT(check_res.value(), kTestMaxStorageBytes);
+
+    std::filesystem::remove_all(test_dir);
+}
+
+TEST(kvs_check_size, check_size_exceeding_limit_fails)
+{
+    const std::string test_dir = "./kvs_check_size_exceeding_test/";
+    std::filesystem::remove_all(test_dir);
+
+    KvsBuilder builder(InstanceId(2));
+    builder.dir(std::string(test_dir));
+    builder.max_storage_bytes(kTestMaxStorageBytes);
+    auto open_res = builder.build();
+    ASSERT_TRUE(open_res);
+    Kvs kvs = std::move(open_res.value());
+
+    const std::string large_data(kTestMaxStorageBytes, 'x');
+    auto set_res = kvs.set_value("oversized_key", KvsValue(large_data.c_str()));
+    ASSERT_TRUE(set_res);
+
+    auto check_res = kvs.calculate_potential_size();
+    ASSERT_FALSE(check_res) << "calculate_potential_size should fail when the storage limit is exceeded";
+    EXPECT_EQ(static_cast<ErrorCode>(*check_res.error()), ErrorCode::OutOfStorageSpace);
+
+    std::filesystem::remove_all(test_dir);
+}

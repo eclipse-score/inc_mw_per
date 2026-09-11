@@ -161,6 +161,8 @@ class Kvs final
      *                 - OpenNeedKvs::Optional: An empty KVS will be used if no KVS exists.
      * @param dir The directory path where the KVS files are located. It is passed as an rvalue
      * reference to avoid unnecessary copying. Use "" or "." for the current directory.
+     * @param max_storage_bytes Optional maximum total storage size in bytes. When unset
+     *                          (the default), no storage limit is enforced.
      * @return A Result object containing either:
      *         - A Kvs object if the operation is successful.
      *         - An ErrorCode if an error occurs during the operation.
@@ -172,7 +174,8 @@ class Kvs final
     static score::Result<Kvs> open(const InstanceId& instance_id,
                                    OpenNeedDefaults need_defaults,
                                    OpenNeedKvs need_kvs,
-                                   const std::string&& dir);
+                                   const std::string&& dir,
+                                   std::optional<size_t> max_storage_bytes = std::nullopt);
 
     /**
      * @brief Resets a key-value-storage to its initial state
@@ -352,6 +355,21 @@ class Kvs final
      */
     score::Result<score::filesystem::Path> get_hash_filename(const SnapshotId& snapshot_id) const;
 
+    /**
+     * @brief Performs a 'dry run' to check if the current in-memory store would
+     *        exceed the storage limit upon flushing.
+     *
+     * This function serializes the current key-value data to a temporary buffer
+     * and calculates the potential total storage size. It checks this size against
+     * the configured `max_storage_bytes` limit.
+     *
+     * @return A score::Result object containing either:
+     *         - On success: The estimated total size (size_t) that the KVS would occupy after a flush.
+     *         - On failure: An `OutOfStorageSpace` error if the limit would be exceeded,
+     *           or another ErrorCode for other failures (e.g., serialization).
+    */
+    score::Result<size_t> calculate_potential_size();
+
   private:
     /* Private constructor to prevent direct instantiation */
     Kvs();
@@ -376,6 +394,9 @@ class Kvs final
     /* Logging */
     std::unique_ptr<score::mw::log::Logger> logger;
 
+    /* Maximum storage limit in bytes. Unset means no limit is enforced. */
+    std::optional<size_t> max_storage_bytes;
+
     /* Private Methods */
     score::ResultBlank snapshot_rotate();
     score::Result<std::unordered_map<std::string, KvsValue>> parse_json_data(const std::string& data);
@@ -383,6 +404,10 @@ class Kvs final
                                                                        OpenJsonNeedFile need_file);
     score::ResultBlank write_json_data(const std::string& buf);
     score::ResultBlank write_and_sync(const std::string& path, const void* data, std::size_t size);
+
+    score::Result<std::string> serialize_and_check();
+    score::Result<size_t> get_file_size(const score::filesystem::Path& file_path);
+    score::Result<size_t> get_current_storage_size();
 };
 
 } /* namespace score::mw::per::kvs */

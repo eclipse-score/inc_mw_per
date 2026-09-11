@@ -17,6 +17,7 @@
 #include <fstream>
 #include <iostream>
 #include <sstream>
+#include <filesystem>
 
 // TODO Default Value Handling TBD
 // TODO Add Score Logging
@@ -28,6 +29,12 @@ using namespace std;
 
 namespace score::mw::per::kvs
 {
+
+namespace
+{
+/* Size of a snapshot hash file in bytes (adler32 checksum) */
+constexpr size_t HASH_FILE_SIZE = 4U;
+} /* namespace */
 
 /*********************** KVS Implementation *********************/
 Kvs::Kvs()
@@ -47,7 +54,8 @@ Kvs::Kvs(Kvs&& other) noexcept
                                          object would also be okay*/
       ,
       writer(std::move(other.writer)),
-      logger(std::move(other.logger))
+      logger(std::move(other.logger)),
+      max_storage_bytes(other.max_storage_bytes)
 {
     {
         std::lock_guard<std::mutex> lock(other.kvs_mutex);
@@ -81,6 +89,7 @@ Kvs& Kvs::operator=(Kvs&& other) noexcept
         parser = std::move(other.parser);
         writer = std::move(other.writer);
         logger = std::move(other.logger);
+        max_storage_bytes = other.max_storage_bytes;
     }
     return *this;
 }
@@ -218,7 +227,8 @@ score::Result<std::unordered_map<string, KvsValue>> Kvs::open_json(const score::
 score::Result<Kvs> Kvs::open(const InstanceId& instance_id,
                              OpenNeedDefaults need_defaults,
                              OpenNeedKvs need_kvs,
-                             const std::string&& dir)
+                             const std::string&& dir,
+                             std::optional<size_t> max_storage_bytes)
 {
     score::Result<Kvs> result =
         score::MakeUnexpected(ErrorCode::UnmappedError); /* Redundant initialization needed, since Resul<KVS> would call
@@ -230,6 +240,7 @@ score::Result<Kvs> Kvs::open(const InstanceId& instance_id,
     const score::filesystem::Path filename_kvs = filename_prefix.Native() + "_0";
 
     Kvs kvs; /* Create KVS instance */
+    kvs.max_storage_bytes = max_storage_bytes; /* Store maximum storage limit */
     auto default_res = kvs.open_json(
         filename_default,
         need_defaults == OpenNeedDefaults::Required ? OpenJsonNeedFile::Required : OpenJsonNeedFile::Optional);
@@ -472,6 +483,55 @@ score::ResultBlank Kvs::remove_key(const std::string_view key)
     return result;
 }
 
+score::Result<size_t> Kvs::get_file_size(const score::filesystem::Path& file_path) {
+    std::error_code ec;
+    const auto size = std::filesystem::file_size(file_path.CStr(), ec);
+
+    if (ec) {
+        // Check if the error is "file not found"
+        if (ec == std::errc::no_such_file_or_directory) {
+            // File does not exist, its size is 0. This is not an error.
+            return 0;
+        }
+        logger->LogError() << "Error: Could not get size of file " << file_path << ": " << ec.message();
+        return score::MakeUnexpected(ErrorCode::PhysicalStorageFailure);
+    }
+
+    return size;
+}
+
+/* Helper Function to get current storage size of all persisted files (defaults and historical snapshots) */
+score::Result<size_t> Kvs::get_current_storage_size() {
+    size_t total_size = 0;
+    const std::array<const char*, 2> file_extensions = {".json", ".hash"};
+
+    // Add the size of the default files
+    const std::string default_suffix = "_default";
+    for (const char* extension : file_extensions) {
+        const score::filesystem::Path file_path = filename_prefix.Native() + default_suffix + extension;
+        auto size_result = get_file_size(file_path);
+        if (!size_result) {
+            return size_result; // Propagate error directly
+        }
+        total_size += size_result.value();
+    }
+
+    // Add the size of current and historical snapshots that will be kept after rotation (0 to N-1).
+    for (size_t snapshot_index = 0; snapshot_index < KVS_MAX_SNAPSHOTS; ++snapshot_index) {
+        const std::string snapshot_suffix = "_" + to_string(snapshot_index);
+
+        for (const char* extension : file_extensions) {
+            const score::filesystem::Path file_path = filename_prefix.Native() + snapshot_suffix + extension;
+            auto size_result = get_file_size(file_path);
+            if (!size_result) {
+                return size_result; // Propagate error directly
+            }
+            total_size += size_result.value();
+        }
+    }
+    return total_size;
+}
+
 /* Helper: write data to a file and ensure it reaches physical storage.*/
 score::ResultBlank Kvs::write_and_sync(const std::string& path, const void* data, std::size_t size)
 {
@@ -550,13 +610,10 @@ score::ResultBlank Kvs::write_json_data(const std::string& buf)
     return result;
 }
 
-/* Flush the key-value store*/
-score::ResultBlank Kvs::flush()
-{
-    score::ResultBlank result = score::MakeUnexpected(ErrorCode::UnmappedError);
-    /* Create JSON Object */
+score::Result<std::string> Kvs::serialize_and_check() {
     score::json::Object root_obj;
-    bool error = false;
+
+    // 1. Serialize the current KVS map to a buffer
     {
         std::unique_lock<std::mutex> lock(kvs_mutex, std::try_to_lock);
         if (lock.owns_lock())
@@ -564,52 +621,71 @@ score::ResultBlank Kvs::flush()
             for (const auto& [key, value] : kvs)
             {
                 auto conv = kvsvalue_to_any(value);
-                if (!conv)
-                {
-                    result = score::MakeUnexpected(static_cast<ErrorCode>(*conv.error()));
-                    error = true;
-                    break;
+                if (!conv) {
+                    return score::MakeUnexpected<std::string>(conv.error());
                 }
-                else
-                {
-                    root_obj.emplace(key, std::move(conv.value()) /*emplace in map uses move operator*/
-                    );
-                }
+                root_obj.emplace(key, std::move(conv.value()));
             }
-        }
-        else
-        {
-            result = score::MakeUnexpected(ErrorCode::MutexLockFailed);
-            error = true;
+        } else {
+            return score::MakeUnexpected(ErrorCode::MutexLockFailed);
         }
     }
 
-    if (!error)
-    {
-        /* Serialize Buffer */
-        auto buf_res = writer->ToBuffer(root_obj);
-        if (!buf_res)
-        {
-            result = score::MakeUnexpected(ErrorCode::JsonGeneratorError);
-        }
-        else
-        {
-            /* Rotate Snapshots */
-            auto rotate_result = snapshot_rotate();
-            if (!rotate_result)
-            {
-                result = rotate_result;
-            }
-            else
-            {
-                /* Write JSON Data */
-                std::string buf = std::move(buf_res.value());
-                result = write_json_data(buf);
-            }
-        }
+    auto buf_res = writer->ToBuffer(root_obj);
+    if (!buf_res) {
+        return score::MakeUnexpected(ErrorCode::JsonGeneratorError);
+    }
+    const std::string& buf = buf_res.value();
+
+    // 2. Get the size of all other persisted files
+    auto current_size_res = get_current_storage_size();
+    if (!current_size_res) {
+        return score::MakeUnexpected<std::string>(current_size_res.error());
     }
 
-    return result;
+    // 3. Calculate the potential total size
+    const size_t total_size = current_size_res.value() + buf.size() + HASH_FILE_SIZE;
+
+    // 4. Check against the limit
+    if (this->max_storage_bytes.has_value() && total_size > this->max_storage_bytes.value()) {
+        logger->LogError() << "error: KVS storage limit would be exceeded. total_size:" << total_size
+                           << " max_storage_bytes:" << this->max_storage_bytes.value();
+        return score::MakeUnexpected(ErrorCode::OutOfStorageSpace);
+    }
+
+    return buf;
+}
+
+/* Flush the key-value store*/
+score::ResultBlank Kvs::flush() {
+    auto result = serialize_and_check();
+    if (!result) {
+        return score::MakeUnexpected<score::Blank>(result.error());
+    }
+
+    auto rotate_result = snapshot_rotate();
+    if (!rotate_result) {
+        return rotate_result;
+    }
+
+    return write_json_data(result.value());
+}
+
+/* Performs a 'dry run' to check the potential storage size */
+score::Result<size_t> Kvs::calculate_potential_size() {
+    auto result = serialize_and_check();
+    if (!result) {
+        return score::MakeUnexpected<size_t>(result.error());
+    }
+
+    // Re-calculate size to return it, as serialize_and_check only returns the buffer
+    const std::string& buf = result.value();
+    auto current_size_res = get_current_storage_size();
+    if (!current_size_res) {
+        return score::MakeUnexpected<size_t>(current_size_res.error());
+    }
+
+    return current_size_res.value() + buf.size() + HASH_FILE_SIZE;
 }
 
 /* Retrieve the snapshot count*/

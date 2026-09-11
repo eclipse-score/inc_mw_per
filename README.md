@@ -1,4 +1,4 @@
-# Key-Value-Storage
+# S-CORE Persistency
 
 ## License
 
@@ -109,8 +109,8 @@ Version 0.1.0
 
 Options:
 -h, --help          Show this help message and exit
--o, --operation     Specify the operation to perform (setkey, getkey, removekey, 
-                    listkeys, reset, snapshotcount, snapshotmaxcount, snapshotrestore, 
+-o, --operation     Specify the operation to perform (setkey, getkey, removekey,
+                    listkeys, reset, snapshotcount, snapshotmaxcount, snapshotrestore,
                     getkvsfilename, gethashfilename, createtestdata)
 -k, --key           Specify the key to operate on (for key operations)
 -p, --payload       Specify the value to write (for set operations)
@@ -126,7 +126,7 @@ Read a Key and show value:
 
 Write a Key and use the <payload> as the data source:
     (automatically detects following types: Number, Boolean, String, Null, Object, Array)
-    kvs_tool -o setkey  -k MyKey -p 'Hello World' 
+    kvs_tool -o setkey  -k MyKey -p 'Hello World'
     kvs_tool -o setkey  -k MyKey -p 'true'
     kvs_tool -o setkey  -k MyKey -p 15
     kvs_tool -o setkey  -k MyKey -p '[456,false,"Second"]'

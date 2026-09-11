@@ -90,6 +90,19 @@ class KvsBuilder final
     KvsBuilder& dir(std::string&& dir_path);
 
     /**
+     * @brief Specify the maximum number of snapshots the KVS maintains.
+     *
+     * comp_req__kvs__snapshot_max_num: The maximum number of snapshots is configurable
+     * per instance. When this option is not used, KVS_DEFAULT_MAX_SNAPSHOTS is applied.
+     *
+     * @param max_count Maximum number of snapshots. A value of 0 keeps no previous
+     *                  generation; flush() still persists the current KVS data.
+     *
+     * @return Reference to this builder (for chaining).
+     */
+    KvsBuilder& snapshot_max_count(std::size_t max_count);
+
+    /**
      * @brief Builds and opens the Kvs instance with the configured options.
      *
      * Internally calls Kvs::open() with the selected flags and directory.
@@ -99,10 +112,11 @@ class KvsBuilder final
     score::Result<Kvs> build();
 
   private:
-    InstanceId instance_id;  ///< ID of the KVS instance
-    bool need_defaults;      ///< Whether default values are required
-    bool need_kvs;           ///< Whether an existing KVS is required
-    std::string directory;   ///< Directory where to store the KVS Files
+    InstanceId instance_id;     ///< ID of the KVS instance
+    bool need_defaults;         ///< Whether default values are required
+    bool need_kvs;              ///< Whether an existing KVS is required
+    std::string directory;      ///< Directory where to store the KVS Files
+    std::size_t max_snapshots;  ///< Maximum number of snapshots to maintain
 };
 
 } /* namespace score::mw::per::kvs */

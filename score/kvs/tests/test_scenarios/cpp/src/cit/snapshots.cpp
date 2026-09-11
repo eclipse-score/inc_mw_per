@@ -64,28 +64,6 @@ class SnapshotCount : public Scenario
         return "count";
     }
 
-    /**
-     * Requirement not being met:
-     *   - The snapshot is created for each data stored.
-     *   - Max count should be configurable.
-     *
-     * TestSnapshotCountFirstFlush
-     *      Issue: The test expects the final snapshot_count to be min(count,
-     * snapshot_max_count) (e.g., 1 for count=1, snapshot_max_count=1/3/10).
-     *      Observed: C++ emits snapshot_count: 0 after the first flush.
-     *      Possible Root Cause: In C++, the snapshot count is not incremented after
-     * the first flush because the snapshot rotation logic and counting are tied to
-     * the hardcoded max (not the parameter).
-     *
-     * TestSnapshotCountFull
-     *      Issue: The test expects a sequence of snapshot_count values: [0, 1] for count=2, [0, 1,
-     * 2, 3] for count=4, etc. Observed: C++ emits [0, 0, 1] or [0, 0, 1, 2, 3], but the first value
-     * is always 0, and the final value is not as expected. Possible Root Cause: The C++
-     * implementation may not be accumulating the count correctly, it stores or updates the count
-     * only after flush when MAX<3.
-     *
-     * Raised bugs: https://github.com/eclipse-score/persistency/issues/108
-     */
     void run(const std::string& input) const final
     {
         auto obj{get_object(input)};
@@ -142,8 +120,6 @@ class SnapshotMaxCount : public Scenario
 
     void run(const std::string& input) const final
     {
-        auto obj{get_object(input)};
-        auto count{get_field<int32_t>(obj, "count")};
         auto params{KvsParameters::from_json(input)};
 
         auto kvs{kvs_instance(params)};

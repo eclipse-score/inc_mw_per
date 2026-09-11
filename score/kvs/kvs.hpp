@@ -28,10 +28,13 @@
 #include <unordered_map>
 #include <vector>
 
-#define KVS_MAX_SNAPSHOTS 3
-
 namespace score::mw::per::kvs
 {
+
+/* comp_req__kvs__constraints: Compile-time default for the maximum number of snapshots.
+   comp_req__kvs__snapshot_max_num: The value is only a default. It can be overridden per
+   instance at init-time via KvsBuilder::snapshot_max_count(). */
+constexpr std::size_t KVS_DEFAULT_MAX_SNAPSHOTS = 3U;
 
 struct InstanceId
 {
@@ -161,6 +164,10 @@ class Kvs final
      *                 - OpenNeedKvs::Optional: An empty KVS will be used if no KVS exists.
      * @param dir The directory path where the KVS files are located. It is passed as an rvalue
      * reference to avoid unnecessary copying. Use "" or "." for the current directory.
+     * @param snapshot_max_count The maximum number of snapshots this instance maintains.
+     *                           Defaults to KVS_DEFAULT_MAX_SNAPSHOTS.
+     *                           A value of 0 keeps no previous generation; the current
+     *                           KVS data is still persisted by flush().
      * @return A Result object containing either:
      *         - A Kvs object if the operation is successful.
      *         - An ErrorCode if an error occurs during the operation.
@@ -172,7 +179,8 @@ class Kvs final
     static score::Result<Kvs> open(const InstanceId& instance_id,
                                    OpenNeedDefaults need_defaults,
                                    OpenNeedKvs need_kvs,
-                                   const std::string&& dir);
+                                   const std::string&& dir,
+                                   std::size_t snapshot_max_count = KVS_DEFAULT_MAX_SNAPSHOTS);
 
     /**
      * @brief Resets a key-value-storage to its initial state
@@ -287,6 +295,10 @@ class Kvs final
      * @brief Flushes the key-value store, ensuring that all pending changes
      *        are written to the underlying storage.
      *
+     * The current KVS data is always written. A configured maximum of 0 snapshots
+     * only means that no previous generation is kept: rotation does nothing and
+     * snapshot_count() stays 0, but the current data is still persisted.
+     *
      * @return A score::Result object that indicates the success or failure of the operation.
      *         - On success: Returns a blank score::Result.
      *         - On failure: Returns an ErrorCode describing the error.
@@ -306,7 +318,9 @@ class Kvs final
      * @brief Retrieves the maximum number of snapshots that can be stored.
      *
      * This function returns the upper limit on the number of snapshots
-     * that the key-value store can maintain at any given time.
+     * that the key-value store can maintain at any given time. The limit is
+     * configured per instance via KvsBuilder::snapshot_max_count() and defaults
+     * to KVS_DEFAULT_MAX_SNAPSHOTS.
      *
      * @return The maximum count of snapshots as a size_t value.
      */
@@ -365,6 +379,9 @@ class Kvs final
 
     /* Filename prefix */
     score::filesystem::Path filename_prefix;
+
+    /* comp_req__kvs__snapshot_max_num: Maximum number of snapshots maintained by this instance */
+    std::size_t max_snapshots;
 
     /* Filesystem handling */
     std::unique_ptr<score::filesystem::Filesystem> filesystem;

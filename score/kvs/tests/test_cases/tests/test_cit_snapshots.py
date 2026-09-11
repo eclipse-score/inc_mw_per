@@ -69,12 +69,7 @@ class TestSnapshotCountFirstFlush(MaxSnapshotsScenario):
         results: ScenarioResult,
         logs_info_level: LogContainer,
         snapshot_max_count: int,
-        version: str,
     ):
-        if version == "cpp" and snapshot_max_count in [0, 1, 3, 10]:
-            pytest.xfail(
-                reason="https://github.com/eclipse-score/persistency/issues/108",
-            )
         assert results.return_code == ResultCode.SUCCESS
 
         count = test_config["count"]
@@ -114,7 +109,7 @@ class TestSnapshotCountFull(TestSnapshotCountFirstFlush):
 )
 @pytest.mark.parametrize("snapshot_max_count", [0, 1, 3, 10], scope="class")
 class TestSnapshotMaxCount(MaxSnapshotsScenario):
-    """Verifies that the maximum number of snapshots is a constant value."""
+    """Verifies that the KVS instance reports the configured maximum number of snapshots."""
 
     @pytest.fixture(scope="class")
     def scenario_name(self) -> str:
@@ -135,12 +130,7 @@ class TestSnapshotMaxCount(MaxSnapshotsScenario):
         results: ScenarioResult,
         logs_info_level: LogContainer,
         snapshot_max_count: int,
-        version: str,
     ):
-        if version == "cpp":
-            pytest.xfail(
-                reason="https://github.com/eclipse-score/persistency/issues/108",
-            )
         assert results.return_code == ResultCode.SUCCESS
         assert logs_info_level.find_log("max_count", value=snapshot_max_count) is not None
 

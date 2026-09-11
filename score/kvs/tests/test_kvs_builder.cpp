@@ -69,3 +69,41 @@ TEST(kvs_kvsbuilder, kvsbuilder_directory_check)
     EXPECT_TRUE(result_build);
     EXPECT_EQ(result_build.value().filename_prefix.CStr(), "./kvs_" + std::to_string(instance_id.id));
 }
+
+TEST(kvs_kvsbuilder, kvsbuilder_snapshot_max_count_default)
+{
+    /* comp_req__kvs__snapshot_max_num:
+       An unconfigured builder must keep the compile-time default, so that existing
+       users observe no behavior change. */
+    KvsBuilder builder(instance_id);
+    EXPECT_EQ(builder.max_snapshots, KVS_DEFAULT_MAX_SNAPSHOTS);
+
+    builder.dir(std::string(data_dir));
+    auto result_build = builder.build();
+    ASSERT_TRUE(result_build);
+    EXPECT_EQ(result_build.value().snapshot_max_count(), KVS_DEFAULT_MAX_SNAPSHOTS);
+
+    cleanup_environment();
+}
+
+TEST(kvs_kvsbuilder, kvsbuilder_snapshot_max_count_configured)
+{
+    /* comp_req__kvs__snapshot_max_num:
+       The configured value must reach the built KVS instance. Without the plumbing
+       through build()/open() the setter would be silently ignored. */
+    const std::size_t configured_max = 7U;
+
+    KvsBuilder builder(instance_id);
+    builder.snapshot_max_count(configured_max);
+    EXPECT_EQ(builder.max_snapshots, configured_max);
+
+    /* The setter must be chainable like every other builder option */
+    EXPECT_EQ(&builder.snapshot_max_count(configured_max), &builder);
+
+    builder.dir(std::string(data_dir));
+    auto result_build = builder.build();
+    ASSERT_TRUE(result_build);
+    EXPECT_EQ(result_build.value().snapshot_max_count(), configured_max);
+
+    cleanup_environment();
+}

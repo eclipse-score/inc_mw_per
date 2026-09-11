@@ -33,6 +33,10 @@ score::mw::per::kvs::Kvs kvs_instance(const KvsParameters& params)
     {
         builder = builder.dir(std::string(*params.dir));
     }
+    if (params.snapshot_max_count.has_value())
+    {
+        builder = builder.snapshot_max_count(*params.snapshot_max_count);
+    }
 
     // Build KVS instance.
     auto build_result{builder.build()};

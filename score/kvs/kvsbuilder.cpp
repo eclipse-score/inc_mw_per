@@ -20,7 +20,8 @@ KvsBuilder::KvsBuilder(const InstanceId& instance_id)
     : instance_id(instance_id),
       need_defaults(false),
       need_kvs(false),
-      directory("./data_folder/") /* Default Directory */
+      directory("./data_folder/"), /* Default Directory */
+      max_snapshots(KVS_DEFAULT_MAX_SNAPSHOTS)
 {
 }
 
@@ -42,6 +43,12 @@ KvsBuilder& KvsBuilder::dir(std::string&& dir_path)
     return *this;
 }
 
+KvsBuilder& KvsBuilder::snapshot_max_count(std::size_t max_count)
+{
+    this->max_snapshots = max_count;
+    return *this;
+}
+
 score::Result<Kvs> KvsBuilder::build()
 {
     score::Result<Kvs> result = score::MakeUnexpected(ErrorCode::UnmappedError);
@@ -55,7 +62,8 @@ score::Result<Kvs> KvsBuilder::build()
     result = Kvs::open(instance_id,
                        need_defaults ? OpenNeedDefaults::Required : OpenNeedDefaults::Optional,
                        need_kvs ? OpenNeedKvs::Required : OpenNeedKvs::Optional,
-                       std::move(directory));
+                       std::move(directory),
+                       max_snapshots);
 
     return result;
 }

@@ -1235,3 +1235,126 @@ TEST(kvs_get_filename, get_hashname_failure)
 
     cleanup_environment();
 }
+
+////////////////////////////////////////////////////////////////////////////////
+/* Initialization from a snapshot other than the current one.
+   The KVS keeps older generations so that a damaged current file is recoverable,
+   but open() could only ever read snapshot 0, leaving that data unreachable. */
+////////////////////////////////////////////////////////////////////////////////
+
+namespace
+{
+/* Lay down a snapshot generation with a matching checksum, so that open() accepts it */
+void write_snapshot(std::size_t snapshot_id, const std::string& json_data)
+{
+    const std::string prefix = filename_prefix + "_" + std::to_string(snapshot_id);
+
+    std::ofstream out(prefix + ".json", std::ios::binary);
+    out.write(json_data.data(), static_cast<std::streamsize>(json_data.size()));
+    out.close();
+
+    const uint32_t hash = adler32(json_data);
+    const std::array<uint8_t, 4> hash_bytes = {static_cast<uint8_t>((hash >> 24) & 0xFF),
+                                               static_cast<uint8_t>((hash >> 16) & 0xFF),
+                                               static_cast<uint8_t>((hash >> 8) & 0xFF),
+                                               static_cast<uint8_t>(hash & 0xFF)};
+    std::ofstream hash_out(prefix + ".hash", std::ios::binary);
+    hash_out.write(reinterpret_cast<const char*>(hash_bytes.data()), hash_bytes.size());
+}
+
+/* Remove the current generation, as a corrupting power loss would */
+void remove_current_snapshot()
+{
+    std::filesystem::remove(kvs_prefix + ".json");
+    std::filesystem::remove(kvs_prefix + ".hash");
+}
+
+const std::string snapshot_one_json = R"({
+    "recovered": {
+        "t": "i32",
+        "v": 7
+    }
+})";
+}  // namespace
+
+TEST(kvs_open, open_defaults_to_current_snapshot)
+{
+    prepare_environment();
+
+    /* Callers that do not ask for a snapshot must keep reading snapshot 0 exactly as before */
+    auto result = Kvs::open(instance_id, OpenNeedDefaults::Optional, OpenNeedKvs::Required, std::string(data_dir));
+    ASSERT_TRUE(result);
+    EXPECT_EQ(result.value().kvs.count("kvs"), 1U);
+
+    cleanup_environment();
+}
+
+TEST(kvs_open, open_from_explicit_snapshot_id)
+{
+    prepare_environment();
+
+    /* The current generation is gone, but an older one survives */
+    remove_current_snapshot();
+    write_snapshot(1U, snapshot_one_json);
+
+    auto result =
+        Kvs::open(instance_id, OpenNeedDefaults::Optional, OpenNeedKvs::Required, std::string(data_dir), SnapshotId(1));
+    ASSERT_TRUE(result);
+
+    /* The data comes from snapshot 1, not from the missing snapshot 0 */
+    EXPECT_EQ(result.value().kvs.count("recovered"), 1U);
+    EXPECT_EQ(result.value().kvs.count("kvs"), 0U);
+
+    cleanup_environment();
+}
+
+TEST(kvs_open, open_required_fails_for_missing_snapshot_id)
+{
+    prepare_environment();
+
+    /* Requesting a generation that does not exist must fail rather than silently
+       falling back to another one: an implicit fallback would hide data loss. */
+    auto result =
+        Kvs::open(instance_id, OpenNeedDefaults::Optional, OpenNeedKvs::Required, std::string(data_dir), SnapshotId(2));
+    ASSERT_FALSE(result);
+    EXPECT_EQ(static_cast<ErrorCode>(*result.error()), ErrorCode::KvsFileReadError);
+
+    cleanup_environment();
+}
+
+TEST(kvs_open, open_optional_missing_snapshot_starts_empty)
+{
+    prepare_environment();
+
+    /* The Optional semantics apply to the requested generation, not only to snapshot 0 */
+    auto result =
+        Kvs::open(instance_id, OpenNeedDefaults::Optional, OpenNeedKvs::Optional, std::string(data_dir), SnapshotId(2));
+    ASSERT_TRUE(result);
+    EXPECT_TRUE(result.value().kvs.empty());
+
+    cleanup_environment();
+}
+
+TEST(kvs_open, flush_after_opening_older_snapshot_becomes_current)
+{
+    prepare_environment();
+
+    /* Recovery story: load a surviving generation, then persist it as the new current KVS */
+    remove_current_snapshot();
+    write_snapshot(1U, snapshot_one_json);
+
+    auto result =
+        Kvs::open(instance_id, OpenNeedDefaults::Optional, OpenNeedKvs::Required, std::string(data_dir), SnapshotId(1));
+    ASSERT_TRUE(result);
+
+    auto flush_result = result.value().flush();
+    ASSERT_TRUE(flush_result);
+
+    EXPECT_TRUE(std::filesystem::exists(kvs_prefix + ".json"));
+
+    auto reopened = Kvs::open(instance_id, OpenNeedDefaults::Optional, OpenNeedKvs::Required, std::string(data_dir));
+    ASSERT_TRUE(reopened);
+    EXPECT_EQ(reopened.value().kvs.count("recovered"), 1U);
+
+    cleanup_environment();
+}

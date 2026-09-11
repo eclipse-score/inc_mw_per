@@ -21,6 +21,8 @@ KvsBuilder::KvsBuilder(const InstanceId& instance_id)
       need_defaults(false),
       need_kvs(false),
       directory("./data_folder/") /* Default Directory */
+      ,
+      snapshot(0) /* Default: the current KVS */
 {
 }
 
@@ -42,6 +44,12 @@ KvsBuilder& KvsBuilder::dir(std::string&& dir_path)
     return *this;
 }
 
+KvsBuilder& KvsBuilder::snapshot_id(const SnapshotId& id)
+{
+    this->snapshot = id;
+    return *this;
+}
+
 score::Result<Kvs> KvsBuilder::build()
 {
     score::Result<Kvs> result = score::MakeUnexpected(ErrorCode::UnmappedError);
@@ -55,7 +63,8 @@ score::Result<Kvs> KvsBuilder::build()
     result = Kvs::open(instance_id,
                        need_defaults ? OpenNeedDefaults::Required : OpenNeedDefaults::Optional,
                        need_kvs ? OpenNeedKvs::Required : OpenNeedKvs::Optional,
-                       std::move(directory));
+                       std::move(directory),
+                       snapshot);
 
     return result;
 }

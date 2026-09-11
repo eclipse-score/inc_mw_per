@@ -69,3 +69,26 @@ TEST(kvs_kvsbuilder, kvsbuilder_directory_check)
     EXPECT_TRUE(result_build);
     EXPECT_EQ(result_build.value().filename_prefix.CStr(), "./kvs_" + std::to_string(instance_id.id));
 }
+
+TEST(kvs_kvsbuilder, kvsbuilder_snapshot_id_default)
+{
+    /* An unconfigured builder must keep reading the current KVS, so that existing
+       users observe no behavior change. */
+    KvsBuilder builder(instance_id);
+    EXPECT_EQ(builder.snapshot.id, 0U);
+
+    cleanup_environment();
+}
+
+TEST(kvs_kvsbuilder, kvsbuilder_snapshot_id_configured)
+{
+    /* The configured snapshot must be stored and the setter must chain like the others.
+       Without the plumbing through build()/open() the option would be silently ignored. */
+    KvsBuilder builder(instance_id);
+    builder.snapshot_id(SnapshotId(2));
+    EXPECT_EQ(builder.snapshot.id, 2U);
+
+    EXPECT_EQ(&builder.snapshot_id(SnapshotId(2)), &builder);
+
+    cleanup_environment();
+}

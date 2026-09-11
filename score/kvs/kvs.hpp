@@ -161,6 +161,11 @@ class Kvs final
      *                 - OpenNeedKvs::Optional: An empty KVS will be used if no KVS exists.
      * @param dir The directory path where the KVS files are located. It is passed as an rvalue
      * reference to avoid unnecessary copying. Use "" or "." for the current directory.
+     * @param snapshot_id The snapshot generation to load. Defaults to SnapshotId(0), the
+     *                    current KVS. Use an older ID to recover when the current
+     *                    generation is missing or corrupted. No implicit fallback is
+     *                    performed: if the requested snapshot is unavailable, the
+     *                    need_kvs flag decides between an error and an empty KVS.
      * @return A Result object containing either:
      *         - A Kvs object if the operation is successful.
      *         - An ErrorCode if an error occurs during the operation.
@@ -172,7 +177,8 @@ class Kvs final
     static score::Result<Kvs> open(const InstanceId& instance_id,
                                    OpenNeedDefaults need_defaults,
                                    OpenNeedKvs need_kvs,
-                                   const std::string&& dir);
+                                   const std::string&& dir,
+                                   const SnapshotId& snapshot_id = SnapshotId(0));
 
     /**
      * @brief Resets a key-value-storage to its initial state

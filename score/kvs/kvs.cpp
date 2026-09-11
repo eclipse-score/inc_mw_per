@@ -218,7 +218,8 @@ score::Result<std::unordered_map<string, KvsValue>> Kvs::open_json(const score::
 score::Result<Kvs> Kvs::open(const InstanceId& instance_id,
                              OpenNeedDefaults need_defaults,
                              OpenNeedKvs need_kvs,
-                             const std::string&& dir)
+                             const std::string&& dir,
+                             const SnapshotId& snapshot_id)
 {
     score::Result<Kvs> result =
         score::MakeUnexpected(ErrorCode::UnmappedError); /* Redundant initialization needed, since Resul<KVS> would call
@@ -227,7 +228,9 @@ score::Result<Kvs> Kvs::open(const InstanceId& instance_id,
     score::filesystem::Path base_path(dir);
     score::filesystem::Path filename_prefix = base_path / ("kvs_" + std::to_string(instance_id.id));
     const score::filesystem::Path filename_default = filename_prefix.Native() + "_default";
-    const score::filesystem::Path filename_kvs = filename_prefix.Native() + "_0";
+    /* The requested generation, snapshot 0 (the current KVS) by default. Loading an
+       older generation makes a KVS recoverable when the current one is unusable. */
+    const score::filesystem::Path filename_kvs = filename_prefix.Native() + "_" + std::to_string(snapshot_id.id);
 
     Kvs kvs; /* Create KVS instance */
     auto default_res = kvs.open_json(
@@ -251,7 +254,7 @@ score::Result<Kvs> Kvs::open(const InstanceId& instance_id,
             kvs.kvs = std::move(kvs_res.value());
             kvs.default_values = std::move(default_res.value());
             kvs.filename_prefix = filename_prefix;
-            kvs.logger->LogInfo() << "opened KVS: instance '" << instance_id.id << "'";
+            kvs.logger->LogInfo() << "opened KVS: instance" << instance_id.id << "from snapshot" << snapshot_id.id;
             kvs.logger->LogInfo() << "max snapshot count: " << KVS_MAX_SNAPSHOTS;
             result = std::move(kvs);
         }

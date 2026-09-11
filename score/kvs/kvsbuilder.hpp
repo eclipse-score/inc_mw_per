@@ -90,6 +90,19 @@ class KvsBuilder final
     KvsBuilder& dir(std::string&& dir_path);
 
     /**
+     * @brief Select which snapshot generation the KVS is initialized from.
+     *
+     * Defaults to SnapshotId(0), the current KVS. Use an older ID to initialize when
+     * the current generation is missing or corrupted. No implicit fallback is performed:
+     * if the requested snapshot is unavailable, need_kvs_flag() decides whether that is
+     * an error or yields an empty KVS.
+     *
+     * @param id The snapshot generation to load.
+     * @return Reference to this builder (for chaining).
+     */
+    KvsBuilder& snapshot_id(const SnapshotId& id);
+
+    /**
      * @brief Builds and opens the Kvs instance with the configured options.
      *
      * Internally calls Kvs::open() with the selected flags and directory.
@@ -103,6 +116,7 @@ class KvsBuilder final
     bool need_defaults;      ///< Whether default values are required
     bool need_kvs;           ///< Whether an existing KVS is required
     std::string directory;   ///< Directory where to store the KVS Files
+    SnapshotId snapshot;     ///< Snapshot generation to initialize from
 };
 
 } /* namespace score::mw::per::kvs */
